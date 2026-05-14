@@ -155,6 +155,15 @@ export class ChatService {
                 };
             }
 
+            if (payload.reasoning_delta !== undefined) {
+                return {
+                    type: 'reasoning_delta',
+                    data: {
+                        reasoning_delta: payload.reasoning_delta,
+                    },
+                };
+            }
+
             if (payload.error) {
                 return {
                     type: 'error',

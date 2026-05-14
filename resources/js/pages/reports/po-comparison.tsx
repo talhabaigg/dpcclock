@@ -34,7 +34,7 @@ import Papa from 'papaparse';
 import Pusher from 'pusher-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
-import ReactMarkdown from 'react-markdown';
+import { Markdown } from '@/components/markdown/markdown';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '/reports' },
@@ -1293,7 +1293,7 @@ export default function POComparisonReport() {
                                                                 </div>
                                                             ) : (
                                                                 <>
-                                                                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                                                                    <Markdown mode={message.status === 'streaming' ? 'streaming' : 'static'}>{message.content}</Markdown>
                                                                     {message.status === 'streaming' && (
                                                                         <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />
                                                                     )}

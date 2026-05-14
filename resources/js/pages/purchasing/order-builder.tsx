@@ -40,8 +40,7 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Markdown } from '@/components/markdown/markdown';
 import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -440,69 +439,6 @@ function StreamingIndicator() {
     );
 }
 
-// Smooth word-by-word deblur streaming text (matches ai-chat design)
-function SmoothStreamingText({ content }: { content: string }) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const revealedCountRef = useRef(0);
-    const rafRef = useRef<number>(0);
-    const words = content.split(/(\s+)/);
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const spans = container.querySelectorAll<HTMLSpanElement>('span[data-word]');
-        let current = revealedCountRef.current;
-
-        const reveal = () => {
-            const batch = Math.max(2, Math.ceil((spans.length - current) * 0.15));
-            const end = Math.min(current + batch, spans.length);
-
-            for (let i = current; i < end; i++) {
-                spans[i].classList.add('gemini-word-visible');
-            }
-
-            current = end;
-            revealedCountRef.current = current;
-
-            if (current < spans.length) {
-                rafRef.current = requestAnimationFrame(reveal);
-            }
-        };
-
-        rafRef.current = requestAnimationFrame(reveal);
-        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-    }, [words.length]);
-
-    return (
-        <>
-            <div ref={containerRef} className="gemini-smooth-stream whitespace-pre-wrap text-sm leading-relaxed">
-                {words.map((word, i) => (
-                    <span
-                        key={i}
-                        data-word
-                        className={i < revealedCountRef.current ? 'gemini-word-visible' : ''}
-                    >
-                        {word}
-                    </span>
-                ))}
-            </div>
-            <style>{`
-                .gemini-smooth-stream span[data-word] {
-                    opacity: 0;
-                    filter: blur(6px);
-                    transition: opacity 0.3s ease-out, filter 0.3s ease-out;
-                    display: inline;
-                }
-                .gemini-smooth-stream span.gemini-word-visible {
-                    opacity: 1;
-                    filter: blur(0);
-                }
-            `}</style>
-        </>
-    );
-}
-
 // Attachment chip for file previews
 function AttachmentChip({ file, onRemove }: { file: File; onRemove: () => void }) {
     const isImage = file.type.startsWith('image/');
@@ -843,67 +779,11 @@ const ChatBubble = memo(function ChatBubble({
                 )}
 
                 {/* Message content */}
-                <div className={cn('prose prose-sm dark:prose-invert max-w-none', isError && 'text-destructive')}>
+                <div className={cn('min-w-0 max-w-none', isError && 'text-destructive')}>
                     {isActive && !message.content ? (
                         <StreamingIndicator />
-                    ) : isStreaming ? (
-                        <SmoothStreamingText content={message.content} />
                     ) : (
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                                code({ className, children }) {
-                                    if (!className) {
-                                        return (
-                                            <code className="rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-                                    return <code className={className}>{children}</code>;
-                                },
-                                pre({ children }) {
-                                    return <>{children}</>;
-                                },
-                                table({ children }) {
-                                    return (
-                                        <div className="my-4 overflow-x-auto rounded-lg border">
-                                            <table className="w-full text-sm">{children}</table>
-                                        </div>
-                                    );
-                                },
-                                thead({ children }) {
-                                    return <thead className="bg-muted/50">{children}</thead>;
-                                },
-                                th({ children }) {
-                                    return <th className="border-b px-4 py-2 text-left font-semibold">{children}</th>;
-                                },
-                                td({ children }) {
-                                    return <td className="border-b px-4 py-2">{children}</td>;
-                                },
-                                a({ href, children }) {
-                                    return (
-                                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                            {children}
-                                        </a>
-                                    );
-                                },
-                                ul({ children }) {
-                                    return <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>;
-                                },
-                                ol({ children }) {
-                                    return <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>;
-                                },
-                                p({ children }) {
-                                    return <p className="mb-2 last:mb-0">{children}</p>;
-                                },
-                                blockquote({ children }) {
-                                    return <blockquote className="border-primary/50 my-2 border-l-4 pl-4 italic">{children}</blockquote>;
-                                },
-                            }}
-                        >
-                            {message.content}
-                        </ReactMarkdown>
+                        <Markdown mode={isStreaming ? 'streaming' : 'static'}>{message.content}</Markdown>
                     )}
                 </div>
 

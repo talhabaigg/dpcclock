@@ -70,11 +70,36 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                         case 'delta':
                             if (event.data.delta) {
                                 setMessages((prev) =>
+                                    prev.map((m) => {
+                                        if (m.id !== assistantId) return m;
+                                        // Reasoning ends as soon as the first answer chunk arrives:
+                                        // capture the elapsed time and flip the streaming flag.
+                                        const justFinishedReasoning =
+                                            m.reasoningStreaming && m.reasoningStartedAt && !m.reasoningDurationMs;
+                                        return {
+                                            ...m,
+                                            content: m.content + event.data.delta,
+                                            reasoningStreaming: false,
+                                            reasoningDurationMs: justFinishedReasoning
+                                                ? Date.now() - (m.reasoningStartedAt ?? Date.now())
+                                                : m.reasoningDurationMs,
+                                            status: 'streaming',
+                                        };
+                                    }),
+                                );
+                            }
+                            break;
+
+                        case 'reasoning_delta':
+                            if (event.data.reasoning_delta) {
+                                setMessages((prev) =>
                                     prev.map((m) =>
                                         m.id === assistantId
                                             ? {
                                                   ...m,
-                                                  content: m.content + event.data.delta,
+                                                  reasoning: (m.reasoning ?? '') + event.data.reasoning_delta,
+                                                  reasoningStreaming: true,
+                                                  reasoningStartedAt: m.reasoningStartedAt ?? Date.now(),
                                                   status: 'streaming',
                                               }
                                             : m,
@@ -89,7 +114,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                                 setConversationId(event.data.conversation_id);
                             }
                             setMessages((prev) => {
-                                const updated = prev.map((m) => (m.id === assistantId ? { ...m, status: 'complete' as const } : m));
+                                const updated = prev.map((m) => {
+                                    if (m.id !== assistantId) return m;
+                                    // Fallback: if reasoning was streaming and no answer chunk
+                                    // ever arrived to close it out, finalize duration here.
+                                    const needsDuration =
+                                        m.reasoning && m.reasoningStartedAt && !m.reasoningDurationMs;
+                                    return {
+                                        ...m,
+                                        status: 'complete' as const,
+                                        reasoningStreaming: false,
+                                        reasoningDurationMs: needsDuration
+                                            ? Date.now() - (m.reasoningStartedAt ?? Date.now())
+                                            : m.reasoningDurationMs,
+                                    };
+                                });
                                 const completedMessage = updated.find((m) => m.id === assistantId);
                                 if (completedMessage && onMessageComplete) {
                                     onMessageComplete(completedMessage);

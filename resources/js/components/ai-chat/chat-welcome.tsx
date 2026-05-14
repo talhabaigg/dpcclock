@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, Plus, X } from 'lucide-react';
 import { SuperiorMark } from './superior-mark';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatService } from './chat-service';
@@ -124,8 +124,8 @@ function AnimatedGreeting({ userName }: { userName?: string }) {
     }, [greeting]);
 
     return (
-        <div className="mb-8 w-full max-w-2xl">
-            <h1 className="text-center text-3xl font-semibold tracking-tight md:text-4xl">
+        <div className="mb-6 w-full max-w-3xl">
+            <h1 className="text-center text-xl font-medium tracking-tight md:text-2xl">
                 <span className="text-foreground">
                     {displayedGreeting}
                     {!isComplete && <span className="text-muted-foreground animate-pulse">|</span>}
@@ -307,216 +307,159 @@ export function ChatWelcome({
                 {/* Animated greeting */}
                 <AnimatedGreeting userName={userName} />
 
-                {/* Gemini-style input */}
-                <div className="w-full max-w-2xl">
-                    {/* Outer wrapper — gradient border lives here */}
-                    <div className="relative rounded-[28px] p-[2px]">
-                        {/* Animated conic gradient border */}
-                        <div
-                            className={cn(
-                                'gemini-border absolute inset-0 rounded-[28px] transition-opacity duration-500',
-                                isFocused ? 'opacity-100' : 'opacity-0',
-                            )}
-                        />
-                        {/* Soft glow behind the border */}
-                        <div
-                            className={cn(
-                                'gemini-border absolute inset-0 rounded-[28px] blur-md transition-opacity duration-500',
-                                isFocused ? 'opacity-50' : 'opacity-0',
-                            )}
-                        />
+                {/* Slim pill input */}
+                <div className="w-full max-w-3xl">
+                    {/* Hidden file input */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                        accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                    />
 
-                        {/* Hidden file input */}
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileSelect}
-                            accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-                        />
-
-                        {/* Inner card */}
-                        <div className={cn(
-                            'relative rounded-[26px] transition-all duration-300',
-                            'bg-card',
-                            !isFocused && 'border border-border/80',
-                            'shadow-sm',
-                            isFocused && 'shadow-lg',
-                        )}>
-                            {/* Attachments preview */}
-                            {attachments.length > 0 && (
-                                <div className="flex flex-wrap gap-2 px-4 pt-3">
-                                    {attachments.map((file, index) => (
-                                        <AttachmentChip key={`${file.name}-${index}`} file={file} onRemove={() => removeAttachment(index)} />
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Textarea area / Recording state */}
-                            <div className="relative px-4 pt-4 pb-2">
-                                {isRecording ? (
-                                    <div className="flex min-h-[44px] items-center gap-3">
-                                        <span className="relative flex size-2.5 shrink-0">
-                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
-                                            <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
-                                        </span>
-                                        <span className="text-foreground/80 shrink-0 text-sm font-medium">Recording</span>
-                                        <VoiceWaveform stream={audioStream} className="text-foreground/70 h-7" />
-                                        <span className="text-muted-foreground shrink-0 text-sm font-medium tabular-nums">{formatRecordingTime(recordingDuration)}</span>
-                                    </div>
-                                ) : isTranscribing ? (
-                                    <div className="flex min-h-[44px] items-center gap-3">
-                                        <svg className="text-muted-foreground size-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                        </svg>
-                                        <span className="text-muted-foreground text-sm">Transcribing voice note...</span>
-                                    </div>
-                                ) : (
-                                    <textarea
-                                        ref={textareaRef}
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        onFocus={() => setIsFocused(true)}
-                                        onBlur={() => setIsFocused(false)}
-                                        placeholder={placeholder}
-                                        disabled={isLoading}
-                                        className={cn(
-                                            'max-h-[200px] min-h-[44px] w-full resize-none bg-transparent text-base leading-relaxed outline-none',
-                                            'placeholder:text-muted-foreground/50',
-                                            'disabled:cursor-not-allowed disabled:opacity-50',
-                                        )}
-                                        rows={2}
-                                    />
-                                )}
-                            </div>
-
-                            {/* Bottom toolbar */}
-                            <div className="relative flex items-center justify-between px-3 pb-3">
-                                <div className="flex items-center gap-1">
-                                    {/* Attachment button */}
-                                    {!isRecording && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                    disabled={isLoading || isTranscribing}
-                                                >
-                                                    <Paperclip className="size-[18px]" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Attach file</TooltipContent>
-                                        </Tooltip>
-                                    )}
-                                    {/* Voice call button */}
-                                    {onVoiceCall && !isRecording && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex size-8 items-center justify-center rounded-full transition-colors"
-                                                    onClick={onVoiceCall}
-                                                >
-                                                    <AudioLines className="size-[18px]" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Voice call</TooltipContent>
-                                        </Tooltip>
-                                    )}
-                                    {/* Cancel recording button */}
-                                    {isRecording && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-8 items-center justify-center rounded-full transition-colors"
-                                                    onClick={cancelRecording}
-                                                >
-                                                    <X className="size-[18px]" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Cancel recording</TooltipContent>
-                                        </Tooltip>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-1">
-                                    {/* Voice note button */}
-                                    {!isLoading && !isTranscribing && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className={cn(
-                                                        'flex size-8 items-center justify-center rounded-full transition-all',
-                                                        isRecording
-                                                            ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-                                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                                                    )}
-                                                    onClick={isRecording ? stopRecording : startRecording}
-                                                >
-                                                    <Mic className="size-[18px]" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>{isRecording ? 'Send voice note' : 'Record voice note'}</TooltipContent>
-                                        </Tooltip>
-                                    )}
-
-                                    {/* Send button */}
-                                    {!isRecording && !isTranscribing && (
-                                        <button
-                                            type="button"
-                                            className={cn(
-                                                'flex size-8 items-center justify-center rounded-full transition-all',
-                                                canSubmit
-                                                    ? 'bg-foreground text-background hover:bg-foreground/90'
-                                                    : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
-                                            )}
-                                            onClick={handleSubmit}
-                                            disabled={!canSubmit}
-                                        >
-                                            <ArrowUp className="size-[18px]" />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Model selector below input */}
-                    {onModelChange && (
-                        <div className="mt-2 px-1">
-                            <ModelSelector
-                                selectedModelId={selectedModelId}
-                                onModelChange={onModelChange}
-                            />
+                    {/* Attachments preview (above pill) */}
+                    {attachments.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-2 px-2">
+                            {attachments.map((file, index) => (
+                                <AttachmentChip key={`${file.name}-${index}`} file={file} onRemove={() => removeAttachment(index)} />
+                            ))}
                         </div>
                     )}
-                </div>
 
-                {/* Gemini gradient animation */}
-                <style>{`
-                    @property --gemini-angle {
-                        syntax: '<angle>';
-                        initial-value: 0deg;
-                        inherits: false;
-                    }
-                    @keyframes gemini-spin {
-                        to { --gemini-angle: 360deg; }
-                    }
-                    .gemini-border {
-                        background: conic-gradient(
-                            from var(--gemini-angle),
-                            #4285f4, #9b72cb, #d96570,
-                            #d96570, #9b72cb, #4285f4
-                        );
-                        animation: gemini-spin 3s linear infinite;
-                    }
-                `}</style>
+                    <div
+                        className={cn(
+                            'bg-muted/70 flex items-center gap-1.5 rounded-full pl-3 pr-3 py-3 transition-colors',
+                            'border border-transparent',
+                            isFocused && 'border-border bg-muted/90',
+                        )}
+                    >
+                        {/* Left: attach button */}
+                        {!isRecording && !isTranscribing && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex size-10 shrink-0 items-center justify-center rounded-full transition-colors"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isLoading}
+                                    >
+                                        {attachments.length > 0 ? <Paperclip className="size-5" /> : <Plus className="size-5" />}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Attach file</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {/* Cancel recording */}
+                        {isRecording && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex size-10 shrink-0 items-center justify-center rounded-full transition-colors"
+                                        onClick={cancelRecording}
+                                    >
+                                        <X className="size-5" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Cancel recording</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {/* Center: textarea / recording / transcribing */}
+                        <div className="flex min-w-0 flex-1 items-center px-3">
+                            {isRecording ? (
+                                <div className="flex min-h-[28px] w-full items-center gap-2.5">
+                                    <span className="relative flex size-2 shrink-0">
+                                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-400 opacity-75" />
+                                        <span className="relative inline-flex size-2 rounded-full bg-red-500" />
+                                    </span>
+                                    <span className="text-foreground/80 shrink-0 text-sm font-medium">Recording</span>
+                                    <VoiceWaveform stream={audioStream} className="text-foreground/70" />
+                                    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{formatRecordingTime(recordingDuration)}</span>
+                                </div>
+                            ) : isTranscribing ? (
+                                <div className="flex min-h-[28px] items-center gap-2.5">
+                                    <svg className="text-muted-foreground size-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    <span className="text-muted-foreground text-sm">Transcribing voice note…</span>
+                                </div>
+                            ) : (
+                                <textarea
+                                    ref={textareaRef}
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
+                                    placeholder={placeholder}
+                                    disabled={isLoading}
+                                    className={cn(
+                                        'max-h-[200px] min-h-[28px] w-full resize-none bg-transparent text-base leading-7 outline-none',
+                                        'placeholder:text-muted-foreground/60',
+                                        'disabled:cursor-not-allowed disabled:opacity-50',
+                                    )}
+                                    rows={1}
+                                />
+                            )}
+                        </div>
+
+                        {/* Right: model selector + voice-call + mic + send */}
+                        {!isRecording && !isTranscribing && onModelChange && (
+                            <div className="shrink-0">
+                                <ModelSelector selectedModelId={selectedModelId} onModelChange={onModelChange} />
+                            </div>
+                        )}
+
+                        {!isLoading && !isTranscribing && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'flex size-10 shrink-0 items-center justify-center rounded-full transition-colors',
+                                            isRecording
+                                                ? 'bg-red-500 text-white hover:bg-red-600'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-background/60',
+                                        )}
+                                        onClick={isRecording ? stopRecording : startRecording}
+                                    >
+                                        <Mic className="size-5" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{isRecording ? 'Send voice note' : 'Record voice note'}</TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        {!isRecording && !isTranscribing && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'flex size-10 shrink-0 items-center justify-center rounded-full transition-colors',
+                                            canSubmit
+                                                ? 'bg-foreground text-background hover:bg-foreground/90'
+                                                : onVoiceCall
+                                                  ? 'bg-background text-muted-foreground hover:text-foreground'
+                                                  : 'bg-muted-foreground/20 text-muted-foreground cursor-not-allowed',
+                                        )}
+                                        onClick={canSubmit ? handleSubmit : onVoiceCall}
+                                        disabled={!canSubmit && !onVoiceCall}
+                                        aria-label={canSubmit ? 'Send message' : 'Voice mode'}
+                                    >
+                                        {canSubmit ? <ArrowUp className="size-5" /> : <AudioLines className="size-5" />}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent>{canSubmit ? 'Send message' : 'Voice mode'}</TooltipContent>
+                            </Tooltip>
+                        )}
+                    </div>
+                </div>
             </div>
         );
     }

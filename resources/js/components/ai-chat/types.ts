@@ -11,6 +11,14 @@ export interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
+    /** Reasoning / chain-of-thought summary streamed before the answer (reasoning-capable models only). */
+    reasoning?: string;
+    /** True while reasoning is actively streaming; false (or undefined) once the answer has started. */
+    reasoningStreaming?: boolean;
+    /** Timestamp (ms) when the first reasoning chunk arrived — used to compute the duration. */
+    reasoningStartedAt?: number;
+    /** Total reasoning duration in milliseconds, set when the answer starts streaming. */
+    reasoningDurationMs?: number;
     timestamp: Date;
     status: 'sending' | 'streaming' | 'complete' | 'error';
     attachments?: ChatAttachment[];
@@ -56,9 +64,10 @@ export interface ChatApiResponse {
 }
 
 export interface StreamEvent {
-    type: 'delta' | 'done' | 'error';
+    type: 'delta' | 'reasoning_delta' | 'done' | 'error';
     data: {
         delta?: string;
+        reasoning_delta?: string;
         conversation_id?: string;
         error?: string;
     };
@@ -86,6 +95,20 @@ export const AVAILABLE_MODELS: AiModel[] = [
 ];
 
 export const DEFAULT_MODEL_ID = 'gpt-5.4-mini';
+
+export type ChatMode = 'instant' | 'thinking' | 'pro';
+
+export const CHAT_MODES: { id: ChatMode; label: string; description: string }[] = [
+    { id: 'instant', label: 'Instant', description: 'Fast everyday replies' },
+    { id: 'thinking', label: 'Thinking', description: 'Step-by-step reasoning' },
+    { id: 'pro', label: 'Pro', description: 'Frontier capability for hard tasks' },
+];
+
+export const DEFAULT_MODE_MODEL_MAP: Record<ChatMode, string> = {
+    instant: 'gpt-5.4-mini',
+    thinking: 'o4-mini',
+    pro: 'gpt-5.5',
+};
 
 export interface ConversationSummary {
     conversation_id: string;

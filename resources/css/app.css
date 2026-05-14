@@ -3,6 +3,8 @@
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../node_modules/streamdown/dist/*.js';
+@source '../../node_modules/@streamdown/code/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant coarse (@media (pointer: coarse));
@@ -206,6 +208,16 @@
 .ai-preview li > ol,
 .prose li > ol {
     margin: 0.25em 0;
+}
+
+/* GFM task list items: remove the bullet so the checkbox stands alone */
+[data-streamdown] .task-list-item,
+.task-list-item {
+    list-style: none;
+}
+[data-streamdown] .task-list-item::marker,
+.task-list-item::marker {
+    content: '';
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

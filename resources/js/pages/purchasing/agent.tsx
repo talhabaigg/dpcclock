@@ -24,10 +24,7 @@ import {
     User,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import remarkGfm from 'remark-gfm';
+import { Markdown } from '@/components/markdown/markdown';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,39 +304,6 @@ function useRequisitionAgent() {
 
 // ─── Message Component ────────────────────────────────────────────────────────
 
-function CodeBlock({ language, children }: { language: string; children: string }) {
-    const [copied, setCopied] = useState(false);
-    return (
-        <div className="group/code relative my-3 overflow-hidden rounded-lg border border-zinc-700">
-            <div className="flex items-center justify-between bg-zinc-800 px-3 py-1.5">
-                <span className="text-xs text-zinc-400">{language || 'code'}</span>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-xs text-zinc-400 hover:text-zinc-200"
-                    onClick={async () => {
-                        await navigator.clipboard.writeText(children);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                    }}
-                >
-                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                    {copied ? 'Copied' : 'Copy'}
-                </Button>
-            </div>
-            <SyntaxHighlighter
-                language={language || 'text'}
-                style={oneDark}
-                customStyle={{ margin: 0, padding: '0.75rem', fontSize: '0.8rem', background: '#1e1e1e', borderRadius: 0 }}
-                showLineNumbers={children.split('\n').length > 3}
-                lineNumberStyle={{ minWidth: '2em', paddingRight: '0.75em', color: '#6b7280', userSelect: 'none' }}
-            >
-                {children}
-            </SyntaxHighlighter>
-        </div>
-    );
-}
-
 // ─── Tool Result Cards ───────────────────────────────────────────────────────
 
 function ToolResultCards({ toolResults, onSelect }: { toolResults: ToolResultData[]; onSelect: (text: string) => void }) {
@@ -493,49 +457,7 @@ const AgentMessageBubble = memo(function AgentMessageBubble({ message, onSendMes
                             </span>
                         </div>
                     ) : (
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                                code({ className, children }) {
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    const codeString = String(children).replace(/\n$/, '');
-                                    if (!className) {
-                                        return <code className="rounded bg-zinc-100 px-1 py-0.5 text-sm dark:bg-zinc-800">{children}</code>;
-                                    }
-                                    return <CodeBlock language={match?.[1] || ''}>{codeString}</CodeBlock>;
-                                },
-                                pre({ children }) {
-                                    return <>{children}</>;
-                                },
-                                table({ children }) {
-                                    return (
-                                        <div className="my-3 overflow-x-auto rounded-lg border">
-                                            <table className="w-full text-sm">{children}</table>
-                                        </div>
-                                    );
-                                },
-                                thead({ children }) {
-                                    return <thead className="bg-muted/50">{children}</thead>;
-                                },
-                                th({ children }) {
-                                    return <th className="border-b px-3 py-2 text-left font-semibold">{children}</th>;
-                                },
-                                td({ children }) {
-                                    return <td className="border-b px-3 py-2">{children}</td>;
-                                },
-                                p({ children }) {
-                                    return <p className="mb-2 last:mb-0">{children}</p>;
-                                },
-                                ul({ children }) {
-                                    return <ul className="my-1 ml-4 list-disc space-y-0.5">{children}</ul>;
-                                },
-                                ol({ children }) {
-                                    return <ol className="my-1 ml-4 list-decimal space-y-0.5">{children}</ol>;
-                                },
-                            }}
-                        >
-                            {message.content}
-                        </ReactMarkdown>
+                        <Markdown mode={isActive ? 'streaming' : 'static'}>{message.content}</Markdown>
                     )}
                     {isActive && message.content && (
                         <span className="bg-primary ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm" />

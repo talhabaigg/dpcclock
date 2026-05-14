@@ -6,15 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { usePage } from '@inertiajs/react';
-import { Check, Copy, Download, FileText, RefreshCw } from 'lucide-react';
+import { Brain, Check, ChevronDown, Copy, Download, FileText, RefreshCw } from 'lucide-react';
 import { SuperiorMark } from './superior-mark';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Markdown } from '@/components/markdown/markdown';
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
-import remarkGfm from 'remark-gfm';
 import type { ChatMessage as ChatMessageType } from './types';
 
 interface ChatMessageProps {
@@ -22,75 +19,6 @@ interface ChatMessageProps {
     isLatest?: boolean;
     onRegenerate?: () => void;
     showTimestamp?: boolean;
-}
-
-// Code block component with syntax highlighting and copy button
-function CodeBlock({ language, children }: { language: string; children: string }) {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(children);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch {
-            // Clipboard API failed
-        }
-    };
-
-    return (
-        <div className="group/code relative my-4 overflow-hidden rounded-lg border border-zinc-700">
-            {/* Header with language and copy button */}
-            <div className="flex items-center justify-between bg-zinc-800 px-4 py-2">
-                <span className="text-xs font-medium text-zinc-400">{language || 'code'}</span>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 gap-1.5 px-2 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-                    onClick={handleCopy}
-                >
-                    {copied ? (
-                        <>
-                            <Check className="size-3" />
-                            Copied!
-                        </>
-                    ) : (
-                        <>
-                            <Copy className="size-3" />
-                            Copy
-                        </>
-                    )}
-                </Button>
-            </div>
-            {/* Code content with syntax highlighting */}
-            <SyntaxHighlighter
-                language={language || 'text'}
-                style={oneDark}
-                customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.875rem',
-                    lineHeight: '1.5',
-                    background: '#1e1e1e',
-                    borderRadius: 0,
-                }}
-                codeTagProps={{
-                    style: {
-                        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                    },
-                }}
-                showLineNumbers={children.split('\n').length > 3}
-                lineNumberStyle={{
-                    minWidth: '2.5em',
-                    paddingRight: '1em',
-                    color: '#6b7280',
-                    userSelect: 'none',
-                }}
-            >
-                {children}
-            </SyntaxHighlighter>
-        </div>
-    );
 }
 
 // Design-system chart tokens — uses CSS variables from --chart-1..5, extended for more datasets
@@ -686,73 +614,6 @@ function ReportBlock({ html }: { html: string }) {
     );
 }
 
-/**
- * Gemini-style smooth text reveal.
- * Shows raw text during streaming with word-by-word deblur animation.
- * ReactMarkdown only renders once streaming is complete.
- */
-function SmoothStreamingText({ content }: { content: string }) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const revealedCountRef = useRef(0);
-    const rafRef = useRef<number>(0);
-    const words = content.split(/(\s+)/);
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const spans = container.querySelectorAll<HTMLSpanElement>('span[data-word]');
-        let current = revealedCountRef.current;
-
-        const reveal = () => {
-            const batch = Math.max(2, Math.ceil((spans.length - current) * 0.15));
-            const end = Math.min(current + batch, spans.length);
-
-            for (let i = current; i < end; i++) {
-                spans[i].classList.add('gemini-word-visible');
-            }
-
-            current = end;
-            revealedCountRef.current = current;
-
-            if (current < spans.length) {
-                rafRef.current = requestAnimationFrame(reveal);
-            }
-        };
-
-        rafRef.current = requestAnimationFrame(reveal);
-        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-    }, [words.length]);
-
-    return (
-        <>
-            <div ref={containerRef} className="gemini-smooth-stream whitespace-pre-wrap text-sm leading-relaxed">
-                {words.map((word, i) => (
-                    <span
-                        key={i}
-                        data-word
-                        className={i < revealedCountRef.current ? 'gemini-word-visible' : ''}
-                    >
-                        {word}
-                    </span>
-                ))}
-            </div>
-            <style>{`
-                .gemini-smooth-stream span[data-word] {
-                    opacity: 0;
-                    filter: blur(6px);
-                    transition: opacity 0.3s ease-out, filter 0.3s ease-out;
-                    display: inline;
-                }
-                .gemini-smooth-stream span.gemini-word-visible {
-                    opacity: 1;
-                    filter: blur(0);
-                }
-            `}</style>
-        </>
-    );
-}
-
 function StreamingIndicator() {
     return (
         <div className="flex items-center gap-1 py-2" role="status" aria-label="AI is responding">
@@ -784,6 +645,73 @@ function StreamingIndicator() {
     );
 }
 
+/**
+ * Reasoning / chain-of-thought display. Two presentations:
+ *  - **Streaming**: shown inline with a soft left-border accent (no card chrome)
+ *    so it reads like a footnote rather than competing with the answer.
+ *  - **Finished**: collapsed pill "Thought for X.Xs" — click to expand the trace
+ *    rendered through <Markdown> so paragraphs/lists/code come out properly.
+ */
+function ThinkingPanel({
+    text,
+    streaming,
+    durationMs,
+}: {
+    text: string;
+    streaming: boolean;
+    durationMs?: number;
+}) {
+    const [expanded, setExpanded] = useState(false);
+
+    // Streaming view: inline, left-border accent, muted body text.
+    if (streaming) {
+        return (
+            <div className="border-muted-foreground/30 my-2 border-l-2 pl-3">
+                <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+                    <Brain className="size-3.5 animate-pulse" />
+                    <span>Thinking…</span>
+                </div>
+                <div className="text-muted-foreground/90 mt-1 whitespace-pre-wrap text-[13px] leading-relaxed">
+                    {text}
+                    <span className="bg-muted-foreground/60 ml-0.5 inline-block h-3 w-0.5 animate-pulse align-middle" />
+                </div>
+            </div>
+        );
+    }
+
+    // Finished view: compact pill with duration; expandable to show the trace.
+    return (
+        <div className="my-2">
+            <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className={cn(
+                    'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                )}
+                aria-expanded={expanded}
+            >
+                <Brain className="size-3.5" />
+                <span>{durationMs ? `Thought for ${formatThinkingDuration(durationMs)}` : 'Thought process'}</span>
+                <ChevronDown className={cn('size-3 transition-transform', expanded && 'rotate-180')} />
+            </button>
+            {expanded && (
+                <div className="border-muted-foreground/30 mt-2 border-l-2 pl-3">
+                    <div className="text-muted-foreground prose-thinking">
+                        <Markdown mode="static">{text}</Markdown>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function formatThinkingDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    const s = ms / 1000;
+    if (s < 10) return `${s.toFixed(1)}s`;
+    return `${Math.round(s)}s`;
+}
+
 export const ChatMessage = memo(function ChatMessage({ message, isLatest = false, onRegenerate, showTimestamp = false }: ChatMessageProps) {
     const [copied, setCopied] = useState(false);
     const isUser = message.role === 'user';
@@ -794,6 +722,32 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
     const getInitials = useInitials();
     const userName = auth?.user?.name ?? 'You';
     const userAvatar = auth?.user?.avatar;
+
+    // Product-specific fenced-code renderers. Anything not listed here falls
+    // through to Streamdown's default Shiki-highlighted code block.
+    const customFences = useMemo(
+        () => ({
+            report: (code: string) => <ReportBlock html={code} />,
+            'html-report': (code: string) => <ReportBlock html={code} />,
+            htmlchart: (code: string) => <HtmlChartBlock html={code} />,
+            'html-chart': (code: string) => <HtmlChartBlock html={code} />,
+            chart: (code: string) => {
+                const chart = tryParseChartData(code);
+                if (chart) return <ChartBlock data={chart} />;
+                const img = tryParseImageData(code);
+                if (img) return <GeneratedImageBlock data={img} />;
+                return null;
+            },
+            json: (code: string) => {
+                const chart = tryParseChartData(code);
+                if (chart) return <ChartBlock data={chart} />;
+                const img = tryParseImageData(code);
+                if (img) return <GeneratedImageBlock data={img} />;
+                return null;
+            },
+        }),
+        [],
+    );
 
     const handleCopy = async () => {
         try {
@@ -827,7 +781,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
     };
 
     return (
-        <div className={cn('group relative flex gap-3 px-4 py-4 transition-colors', isUser ? 'bg-transparent' : 'bg-muted/30')}>
+        <div
+            data-message-id={message.id}
+            data-message-role={message.role}
+            className={cn('group relative flex gap-3 px-4 py-4 transition-colors', isUser ? 'bg-transparent' : 'bg-muted/30')}
+        >
             {/* Avatar */}
             <div className="flex-shrink-0">
                 <Avatar className={cn('size-8', !isUser && 'border-border bg-background border')}>
@@ -880,8 +838,17 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                     </div>
                 )}
 
+                {/* Reasoning / chain-of-thought panel (only on assistant messages that have it) */}
+                {!isUser && message.reasoning && (
+                    <ThinkingPanel
+                        text={message.reasoning}
+                        streaming={!!message.reasoningStreaming}
+                        durationMs={message.reasoningDurationMs}
+                    />
+                )}
+
                 {/* Message Content */}
-                <div className={cn('prose prose-sm dark:prose-invert max-w-none', isError && 'text-destructive')}>
+                <div className={cn('min-w-0 max-w-none', isError && 'text-destructive')}>
                     {isStreaming && !message.content ? (
                         <StreamingIndicator />
                     ) : isStreaming ? (
@@ -897,7 +864,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                                 const before = message.content.slice(0, chartHtmlMatch.index).trim();
                                 return (
                                     <>
-                                        {before && <SmoothStreamingText content={before} />}
+                                        {before && (
+                                            <Markdown mode="streaming" customFences={customFences}>
+                                                {before}
+                                            </Markdown>
+                                        )}
                                         <div className="bg-card relative my-4 overflow-hidden rounded-xl border shadow-sm">
                                             {/* Double shimmer — fast sweep + slow glow */}
                                             <div className="pointer-events-none absolute inset-0 z-10" style={{
@@ -1056,7 +1027,11 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                                 const before = message.content.slice(0, reportMatch?.index ?? 0).trim();
                                 return (
                                     <>
-                                        {before && <SmoothStreamingText content={before} />}
+                                        {before && (
+                                            <Markdown mode="streaming" customFences={customFences}>
+                                                {before}
+                                            </Markdown>
+                                        )}
                                         <div className="bg-card relative my-4 overflow-hidden rounded-xl border shadow-sm">
                                             <div className="pointer-events-none absolute inset-0 z-10" style={{
                                                 background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.08) 60%, transparent 100%)',
@@ -1140,108 +1115,19 @@ export const ChatMessage = memo(function ChatMessage({ message, isLatest = false
                                     </>
                                 );
                             }
-                            return <SmoothStreamingText content={message.content} />;
+                            return (
+                                <Markdown mode="streaming" customFences={customFences}>
+                                    {message.content}
+                                </Markdown>
+                            );
                         })()
                     ) : /^<div\s+style=/.test(message.content.trim()) && !message.content.includes('```') ? (
                         // Fallback: AI output raw HTML without a ```report fence — render it as a report
                         <ReportBlock html={message.content.trim()} />
                     ) : (
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                                // Code blocks with syntax highlighting and chart support
-                                code({ className, children, ...props }) {
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    const language = match ? match[1] : '';
-                                    const codeString = String(children).replace(/\n$/, '');
-                                    // Check if inline based on whether we have a language class (block code has language)
-                                    const isInline = !className;
-
-                                    if (isInline) {
-                                        return (
-                                            <code
-                                                className="rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
-                                                {...props}
-                                            >
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-
-                                    // Check if this is an AI-generated report (HTML document)
-                                    if (language === 'report' || language === 'html-report') {
-                                        return <ReportBlock html={codeString} />;
-                                    }
-
-                                    // Inline HTML visual — just the chart/visual, no wrapper
-                                    if (language === 'htmlchart' || language === 'html-chart') {
-                                        return <HtmlChartBlock html={codeString} />;
-                                    }
-
-                                    // Check if this is chart data (language is 'chart' or 'json' containing chart data)
-                                    if (language === 'chart' || language === 'json') {
-                                        const chartData = tryParseChartData(codeString);
-                                        if (chartData) {
-                                            return <ChartBlock data={chartData} />;
-                                        }
-
-                                        // Check if this is generated image data
-                                        const imageData = tryParseImageData(codeString);
-                                        if (imageData) {
-                                            return <GeneratedImageBlock data={imageData} />;
-                                        }
-                                    }
-
-                                    return <CodeBlock language={language}>{codeString}</CodeBlock>;
-                                },
-                                // Pre tag - let CodeBlock handle the styling
-                                pre({ children }) {
-                                    return <>{children}</>;
-                                },
-                                // Tables
-                                table({ children }) {
-                                    return (
-                                        <div className="my-4 overflow-x-auto rounded-lg border">
-                                            <table className="w-full text-sm">{children}</table>
-                                        </div>
-                                    );
-                                },
-                                thead({ children }) {
-                                    return <thead className="bg-muted/50">{children}</thead>;
-                                },
-                                th({ children }) {
-                                    return <th className="border-b px-4 py-2 text-left font-semibold">{children}</th>;
-                                },
-                                td({ children }) {
-                                    return <td className="border-b px-4 py-2">{children}</td>;
-                                },
-                                // Links
-                                a({ href, children }) {
-                                    return (
-                                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                            {children}
-                                        </a>
-                                    );
-                                },
-                                // Lists
-                                ul({ children }) {
-                                    return <ul className="my-2 ml-4 list-disc space-y-1">{children}</ul>;
-                                },
-                                ol({ children }) {
-                                    return <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>;
-                                },
-                                // Paragraphs
-                                p({ children }) {
-                                    return <p className="mb-2 last:mb-0">{children}</p>;
-                                },
-                                // Blockquotes
-                                blockquote({ children }) {
-                                    return <blockquote className="border-primary/50 my-2 border-l-4 pl-4 italic">{children}</blockquote>;
-                                },
-                            }}
-                        >
+                        <Markdown mode="static" customFences={customFences}>
                             {message.content}
-                        </ReactMarkdown>
+                        </Markdown>
                     )}
                 </div>
 

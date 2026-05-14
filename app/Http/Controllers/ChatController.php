@@ -1154,6 +1154,28 @@ INSTRUCTIONS;
     /**
      * Stream response from OpenAI API with tool call support
      */
+    /**
+     * Detect whether a model id supports OpenAI's reasoning parameter (and thus
+     * can stream reasoning summaries). Covers o-series and GPT-5 family.
+     */
+    private function isReasoningModel(string $model): bool
+    {
+        $m = strtolower($model);
+        return str_starts_with($m, 'o1')
+            || str_starts_with($m, 'o3')
+            || str_starts_with($m, 'o4')
+            || str_starts_with($m, 'gpt-5');
+    }
+
+    /**
+     * Detect Anthropic models that support extended thinking.
+     */
+    private function isClaudeThinkingModel(string $model): bool
+    {
+        $m = strtolower($model);
+        return str_contains($m, 'sonnet-4') || str_contains($m, 'opus-4');
+    }
+
     private function streamOpenAiResponse(array $input, string $instructions, array $tools, string $model, string $apiKey, ?string $forceTool, string &$fullText, int &$totalTokens, int &$inputTokens, int &$outputTokens): void
     {
         $maxIterations = 10;
@@ -1169,6 +1191,19 @@ INSTRUCTIONS;
                 'tools' => $tools,
                 'stream' => true,
             ];
+
+            // For reasoning-capable models (o-series, GPT-5 family), ask the API
+            // for reasoning effort. The "summary" field that streams a thinking
+            // panel to the UI requires org verification on OpenAI's side, so it's
+            // gated by an env flag — flip OPENAI_REASONING_SUMMARY=true after
+            // verifying at https://platform.openai.com/settings/organization/general
+            if ($this->isReasoningModel($model)) {
+                $reasoning = ['effort' => 'medium'];
+                if (env('OPENAI_REASONING_SUMMARY', false)) {
+                    $reasoning['summary'] = 'auto';
+                }
+                $requestPayload['reasoning'] = $reasoning;
+            }
 
             if ($forceTool && $iteration === 0) {
                 $requestPayload['tool_choice'] = [
@@ -1233,6 +1268,24 @@ INSTRUCTIONS;
                         if (is_string($delta) && $delta !== '') {
                             $fullText .= $delta;
                             $this->sendSSEData(['delta' => $delta]);
+                        }
+                    }
+
+                    // Reasoning summary stream (o-series / GPT-5 reasoning models). OpenAI's
+                    // Responses API emits incremental summary deltas while the model thinks.
+                    if ($eventType === 'response.reasoning_summary_text.delta') {
+                        $delta = $event['delta'] ?? '';
+                        if (is_string($delta) && $delta !== '') {
+                            $this->sendSSEData(['reasoning_delta' => $delta]);
+                        }
+                    }
+                    // Some Responses API versions emit per-part deltas inside reasoning items
+                    // under this event name — forward those too for compatibility.
+                    if ($eventType === 'response.reasoning_summary_part.delta') {
+                        $part = $event['part'] ?? [];
+                        $delta = is_array($part) ? ($part['text'] ?? '') : '';
+                        if (is_string($delta) && $delta !== '') {
+                            $this->sendSSEData(['reasoning_delta' => $delta]);
                         }
                     }
 
@@ -1393,6 +1446,17 @@ INSTRUCTIONS;
             'stream' => true,
         ];
 
+        // For thinking-capable Claude models (Sonnet 4, Opus 4), enable extended
+        // thinking so the API streams a thinking_delta content block before the
+        // answer. budget_tokens must be < max_tokens. We raise both modestly.
+        if ($this->isClaudeThinkingModel($model)) {
+            $requestPayload['max_tokens'] = 8192;
+            $requestPayload['thinking'] = [
+                'type' => 'enabled',
+                'budget_tokens' => 4096,
+            ];
+        }
+
         Log::info('Making Anthropic API request', ['model' => $model]);
 
         $response = Http::withHeaders([
@@ -1441,12 +1505,22 @@ INSTRUCTIONS;
 
                 $eventType = $event['type'] ?? null;
 
-                // Handle text deltas
+                // Handle text + thinking deltas. The delta object carries a `type`
+                // field that distinguishes regular output from extended thinking.
                 if ($eventType === 'content_block_delta') {
-                    $delta = $event['delta']['text'] ?? '';
-                    if ($delta !== '') {
-                        $fullText .= $delta;
-                        $this->sendSSEData(['delta' => $delta]);
+                    $delta = $event['delta'] ?? [];
+                    $deltaType = $delta['type'] ?? null;
+                    if ($deltaType === 'text_delta') {
+                        $text = $delta['text'] ?? '';
+                        if ($text !== '') {
+                            $fullText .= $text;
+                            $this->sendSSEData(['delta' => $text]);
+                        }
+                    } elseif ($deltaType === 'thinking_delta') {
+                        $thinking = $delta['thinking'] ?? '';
+                        if ($thinking !== '') {
+                            $this->sendSSEData(['reasoning_delta' => $thinking]);
+                        }
                     }
                 }
 
