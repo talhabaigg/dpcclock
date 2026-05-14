@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { ArrowUp, AudioLines, Mic, Paperclip, Plus, Square, X } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { chatService } from './chat-service';
+import { MobileActionsMenu } from './mobile-actions-menu';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 import { VoiceWaveform } from './voice-waveform';
@@ -265,30 +266,52 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     isFocused && 'border-border bg-muted/90',
                 )}
             >
-                {/* Left: attachment button */}
-                {enableAttachments && !isRecording && !isTranscribing && (
+                {/* Left: attachment / mobile actions */}
+                {!isRecording && !isTranscribing && (
                     <>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileSelect}
-                            accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
-                        />
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button
-                                    type="button"
-                                    className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex size-8 shrink-0 items-center justify-center rounded-full transition-colors"
-                                    onClick={() => fileInputRef.current?.click()}
+                        {enableAttachments && (
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={handleFileSelect}
+                                accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                            />
+                        )}
+
+                        {/* Mobile: combined + menu with Attach + Intelligence modes */}
+                        {(enableAttachments || onModelChange) && (
+                            <div className="sm:hidden">
+                                <MobileActionsMenu
+                                    enableAttachments={enableAttachments}
+                                    attachmentCount={attachments.length}
+                                    onAttachClick={enableAttachments ? () => fileInputRef.current?.click() : undefined}
+                                    selectedModelId={selectedModelId}
+                                    onModelChange={onModelChange}
                                     disabled={disabled || isLoading}
-                                >
-                                    {attachments.length > 0 ? <Paperclip className="size-4" /> : <Plus className="size-4" />}
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent>Attach file</TooltipContent>
-                        </Tooltip>
+                                />
+                            </div>
+                        )}
+
+                        {/* Desktop: dedicated + (attach) button */}
+                        {enableAttachments && (
+                            <div className="hidden sm:inline-flex">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex size-8 shrink-0 items-center justify-center rounded-full transition-colors"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={disabled || isLoading}
+                                        >
+                                            {attachments.length > 0 ? <Paperclip className="size-4" /> : <Plus className="size-4" />}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Attach file</TooltipContent>
+                                </Tooltip>
+                            </div>
+                        )}
                     </>
                 )}
 
@@ -348,9 +371,9 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
                     )}
                 </div>
 
-                {/* Right: model selector + mic + send/stop */}
+                {/* Right: model selector (desktop only) + mic + send/stop */}
                 {!isRecording && !isTranscribing && onModelChange && (
-                    <div className="shrink-0">
+                    <div className="hidden shrink-0 sm:block">
                         <ModelSelector selectedModelId={selectedModelId} onModelChange={onModelChange} />
                     </div>
                 )}

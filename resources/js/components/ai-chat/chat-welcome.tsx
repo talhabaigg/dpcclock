@@ -8,6 +8,7 @@ import { ArrowRight, ArrowUp, AudioLines, Mic, Paperclip, Plus, X } from 'lucide
 import { SuperiorMark } from './superior-mark';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatService } from './chat-service';
+import { MobileActionsMenu } from './mobile-actions-menu';
 import { ModelSelector } from './model-selector';
 import { DEFAULT_MODEL_ID } from './types';
 import type { SuggestedPrompt } from './types';
@@ -335,21 +336,37 @@ export function ChatWelcome({
                             isFocused && 'border-border bg-muted/90',
                         )}
                     >
-                        {/* Left: attach button */}
+                        {/* Left: attach button (desktop) / combined mobile actions */}
                         {!isRecording && !isTranscribing && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex size-10 shrink-0 items-center justify-center rounded-full transition-colors"
-                                        onClick={() => fileInputRef.current?.click()}
+                            <>
+                                <div className="sm:hidden">
+                                    <MobileActionsMenu
+                                        enableAttachments
+                                        attachmentCount={attachments.length}
+                                        onAttachClick={() => fileInputRef.current?.click()}
+                                        selectedModelId={selectedModelId}
+                                        onModelChange={onModelChange}
                                         disabled={isLoading}
-                                    >
-                                        {attachments.length > 0 ? <Paperclip className="size-5" /> : <Plus className="size-5" />}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Attach file</TooltipContent>
-                            </Tooltip>
+                                        triggerSizeClass="size-10"
+                                        iconSizeClass="size-5"
+                                    />
+                                </div>
+                                <div className="hidden sm:inline-flex">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex size-10 shrink-0 items-center justify-center rounded-full transition-colors"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isLoading}
+                                            >
+                                                {attachments.length > 0 ? <Paperclip className="size-5" /> : <Plus className="size-5" />}
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Attach file</TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </>
                         )}
 
                         {/* Cancel recording */}
@@ -408,9 +425,9 @@ export function ChatWelcome({
                             )}
                         </div>
 
-                        {/* Right: model selector + voice-call + mic + send */}
+                        {/* Right: model selector (desktop only) + voice-call + mic + send */}
                         {!isRecording && !isTranscribing && onModelChange && (
-                            <div className="shrink-0">
+                            <div className="hidden shrink-0 sm:block">
                                 <ModelSelector selectedModelId={selectedModelId} onModelChange={onModelChange} />
                             </div>
                         )}
