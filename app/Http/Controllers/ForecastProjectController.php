@@ -17,11 +17,20 @@ class ForecastProjectController extends Controller
      */
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:255',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+
         $includeArchived = $request->boolean('archived');
         $view = $request->string('view')->toString() ?: 'board';
         if (! in_array($view, ['board', 'list'], true)) {
             $view = 'board';
         }
+
+        $perPage = $validated['per_page'] ?? 25;
+        $search = $validated['search'] ?? null;
 
         $query = ForecastProject::with(['creator:id,name', 'updater:id,name', 'archiver:id,name'])
             ->orderBy('created_at', 'desc');
@@ -30,19 +39,19 @@ class ForecastProjectController extends Controller
             $query->notArchived();
         }
 
-        $projectsRaw = $query->get();
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('project_number', 'like', "%{$search}%")
+                    ->orWhere('company', 'like', "%{$search}%");
+            });
+        }
 
         // Revenue budget is derived from the forecast data (sum of monthly revenue
         // forecast entries) rather than the static total_revenue_budget column, so
         // cards reflect the latest planning work without requiring a manual column
         // update. One aggregate query keyed by project id avoids an N+1.
-        $revenueByProject = JobForecastData::whereIn('forecast_project_id', $projectsRaw->pluck('id'))
-            ->where('grid_type', 'revenue')
-            ->groupBy('forecast_project_id')
-            ->selectRaw('forecast_project_id, SUM(forecast_amount) AS total')
-            ->pluck('total', 'forecast_project_id');
-
-        $projects = $projectsRaw->map(function (ForecastProject $p) use ($revenueByProject) {
+        $mapProject = function (ForecastProject $p, $revenueByProject) {
             return [
                 'id' => $p->id,
                 'name' => $p->name,
@@ -60,12 +69,44 @@ class ForecastProjectController extends Controller
                 'archived_at' => $p->archived_at,
                 'archived_by_name' => $p->archiver?->name,
             ];
-        });
+        };
+
+        // List view paginates; board view returns all (kanban needs every card).
+        if ($view === 'list') {
+            $paginated = $query->paginate($perPage)->withQueryString();
+
+            $ids = collect($paginated->items())->pluck('id');
+            $revenueByProject = JobForecastData::whereIn('forecast_project_id', $ids)
+                ->where('grid_type', 'revenue')
+                ->groupBy('forecast_project_id')
+                ->selectRaw('forecast_project_id, SUM(forecast_amount) AS total')
+                ->pluck('total', 'forecast_project_id');
+
+            $paginated->through(fn (ForecastProject $p) => $mapProject($p, $revenueByProject));
+
+            return Inertia::render('forecast-projects/index', [
+                'projects' => $paginated,
+                'includeArchived' => $includeArchived,
+                'view' => $view,
+                'filters' => ['search' => $search ?? '', 'per_page' => $perPage],
+            ]);
+        }
+
+        $projectsRaw = $query->get();
+
+        $revenueByProject = JobForecastData::whereIn('forecast_project_id', $projectsRaw->pluck('id'))
+            ->where('grid_type', 'revenue')
+            ->groupBy('forecast_project_id')
+            ->selectRaw('forecast_project_id, SUM(forecast_amount) AS total')
+            ->pluck('total', 'forecast_project_id');
+
+        $projects = $projectsRaw->map(fn (ForecastProject $p) => $mapProject($p, $revenueByProject));
 
         return Inertia::render('forecast-projects/index', [
             'projects' => $projects,
             'includeArchived' => $includeArchived,
             'view' => $view,
+            'filters' => ['search' => $search ?? '', 'per_page' => $perPage],
         ]);
     }
 
