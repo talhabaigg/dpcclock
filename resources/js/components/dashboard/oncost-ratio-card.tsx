@@ -53,8 +53,8 @@ export default function OncostRatioCard({ data, isEditing }: OncostRatioCardProp
 
     if (!hasData) {
         return (
-            <Card className="p-0 gap-0 h-full overflow-hidden">
-                <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+            <Card className="p-0 gap-0 h-full overflow-hidden ring-0 border border-border">
+                <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Oncost Ratio</CardTitle>
                     </div>
@@ -67,12 +67,12 @@ export default function OncostRatioCard({ data, isEditing }: OncostRatioCardProp
     }
 
     const actualColor = isOver
-        ? 'text-red-600 dark:text-red-400'
+        ? 'text-amber-600 dark:text-amber-400'
         : 'text-green-600 dark:text-green-400';
 
     return (
-        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Oncost Ratio</CardTitle>
                 </div>

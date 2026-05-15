@@ -34,7 +34,7 @@ function getSemanticColor(percent: number) {
     return { used: 'hsl(217, 91%, 60%)', text: 'text-muted-foreground' };                                 // normal
 }
 
-const TRACK_COLOR = 'hsl(var(--muted))';
+const TRACK_COLOR = 'var(--border)';
 
 function getChartConfig(usedColor: string): ChartConfig {
     return {
@@ -87,8 +87,8 @@ export default function BudgetDonutCard({ title, locationId, costCodes, savedCos
         : '';
 
     return (
-        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn("!p-0 shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">{title}</CardTitle>
                     <Popover open={pickerOpen} onOpenChange={setPickerOpen}>

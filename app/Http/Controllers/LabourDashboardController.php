@@ -293,7 +293,7 @@ class LabourDashboardController extends Controller
             'location_ids' => 'required|string',
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
-            'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available',
+            'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available,industrial_action',
             'search' => 'nullable|string|max:255',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|in:10,25,50,100',
@@ -382,6 +382,7 @@ class LabourDashboardController extends Controller
             }),
             'non_standard' => $query->whereNotIn('eh_worktype_id', $bucketedIds)
                 ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
+            'industrial_action' => $query->where('eh_worktype_id', 2585103),
         };
 
         $clocks = $query->orderBy('clock_in')->limit(10000)->get();

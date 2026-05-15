@@ -38,10 +38,12 @@ export default function PendingPosCard({ data, locationId, asOfDate, isEditing }
     };
 
     return (
-        <Card ref={cardRef} className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+        <Card ref={cardRef} className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className={cn('flex items-center justify-between w-full px-2 min-h-7', isCompact ? 'py-0 min-h-5' : 'py-1')}>
-                    <CardTitle className={cn('font-semibold leading-none', isCompact ? 'text-[9px]' : 'text-[11px]')}>Pending POs</CardTitle>
+                    <CardTitle className={cn('font-semibold leading-none', isCompact ? 'text-[9px]' : 'text-[11px]')}>
+                        Pending POs{data != null ? ` (${data.po_count})` : ''}
+                    </CardTitle>
                 </div>
             </CardHeader>
             <CardContent className="p-0 mt-0 flex-1 min-h-0 flex flex-col items-center justify-center">
@@ -59,9 +61,6 @@ export default function PendingPosCard({ data, locationId, asOfDate, isEditing }
                         >
                             {formatCompact(data.total)}
                         </button>
-                        <span className={cn('text-muted-foreground leading-none', isCompact ? 'text-[7px]' : 'text-[9px] sm:text-[10px]')}>
-                            {data.po_count} PO{data.po_count !== 1 ? 's' : ''} pending
-                        </span>
                     </div>
                 )}
             </CardContent>

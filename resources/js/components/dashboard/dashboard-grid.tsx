@@ -124,7 +124,15 @@ function renderWidget(id: string, props: DashboardGridProps, isEditing: boolean)
                 />
             );
         case 'industrial-action':
-            return <IndustrialActionCard hours={props.industrialActionHours} isEditing={isEditing} />;
+            return (
+                <IndustrialActionCard
+                    hours={props.industrialActionHours}
+                    locationId={props.location.id}
+                    dateFrom={props.timelineData?.start_date}
+                    dateTo={props.asOfDate}
+                    isEditing={isEditing}
+                />
+            );
         case 'budget-weather':
             return (
                 <BudgetWeatherCard

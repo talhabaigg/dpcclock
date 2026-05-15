@@ -5,7 +5,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useContainerSize } from './dashboard-utils';
@@ -44,8 +44,8 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
 
     if (!timelineData) {
         return (
-            <Card className="p-0 gap-0 h-full overflow-hidden">
-                <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+            <Card className="p-0 gap-0 h-full overflow-hidden ring-0 border border-border">
+                <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Project Timeline</CardTitle>
                     </div>
@@ -79,14 +79,14 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
     const getStatus = () => {
         if (totalOverrun > 7) return { label: 'At Risk', color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20', icon: AlertTriangle };
         if (totalOverrun > 0) return { label: 'Delayed', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', icon: Clock };
-        return { label: 'On Track', color: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20', icon: CheckCircle2 };
+        return { label: 'On Track', color: 'text-muted-foreground border-border', icon: CheckCircle2 };
     };
     const status = getStatus();
     const StatusIcon = status.icon;
 
     return (
-        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Project Timeline</CardTitle>
                     <Badge
@@ -102,16 +102,15 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                 ref={contentRef}
                 className={cn("p-0 mt-0 flex-1 min-h-0 flex flex-col overflow-hidden", statsOnly && "justify-center")}
             >
-                <TooltipProvider delayDuration={200}>
                     {/* ── Three metric columns ── */}
                     <div className={cn(
-                        'flex items-center justify-center px-3',
+                        'flex items-stretch px-3 w-full',
                         statsOnly ? 'py-0' : compact ? 'py-1' : 'py-3',
                     )}>
                         {/* Start Delay */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                        <HoverCard openDelay={150} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                                <div className="flex-1 flex flex-col items-center justify-center gap-0.5 cursor-default">
                                     <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Start Delay</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none text-muted-foreground',
@@ -120,20 +119,40 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                                         {startDelay !== null ? (startDelay > 0 ? `+${startDelay}` : startDelay) : '-'}
                                     </span>
                                 </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px]">
-                                <div>Contract start: {fmtDate(timelineData.start_date)}</div>
-                                {actualStart && <div>Actual start: {fmtDate(timelineData.actual_start_date!)}</div>}
-                                <div className="font-semibold">{startDelay !== null ? `${startDelay > 0 ? '+' : ''}${startDelay} days` : 'No actual start'}</div>
-                            </TooltipContent>
-                        </Tooltip>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="bottom" className="w-56 p-0">
+                                <div className="px-3 py-2 border-b">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Start Delay</div>
+                                </div>
+                                <dl className="px-3 py-2 space-y-1 text-[11px]">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Contract start</dt>
+                                        <dd className="tabular-nums font-medium">{fmtDate(timelineData.start_date)}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Actual start</dt>
+                                        <dd className="tabular-nums font-medium">{actualStart ? fmtDate(timelineData.actual_start_date!) : '—'}</dd>
+                                    </div>
+                                </dl>
+                                <div className={cn(
+                                    'px-3 py-1.5 border-t flex items-center justify-between text-[11px]',
+                                    startDelay !== null && startDelay > 0 && 'text-amber-700 dark:text-amber-400',
+                                    startDelay !== null && startDelay < 0 && 'text-green-700 dark:text-green-400',
+                                )}>
+                                    <span className="font-medium">Delay</span>
+                                    <span className="tabular-nums font-semibold">
+                                        {startDelay !== null ? `${startDelay > 0 ? '+' : ''}${startDelay} days` : '—'}
+                                    </span>
+                                </div>
+                            </HoverCardContent>
+                        </HoverCard>
 
                         <div className={cn('w-px bg-border shrink-0', statsOnly ? 'h-5' : compact ? 'h-6' : 'h-8')} />
 
                         {/* End Overrun */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                        <HoverCard openDelay={150} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                                <div className="flex-1 flex flex-col items-center justify-center gap-0.5 cursor-default">
                                     <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Over Run</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none text-muted-foreground',
@@ -142,20 +161,40 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                                         {forecastOverrun !== null ? (forecastOverrun > 0 ? `+${forecastOverrun}` : forecastOverrun) : '-'}
                                     </span>
                                 </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px]">
-                                <div>Contract end: {fmtDate(timelineData.estimated_end_date)}</div>
-                                {forecastEnd && <div>Forecast end: {fmtDate(timelineData.actual_end_date!)}</div>}
-                                <div className="font-semibold">{forecastOverrun !== null ? `${forecastOverrun > 0 ? '+' : ''}${forecastOverrun} days` : 'No forecast'}</div>
-                            </TooltipContent>
-                        </Tooltip>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="bottom" className="w-56 p-0">
+                                <div className="px-3 py-2 border-b">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">End Overrun</div>
+                                </div>
+                                <dl className="px-3 py-2 space-y-1 text-[11px]">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Contract end</dt>
+                                        <dd className="tabular-nums font-medium">{fmtDate(timelineData.estimated_end_date)}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Forecast end</dt>
+                                        <dd className="tabular-nums font-medium">{forecastEnd ? fmtDate(timelineData.actual_end_date!) : '—'}</dd>
+                                    </div>
+                                </dl>
+                                <div className={cn(
+                                    'px-3 py-1.5 border-t flex items-center justify-between text-[11px]',
+                                    forecastOverrun !== null && forecastOverrun > 0 && 'text-amber-700 dark:text-amber-400',
+                                    forecastOverrun !== null && forecastOverrun < 0 && 'text-green-700 dark:text-green-400',
+                                )}>
+                                    <span className="font-medium">Overrun</span>
+                                    <span className="tabular-nums font-semibold">
+                                        {forecastOverrun !== null ? `${forecastOverrun > 0 ? '+' : ''}${forecastOverrun} days` : '—'}
+                                    </span>
+                                </div>
+                            </HoverCardContent>
+                        </HoverCard>
 
                         <div className={cn('w-px bg-border shrink-0', statsOnly ? 'h-5' : compact ? 'h-6' : 'h-8')} />
 
                         {/* Total Overrun */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex-1 flex flex-col items-center gap-0.5 cursor-default">
+                        <HoverCard openDelay={150} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                                <div className="flex-1 flex flex-col items-center justify-center gap-0.5 cursor-default">
                                     <span className={cn('text-[9px] font-medium text-muted-foreground leading-none', (compact || statsOnly) && 'text-[8px]')}>Total Over Run</span>
                                     <span className={cn(
                                         'font-bold tabular-nums leading-none',
@@ -169,37 +208,59 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                                         {totalOverrun > 0 ? '+' : ''}{totalOverrun}
                                     </span>
                                 </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px]">
-                                Net overrun (forecast duration vs contract duration): {totalOverrun > 0 ? '+' : ''}{totalOverrun} days
-                            </TooltipContent>
-                        </Tooltip>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="bottom" className="w-64 p-0">
+                                <div className="px-3 py-2 border-b">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total Overrun</div>
+                                </div>
+                                <dl className="px-3 py-2 space-y-1 text-[11px]">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Contract duration</dt>
+                                        <dd className="tabular-nums font-medium">{contractDuration} days</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Forecast duration</dt>
+                                        <dd className="tabular-nums font-medium">{forecastDuration !== null ? `${forecastDuration} days` : '—'}</dd>
+                                    </div>
+                                </dl>
+                                <div className={cn(
+                                    'px-3 py-1.5 border-t flex items-center justify-between text-[11px]',
+                                    totalOverrun > 0 && 'text-amber-700 dark:text-amber-400',
+                                    totalOverrun < 0 && 'text-green-700 dark:text-green-400',
+                                )}>
+                                    <span className="font-medium">Net</span>
+                                    <span className="tabular-nums font-semibold">
+                                        {totalOverrun > 0 ? '+' : ''}{totalOverrun} days
+                                    </span>
+                                </div>
+                            </HoverCardContent>
+                        </HoverCard>
                     </div>
 
                     {/* ── Date details (secondary info) ── */}
-                    {!statsOnly && <div className="border-t flex-1 min-h-0">
+                    {!statsOnly && <div className="flex-1 min-h-0">
                         <table className={cn('w-full h-full border-collapse', compact ? 'text-[9px]' : 'text-[11px]')}>
                             <thead>
-                                <tr className="bg-muted/30">
-                                    <th className={cn('text-left font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px] w-[50px]' : 'py-0.5 px-2 text-[9px] w-[70px]')}></th>
-                                    <th className={cn('text-center font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Start</th>
-                                    <th className={cn('text-center font-semibold uppercase tracking-wider text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Finish</th>
+                                <tr>
+                                    <th className={cn('text-left font-medium text-muted-foreground', compact ? 'py-0 px-1 text-[8px] w-[50px]' : 'py-0.5 px-2 text-[9px] w-[70px]')}></th>
+                                    <th className={cn('text-center font-medium text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Start</th>
+                                    <th className={cn('text-center font-medium text-muted-foreground', compact ? 'py-0 px-1 text-[8px]' : 'py-0.5 px-2 text-[9px]')}>Finish</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr className="border-b border-border/50">
+                                <tr>
                                     <td className={cn('font-medium text-muted-foreground', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>Contract</td>
-                                    <td className={cn('text-center tabular-nums', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
+                                    <td className={cn('text-center tabular-nums font-light', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
                                         {timelineData.start_date ? fmtDate(timelineData.start_date) : '-'}
                                     </td>
-                                    <td className={cn('text-center tabular-nums', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
+                                    <td className={cn('text-center tabular-nums font-light', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>
                                         {timelineData.estimated_end_date ? fmtDate(timelineData.estimated_end_date) : '-'}
                                     </td>
                                 </tr>
-                                <tr className="border-b border-border/50">
+                                <tr>
                                     <td className={cn('font-medium text-muted-foreground', compact ? 'py-0 px-1' : 'py-0.5 px-2')}>Actual</td>
                                     <td className={cn(
-                                        'text-center tabular-nums',
+                                        'text-center tabular-nums font-light',
                                         compact ? 'py-0 px-1' : 'py-0.5 px-2',
                                         startDelay !== null && startDelay > 0 && 'text-amber-600 dark:text-amber-400',
                                         startDelay !== null && startDelay < 0 && 'text-green-600 dark:text-green-400',
@@ -207,7 +268,7 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                                         {actualStart ? fmtDate(timelineData.actual_start_date!) : '-'}
                                     </td>
                                     <td className={cn(
-                                        'text-center tabular-nums',
+                                        'text-center tabular-nums font-light',
                                         compact ? 'py-0 px-1' : 'py-0.5 px-2',
                                         forecastOverrun !== null && forecastOverrun > 0 && 'text-amber-600 dark:text-amber-400',
                                         forecastOverrun !== null && forecastOverrun < 0 && 'text-green-600 dark:text-green-400',
@@ -218,7 +279,6 @@ export default function ProjectDetailsCard({ timelineData, isEditing }: ProjectD
                             </tbody>
                         </table>
                     </div>}
-                </TooltipProvider>
             </CardContent>
         </Card>
     );

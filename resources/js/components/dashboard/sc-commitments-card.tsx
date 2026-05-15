@@ -25,10 +25,10 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
 
     if (!data) {
         return (
-            <Card className="p-0 gap-0 h-full">
-                <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
-                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                        <CardTitle className="text-[11px] font-semibold leading-none">SC Commitments</CardTitle>
+            <Card className="p-0 gap-0 h-full ring-0 border border-border">
+                <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+                    <div className="flex items-center justify-between w-full px-2 py-1 min-h-7 min-w-0">
+                        <CardTitle className="text-[11px] font-semibold leading-none truncate whitespace-nowrap overflow-hidden">SC Commitments</CardTitle>
                     </div>
                 </CardHeader>
                 <CardContent className="p-2 text-[11px] text-muted-foreground">
@@ -46,11 +46,11 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
     const isLowInvoicing = scTotal > 0 && invoicedPercent < 20;
 
     return (
-        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
-                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                    <CardTitle className="text-[11px] font-semibold leading-none">SC Commitments</CardTitle>
-                    <div className="flex items-center gap-1">
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+                <div className="flex items-center justify-between w-full px-2 py-1 min-h-7 min-w-0 gap-2">
+                    <CardTitle className="text-[11px] font-semibold leading-none truncate whitespace-nowrap overflow-hidden min-w-0">SC Commitments</CardTitle>
+                    <div className="flex items-center gap-1 shrink-0">
                         {hasData && (
                             <div className="flex items-center rounded border border-border overflow-hidden">
                                 <button
@@ -170,7 +170,7 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
                             <div
                                 className={cn(
                                     'h-full rounded-full transition-all duration-300',
-                                    isLowInvoicing ? 'bg-amber-500' : 'bg-blue-600',
+                                    isLowInvoicing ? 'bg-amber-500' : 'bg-primary',
                                 )}
                                 style={{ width: `${Math.max(invoicedPercent, 0.5)}%` }}
                             />

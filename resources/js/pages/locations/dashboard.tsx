@@ -302,7 +302,7 @@ export default function Dashboard({
 
             <div className="flex min-w-0 flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-2 xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
                 {/* ── Top bar with tabs + filters ── */}
-                <div className="bg-card shrink-0 rounded-lg border p-1.5 sm:p-2">
+                <div className="shrink-0">
                     {/* Row 1: Tabs + Job selector (always visible) */}
                     <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-2">
                         <Tabs value={activeTab} onValueChange={setActiveTab}>

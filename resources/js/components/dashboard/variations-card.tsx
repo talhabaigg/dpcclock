@@ -35,7 +35,7 @@ function useFitToContainer(deps: unknown[]) {
         const ro = new ResizeObserver(fit);
         ro.observe(container);
         return () => ro.disconnect();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, deps);
 
     useEffect(() => {

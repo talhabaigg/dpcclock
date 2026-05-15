@@ -251,10 +251,9 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
 
     return (
         <>
-            <Card className="p-0 gap-0 h-full flex flex-col">
-                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+            <Card className="p-0 gap-0 h-full flex flex-col ring-0 border border-border">
+                <CardHeader className={cn("!p-0 shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                        <div className="flex-1" />
                         <div className="flex items-center gap-1.5">
                             <CardTitle className="text-[11px] font-semibold leading-none">
                                 Budget Utilization:
@@ -263,7 +262,7 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
                                 {totals.percent}%
                             </span>
                         </div>
-                        <div className="flex-1 flex justify-end items-center gap-0.5">
+                        <div className="flex items-center gap-0.5">
                             {renderFilterPopover()}
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setFullscreen(true)}>
                                 <Maximize2 className="h-3.5 w-3.5" />
@@ -277,8 +276,8 @@ export default function LabourBudgetCard({ data, isEditing }: LabourBudgetCardPr
             </Card>
 
             <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-                <DialogContent className="min-w-full h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
-                    <DialogHeader className="flex flex-row items-center justify-between px-4 py-3 border-b shrink-0">
+                <DialogContent className="min-w-[90%] max-w-[90%] h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
+                    <DialogHeader className="flex flex-row items-center justify-between px-4 py-3 shrink-0">
                         <DialogTitle className="text-sm font-semibold">Budget Utilization by Type</DialogTitle>
                         <div className="flex items-center gap-1 mr-8">
                             <Popover modal>

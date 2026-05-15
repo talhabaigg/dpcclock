@@ -127,8 +127,8 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
 
     return (
         <>
-            <Card ref={cardRef} className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-                <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+            <Card ref={cardRef} className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+                <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                     <div className={cn('flex items-center justify-between w-full px-2 min-h-7', isCompact ? 'py-0 min-h-5' : 'py-1')}>
                         <CardTitle className={cn('font-semibold leading-none', isCompact ? 'text-[9px]' : 'text-[11px]')}>PO Commitments</CardTitle>
                     </div>
@@ -143,7 +143,7 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
                                     type="button"
                                     onClick={() => setOpen(true)}
                                     className={cn(
-                                        'font-bold tabular-nums leading-none hover:underline underline-offset-2 cursor-pointer text-blue-600 dark:text-blue-400 transition-colors',
+                                        'font-bold tabular-nums leading-none hover:underline underline-offset-2 cursor-pointer text-primary transition-colors',
                                         isCompact ? 'text-xs' : 'text-lg sm:text-xl',
                                     )}
                                 >
@@ -154,7 +154,6 @@ export default function POCommitmentsCard({ value, poLines, isEditing }: POCommi
                                     {formatCompact(value)}
                                 </span>
                             )}
-                            <span className={cn('text-muted-foreground leading-none', isCompact ? 'text-[7px]' : 'text-[9px] sm:text-[10px]')}>outstanding</span>
                         </div>
                     )}
                 </CardContent>

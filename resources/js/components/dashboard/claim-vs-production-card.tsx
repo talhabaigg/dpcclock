@@ -17,8 +17,8 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
 
     if (dpcPercentComplete === null) {
         return (
-            <Card className="p-0 gap-0 h-full overflow-hidden">
-                <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+            <Card className="p-0 gap-0 h-full overflow-hidden ring-0 border border-border">
+                <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Claim vs DPC</CardTitle>
                     </div>
@@ -44,8 +44,8 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
     const dpcTextColor = 'text-muted-foreground';
 
     return (
-        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden">
-            <CardHeader className={cn('!p-0 border-b shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
+        <Card className="p-0 gap-0 flex flex-col h-full overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn('!p-0 shrink-0', isEditing && 'drag-handle cursor-grab active:cursor-grabbing')}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                     <CardTitle className="text-[11px] font-semibold leading-none">Claim vs DPC</CardTitle>
                 </div>
@@ -138,7 +138,7 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                                 barValueClass,
                                 'font-semibold tabular-nums leading-none',
                                 isOverBilled && 'text-amber-600 dark:text-amber-400',
-                                isUnderBilled && 'text-red-600 dark:text-red-400',
+                                isUnderBilled && 'text-amber-600 dark:text-amber-400',
                                 !isOverBilled && !isUnderBilled && 'text-muted-foreground',
                             )}>
                                 {isOverBilled ? 'Over' : isUnderBilled ? 'Under' : 'On track'}{' '}
@@ -175,7 +175,7 @@ export default function ClaimVsProductionCard({ claimedPercent, dpcPercentComple
                                 <span className={cn(
                                     'inline-flex items-center gap-1 text-xs font-semibold tabular-nums',
                                     isOverBilled && 'text-amber-600 dark:text-amber-400',
-                                    isUnderBilled && 'text-red-600 dark:text-red-400',
+                                    isUnderBilled && 'text-amber-600 dark:text-amber-400',
                                     !isOverBilled && !isUnderBilled && 'text-green-600 dark:text-green-400',
                                 )}>
                                     {isOverBilled && <ArrowUpRight className="h-3 w-3" />}

@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
-import { ArrowDown, ArrowUp, Maximize2, Minus } from 'lucide-react';
+import { Maximize2 } from 'lucide-react';
 import { Line, LineChart, XAxis, YAxis, ReferenceDot } from 'recharts';
 import { format, parse, subMonths } from 'date-fns';
 import { useMemo, useState } from 'react';
@@ -50,21 +51,9 @@ const TIME_RANGES: { value: TimeRange; label: string }[] = [
 const chartConfig = {
     count: {
         label: 'Employees',
-        color: 'hsl(217, 91%, 60%)',
+        color: 'var(--primary)',
     },
 } satisfies ChartConfig;
-
-// Color palette for worktype segments
-const TYPE_COLORS = [
-    'bg-blue-500',
-    'bg-emerald-500',
-    'bg-amber-500',
-    'bg-violet-500',
-    'bg-rose-500',
-    'bg-cyan-500',
-    'bg-orange-500',
-    'bg-pink-500',
-];
 
 export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSiteCardProps) {
     const [range, setRange] = useState<TimeRange>('All');
@@ -116,8 +105,8 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
 
     if (!data) {
         return (
-            <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
-                <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+            <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden ring-0 border border-border">
+                <CardHeader className={cn("!p-0 shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                     <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
                         <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
                     </div>
@@ -136,10 +125,75 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
 
     return (
         <>
-        <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden">
-            <CardHeader className={cn("!p-0 border-b shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
+        <Card className="p-0 gap-0 h-full min-h-0 flex flex-col overflow-hidden ring-0 border border-border">
+            <CardHeader className={cn("!p-0 shrink-0", isEditing && "drag-handle cursor-grab active:cursor-grabbing")}>
                 <div className="flex items-center justify-between w-full px-2 py-1 min-h-7">
-                    <CardTitle className="text-[11px] font-semibold leading-none">Employees on Site</CardTitle>
+                    <HoverCard openDelay={150} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                            <CardTitle className="text-[11px] font-semibold leading-none cursor-default">
+                                Employees on Site
+                                {total > 0 && (
+                                    <span className="font-normal text-muted-foreground ml-1">
+                                        ({total}
+                                        {deltaPct !== null && delta !== 0 && (
+                                            <span className={cn(
+                                                'ml-1 tabular-nums',
+                                                delta > 0 ? 'text-emerald-600' : 'text-red-500',
+                                            )}>
+                                                {delta > 0 ? '+' : ''}{deltaPct}%
+                                            </span>
+                                        )}
+                                        )
+                                    </span>
+                                )}
+                            </CardTitle>
+                        </HoverCardTrigger>
+                        {total > 0 && (
+                            <HoverCardContent side="bottom" align="start" className="w-72 p-0">
+                                <div className="px-3 py-2 border-b">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Headcount</div>
+                                </div>
+                                <dl className="px-3 py-2 space-y-1 text-[11px]">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Last 30 days</dt>
+                                        <dd className="tabular-nums font-semibold">{total}</dd>
+                                    </div>
+                                    {totalToDate > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <dt className="text-muted-foreground">To date</dt>
+                                            <dd className="tabular-nums font-semibold">{totalToDate}</dd>
+                                        </div>
+                                    )}
+                                    {casuals > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <dt className="text-muted-foreground">Casuals</dt>
+                                            <dd className="tabular-nums font-medium">{casuals}</dd>
+                                        </div>
+                                    )}
+                                </dl>
+                                {data.by_type.length > 0 && (
+                                    <>
+                                        <div className="px-3 py-1.5 border-t">
+                                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                By work type ({totalByType})
+                                            </div>
+                                        </div>
+                                        <dl className="px-3 py-2 space-y-0.5 text-[11px]">
+                                            {data.by_type.map((row) => (
+                                                <div key={row.worktype} className="flex items-center gap-2">
+                                                    <dt className="flex-1 text-muted-foreground truncate">{row.worktype}</dt>
+                                                    <dd className="tabular-nums font-medium shrink-0">{row.count}</dd>
+                                                    <dd className="tabular-nums text-muted-foreground shrink-0 w-10 text-right">
+                                                        {((row.count / totalByType) * 100).toFixed(0)}%
+                                                    </dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    </>
+                                )}
+                            </HoverCardContent>
+                        )}
+                    </HoverCard>
                     <div className="flex items-center gap-2">
                         {/* Time range toggle */}
                         <div className="flex items-center bg-muted/50 rounded-md p-0.5">
@@ -159,47 +213,6 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 </button>
                             ))}
                         </div>
-                        {/* Hero KPI */}
-                        {total > 0 && (
-                            <div className="flex items-center gap-1.5">
-                                <span
-                                    className="text-xl font-bold tabular-nums leading-none"
-                                    title="Unique employees on site in the last 30 days"
-                                >
-                                    {total}
-                                </span>
-                                {deltaPct !== null && delta !== 0 && (
-                                    <span className={cn(
-                                        "flex items-center gap-0.5 text-[10px] font-medium tabular-nums",
-                                        delta > 0 ? "text-emerald-600" : "text-red-500"
-                                    )}>
-                                        {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                                        {Math.abs(deltaPct)}%
-                                    </span>
-                                )}
-                                {deltaPct !== null && delta === 0 && (
-                                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
-                                        <Minus className="h-3 w-3" />
-                                    </span>
-                                )}
-                                {casuals > 0 && (
-                                    <span className="text-[10px] text-muted-foreground font-medium tabular-nums">
-                                        ({casuals} casual{casuals !== 1 ? 's' : ''})
-                                    </span>
-                                )}
-                                {totalToDate > 0 && (
-                                    <span
-                                        className="flex items-center gap-1 pl-1.5 ml-0.5 border-l border-border"
-                                        title="Unique employees who have ever clocked on this job"
-                                    >
-                                        <span className="text-base font-semibold tabular-nums leading-none">{totalToDate}</span>
-                                        <span className="text-[9px] text-muted-foreground font-medium leading-none uppercase tracking-wide">
-                                            to&nbsp;date
-                                        </span>
-                                    </span>
-                                )}
-                            </div>
-                        )}
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setFullscreen(true)}>
                             <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
@@ -243,7 +256,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 <Line
                                     type="monotone"
                                     dataKey="count"
-                                    stroke="hsl(217, 91%, 60%)"
+                                    stroke="var(--primary)"
                                     strokeWidth={2}
                                     dot={false}
                                     activeDot={{ r: 4 }}
@@ -254,7 +267,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                         x={lastPoint.label || lastPoint.week_ending}
                                         y={lastPoint.count}
                                         r={3}
-                                        fill="hsl(217, 91%, 60%)"
+                                        fill="var(--primary)"
                                         stroke="white"
                                         strokeWidth={2}
                                         label={{
@@ -262,7 +275,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                             position: 'top',
                                             fontSize: 11,
                                             fontWeight: 600,
-                                            fill: 'hsl(217, 91%, 60%)',
+                                            fill: 'var(--primary)',
                                             offset: 6,
                                         }}
                                     />
@@ -272,91 +285,95 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                     </div>
                 )}
 
-                {/* Compact worktype breakdown — stacked bar + legend */}
-                {data.by_type.length > 0 && (
-                    <div className="shrink-0 px-2 pb-1.5 pt-1">
-                        {/* Stacked horizontal bar */}
-                        <div className="flex h-2 w-full rounded-full overflow-hidden gap-px">
-                            {data.by_type.map((row, i) => (
-                                <div
-                                    key={row.worktype}
-                                    className={cn("h-full rounded-sm", TYPE_COLORS[i % TYPE_COLORS.length])}
-                                    style={{ width: `${(row.count / totalByType) * 100}%` }}
-                                    title={`${row.worktype}: ${row.count}`}
-                                />
-                            ))}
-                        </div>
-                        {/* Inline legend */}
-                        <div className={cn(
-                            "flex flex-wrap mt-1",
-                            data.by_type.length > 5 ? "gap-x-1.5 gap-y-0" : "gap-x-2.5 gap-y-0.5"
-                        )}>
-                            {data.by_type.map((row, i) => (
-                                <div key={row.worktype} className={cn("flex items-center", data.by_type.length > 5 ? "gap-0.5" : "gap-1")}>
-                                    <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", TYPE_COLORS[i % TYPE_COLORS.length])} />
-                                    <span className={cn("text-muted-foreground leading-none", data.by_type.length > 5 ? "text-[8px]" : "text-[9px]")}>{row.worktype}</span>
-                                    <span className={cn("font-semibold tabular-nums leading-none", data.by_type.length > 5 ? "text-[8px]" : "text-[9px]")}>{row.count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </CardContent>
         </Card>
 
         {/* Fullscreen dialog */}
         <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-            <DialogContent className="min-w-full h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
-                <DialogHeader className="flex flex-row items-center justify-between pl-4 pr-12 py-3 border-b shrink-0">
-                    <DialogTitle className="text-sm font-semibold">Employees on Site</DialogTitle>
-                    <div className="flex items-center gap-3">
-                        {/* Time range toggle */}
-                        <div className="flex items-center bg-muted/50 rounded-md p-0.5">
-                            {TIME_RANGES.map((tr) => (
-                                <button
-                                    key={tr.value}
-                                    type="button"
-                                    onClick={() => setRange(tr.value)}
-                                    className={cn(
-                                        "px-2 py-1 text-xs font-medium rounded-sm transition-colors leading-none",
-                                        range === tr.value
-                                            ? "bg-background text-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground"
-                                    )}
-                                >
-                                    {tr.label}
-                                </button>
-                            ))}
-                        </div>
-                        {/* Hero KPI */}
+            <DialogContent className="min-w-[90%] max-w-[90%] h-[90vh] flex flex-col p-0 gap-0" onInteractOutside={(e) => e.preventDefault()}>
+                <DialogHeader className="flex flex-row items-center justify-between pl-4 pr-12 py-3 shrink-0">
+                    <HoverCard openDelay={150} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                            <DialogTitle className="text-sm font-semibold cursor-default">
+                                Employees on Site
+                                {total > 0 && (
+                                    <span className="font-normal text-muted-foreground ml-1.5">
+                                        ({total}
+                                        {deltaPct !== null && delta !== 0 && (
+                                            <span className={cn(
+                                                'ml-1 tabular-nums',
+                                                delta > 0 ? 'text-emerald-600' : 'text-red-500',
+                                            )}>
+                                                {delta > 0 ? '+' : ''}{deltaPct}%
+                                            </span>
+                                        )}
+                                        )
+                                    </span>
+                                )}
+                            </DialogTitle>
+                        </HoverCardTrigger>
                         {total > 0 && (
-                            <div className="flex items-center gap-2">
-                                <div className="flex flex-col items-end leading-none">
-                                    <span className="text-2xl font-bold tabular-nums leading-none">{total}</span>
-                                    <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">last 30 days</span>
+                            <HoverCardContent side="bottom" align="start" className="w-72 p-0">
+                                <div className="px-3 py-2 border-b">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Headcount</div>
                                 </div>
-                                {deltaPct !== null && delta !== 0 && (
-                                    <span className={cn(
-                                        "flex items-center gap-0.5 text-sm font-medium tabular-nums",
-                                        delta > 0 ? "text-emerald-600" : "text-red-500"
-                                    )}>
-                                        {delta > 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                                        {Math.abs(deltaPct)}%
-                                    </span>
-                                )}
-                                {casuals > 0 && (
-                                    <span className="text-xs text-muted-foreground font-medium tabular-nums">
-                                        ({casuals} casual{casuals !== 1 ? 's' : ''})
-                                    </span>
-                                )}
-                                {totalToDate > 0 && (
-                                    <div className="flex flex-col items-end leading-none pl-3 ml-1 border-l border-border">
-                                        <span className="text-2xl font-bold tabular-nums leading-none">{totalToDate}</span>
-                                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">to date</span>
+                                <dl className="px-3 py-2 space-y-1 text-[11px]">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-muted-foreground">Last 30 days</dt>
+                                        <dd className="tabular-nums font-semibold">{total}</dd>
                                     </div>
+                                    {totalToDate > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <dt className="text-muted-foreground">To date</dt>
+                                            <dd className="tabular-nums font-semibold">{totalToDate}</dd>
+                                        </div>
+                                    )}
+                                    {casuals > 0 && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <dt className="text-muted-foreground">Casuals</dt>
+                                            <dd className="tabular-nums font-medium">{casuals}</dd>
+                                        </div>
+                                    )}
+                                </dl>
+                                {data.by_type.length > 0 && (
+                                    <>
+                                        <div className="px-3 py-1.5 border-t">
+                                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                By work type ({totalByType})
+                                            </div>
+                                        </div>
+                                        <dl className="px-3 py-2 space-y-0.5 text-[11px]">
+                                            {data.by_type.map((row) => (
+                                                <div key={row.worktype} className="flex items-center gap-2">
+                                                    <dt className="flex-1 text-muted-foreground truncate">{row.worktype}</dt>
+                                                    <dd className="tabular-nums font-medium shrink-0">{row.count}</dd>
+                                                    <dd className="tabular-nums text-muted-foreground shrink-0 w-10 text-right">
+                                                        {((row.count / totalByType) * 100).toFixed(0)}%
+                                                    </dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    </>
                                 )}
-                            </div>
+                            </HoverCardContent>
                         )}
+                    </HoverCard>
+                    <div className="flex items-center bg-muted/50 rounded-md p-0.5">
+                        {TIME_RANGES.map((tr) => (
+                            <button
+                                key={tr.value}
+                                type="button"
+                                onClick={() => setRange(tr.value)}
+                                className={cn(
+                                    "px-2 py-1 text-xs font-medium rounded-sm transition-colors leading-none",
+                                    range === tr.value
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {tr.label}
+                            </button>
+                        ))}
                     </div>
                 </DialogHeader>
                 <div className="flex-1 min-h-0 p-4">
@@ -393,7 +410,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                             <Line
                                 type="monotone"
                                 dataKey="count"
-                                stroke="hsl(217, 91%, 60%)"
+                                stroke="var(--primary)"
                                 strokeWidth={2.5}
                                 dot={false}
                                 activeDot={{ r: 5 }}
@@ -403,7 +420,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                     x={lastPoint.label || lastPoint.week_ending}
                                     y={lastPoint.count}
                                     r={4}
-                                    fill="hsl(217, 91%, 60%)"
+                                    fill="var(--primary)"
                                     stroke="white"
                                     strokeWidth={2}
                                     label={{
@@ -411,7 +428,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                         position: 'top',
                                         fontSize: 13,
                                         fontWeight: 600,
-                                        fill: 'hsl(217, 91%, 60%)',
+                                        fill: 'var(--primary)',
                                         offset: 8,
                                     }}
                                 />
@@ -419,30 +436,6 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                         </LineChart>
                     </ChartContainer>
                 </div>
-                {/* Worktype breakdown */}
-                {data.by_type.length > 0 && (
-                    <div className="shrink-0 px-4 pb-3 pt-1 border-t">
-                        <div className="flex h-3 w-full rounded-full overflow-hidden gap-px">
-                            {data.by_type.map((row, i) => (
-                                <div
-                                    key={row.worktype}
-                                    className={cn("h-full rounded-sm", TYPE_COLORS[i % TYPE_COLORS.length])}
-                                    style={{ width: `${(row.count / totalByType) * 100}%` }}
-                                    title={`${row.worktype}: ${row.count}`}
-                                />
-                            ))}
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                            {data.by_type.map((row, i) => (
-                                <div key={row.worktype} className="flex items-center gap-1.5">
-                                    <div className={cn("h-2 w-2 rounded-full shrink-0", TYPE_COLORS[i % TYPE_COLORS.length])} />
-                                    <span className="text-xs text-muted-foreground">{row.worktype}</span>
-                                    <span className="text-xs font-semibold tabular-nums">{row.count}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </DialogContent>
         </Dialog>
         </>

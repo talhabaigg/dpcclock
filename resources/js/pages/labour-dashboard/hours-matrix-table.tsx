@@ -25,7 +25,8 @@ export type DrillCategory =
     | 'ph'
     | 'lost'
     | 'non_standard'
-    | 'available';
+    | 'available'
+    | 'industrial_action';
 
 export interface HoursMatrixRow {
     location_id: number;
