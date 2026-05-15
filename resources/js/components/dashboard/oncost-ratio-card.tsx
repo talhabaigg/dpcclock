@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
+import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { formatCurrency, useContainerSize } from './dashboard-utils';
 import type { LabourBudgetRow } from './labour-budget-card';
 
@@ -77,82 +78,135 @@ export default function OncostRatioCard({ data, isEditing }: OncostRatioCardProp
                 </div>
             </CardHeader>
             <CardContent ref={contentRef} className="p-0 mt-0 flex-1 min-h-0 flex flex-col justify-center gap-1.5 px-2 py-1.5">
-                <TooltipProvider delayDuration={200}>
-                    {/* Comparison metrics — stacked when narrow, side-by-side when wide */}
+                {/* Comparison metrics — stacked when narrow, side-by-side when wide */}
+                <div className={cn(
+                    'flex items-center justify-center gap-0',
+                    compact ? 'flex-col gap-1' : 'flex-row',
+                )} role="group" aria-label="Oncost ratio comparison">
+                    {/* Budget ratio */}
+                    <HoverCard>
+                        <HoverCardTrigger asChild delay={400}>
+                            <div className={cn('flex flex-col items-center gap-0.5 cursor-default', !compact && 'flex-1')}>
+                                <span className={cn(barLabelClass, 'font-medium text-muted-foreground')}>Budget</span>
+                                <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
+                                    {budgetRatio.toFixed(2)}%
+                                </span>
+                            </div>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="bottom" align="center" className="w-auto min-w-[240px] max-w-[300px] p-0 overflow-hidden">
+                            <div className="px-3 py-2 border-b bg-muted/40">
+                                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    Budget Ratio
+                                </div>
+                            </div>
+                            <div className="px-3 py-2 space-y-1.5 text-xs">
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-muted-foreground">Direct Labour</span>
+                                    <span className="font-medium tabular-nums">{formatCurrency(labourBudget)}</span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-muted-foreground">Oncost</span>
+                                    <span className="font-medium tabular-nums">{formatCurrency(oncostBudget)}</span>
+                                </div>
+                            </div>
+                            <div className="border-t px-3 py-2 flex items-baseline justify-between gap-4">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Ratio</span>
+                                <span className="font-semibold tabular-nums text-xs">{budgetRatio.toFixed(2)}%</span>
+                            </div>
+                        </HoverCardContent>
+                    </HoverCard>
+
+                    {/* Divider — vertical when side-by-side, horizontal when stacked */}
                     <div className={cn(
-                        'flex items-center justify-center gap-0',
-                        compact ? 'flex-col gap-1' : 'flex-row',
-                    )} role="group" aria-label="Oncost ratio comparison">
-                        {/* Budget ratio */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className={cn('flex flex-col items-center gap-0.5 cursor-default', !compact && 'flex-1')}>
-                                    <span className={cn(barLabelClass, 'font-medium text-muted-foreground')}>Budget</span>
-                                    <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold text-muted-foreground leading-none')}>
-                                        {budgetRatio.toFixed(2)}%
-                                    </span>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px] max-w-[280px]">
-                                <div>Direct Labour Budget: {formatCurrency(labourBudget)}</div>
-                                <div>Oncost Budget: {formatCurrency(oncostBudget)}</div>
-                                <div className="border-t border-border/50 mt-0.5 pt-0.5">
-                                    Ratio: {formatCurrency(oncostBudget)} / {formatCurrency(labourBudget)} = {budgetRatio.toFixed(2)}%
-                                </div>
-                            </TooltipContent>
-                        </Tooltip>
+                        'bg-border shrink-0',
+                        compact ? 'h-px w-full' : 'w-px h-8',
+                    )} />
 
-                        {/* Divider — vertical when side-by-side, horizontal when stacked */}
-                        <div className={cn(
-                            'bg-border shrink-0',
-                            compact ? 'h-px w-full' : 'w-px h-8',
-                        )} />
-
-                        {/* Actual ratio */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className={cn('flex flex-col items-center gap-0.5 cursor-default', !compact && 'flex-1')}>
-                                    <span className={cn(barLabelClass, 'font-medium', actualColor)}>Actual</span>
-                                    <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold leading-none', actualColor)}>
-                                        {actualRatio.toFixed(2)}%
-                                    </span>
+                    {/* Actual ratio */}
+                    <HoverCard>
+                        <HoverCardTrigger asChild delay={400}>
+                            <div className={cn('flex flex-col items-center gap-0.5 cursor-default', !compact && 'flex-1')}>
+                                <span className={cn(barLabelClass, 'font-medium', actualColor)}>Actual</span>
+                                <span className={cn(compact ? 'text-sm' : 'text-lg', 'tabular-nums font-bold leading-none', actualColor)}>
+                                    {actualRatio.toFixed(2)}%
+                                </span>
+                            </div>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="bottom" align="center" className="w-auto min-w-[240px] max-w-[300px] p-0 overflow-hidden">
+                            <div className="px-3 py-2 border-b bg-muted/40">
+                                <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    Actual Ratio
                                 </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" className="text-[10px] max-w-[280px]">
-                                <div>Direct Labour Actual: {formatCurrency(labourActual)}</div>
-                                <div>Oncost Actual: {formatCurrency(oncostActual)}</div>
-                                <div className="border-t border-border/50 mt-0.5 pt-0.5">
-                                    Ratio: {formatCurrency(oncostActual)} / {formatCurrency(labourActual)} = {actualRatio.toFixed(2)}%
+                            </div>
+                            <div className="px-3 py-2 space-y-1.5 text-xs">
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-muted-foreground">Direct Labour</span>
+                                    <span className="font-medium tabular-nums">{formatCurrency(labourActual)}</span>
                                 </div>
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
+                                <div className="flex items-baseline justify-between gap-4">
+                                    <span className="text-muted-foreground">Oncost</span>
+                                    <span className="font-medium tabular-nums">{formatCurrency(oncostActual)}</span>
+                                </div>
+                            </div>
+                            <div className="border-t px-3 py-2 flex items-baseline justify-between gap-4">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Ratio</span>
+                                <span className={cn('font-semibold tabular-nums text-xs', actualColor)}>
+                                    {actualRatio.toFixed(2)}%
+                                </span>
+                            </div>
+                        </HoverCardContent>
+                    </HoverCard>
+                </div>
 
-                    {/* Variance detail row */}
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className={cn('flex items-center cursor-default', compact ? 'justify-center' : 'justify-between')}>
-                                {!compact && <span className={cn(labelClass, 'text-muted-foreground')}>Variance:</span>}
+                {/* Variance detail row */}
+                <HoverCard>
+                    <HoverCardTrigger asChild delay={400}>
+                        <div className={cn('flex items-center cursor-default', compact ? 'justify-center' : 'justify-between')}>
+                            {!compact && <span className={cn(labelClass, 'text-muted-foreground')}>Variance:</span>}
+                            <span className={cn(
+                                barValueClass,
+                                'font-semibold tabular-nums leading-none',
+                                actualColor,
+                            )}>
+                                {delta >= 0 ? '+' : ''}{delta.toFixed(2)}%
+                            </span>
+                        </div>
+                    </HoverCardTrigger>
+                    <HoverCardContent side="top" align="center" className="w-auto min-w-[240px] max-w-[300px] p-0 overflow-hidden">
+                        <div className="px-3 py-2 border-b bg-muted/40">
+                            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Variance Breakdown
+                            </div>
+                        </div>
+                        <div className="px-3 py-2 space-y-1.5 text-xs">
+                            <div className="flex items-baseline justify-between gap-4">
+                                <span className="text-muted-foreground">Budget</span>
+                                <span className="font-medium tabular-nums">{budgetRatio.toFixed(2)}%</span>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-4">
+                                <span className="text-muted-foreground">Actual</span>
+                                <span className={cn('font-medium tabular-nums', actualColor)}>{actualRatio.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                        <div className="border-t px-3 py-2 space-y-1">
+                            <div className="flex items-center justify-between gap-4">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Delta</span>
                                 <span className={cn(
-                                    barValueClass,
-                                    'font-semibold tabular-nums leading-none',
+                                    'inline-flex items-center gap-1 text-xs font-semibold tabular-nums',
                                     actualColor,
                                 )}>
+                                    {isOver ? <TrendingUp className="h-3 w-3" /> : delta < 0 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
                                     {delta >= 0 ? '+' : ''}{delta.toFixed(2)}%
                                 </span>
                             </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-[10px] max-w-[280px]">
-                            <div>Budget ratio: {budgetRatio.toFixed(2)}%</div>
-                            <div>Actual ratio: {actualRatio.toFixed(2)}%</div>
-                            <div className="border-t border-border/50 mt-0.5 pt-0.5">
+                            <p className="text-[10px] text-muted-foreground leading-snug pt-1 border-t border-border/40">
                                 {isOver
                                     ? 'Oncost ratio exceeds budget — investigate oncost overruns'
                                     : 'Oncost ratio is within budget — tracking well'}
-                            </div>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                            </p>
+                        </div>
+                    </HoverCardContent>
+                </HoverCard>
             </CardContent>
         </Card>
     );

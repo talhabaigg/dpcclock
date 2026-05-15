@@ -1,14 +1,16 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ChevronRight, Plus, Search, Shield, Trash2 } from 'lucide-react';
+import { Plus, Search, Shield, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -95,22 +97,45 @@ export default function PermissionsIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Permissions" />
 
-            <div className="m-4 space-y-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 {/* Flash Messages */}
                 {flash.success && (
                     <div className="rounded-md bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-400">{flash.success}</div>
                 )}
                 {flash.error && <div className="rounded-md bg-red-50 p-4 text-red-800 dark:bg-red-900/20 dark:text-red-400">{flash.error}</div>}
 
-                {/* Header */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold">Permissions</h1>
-                        <p className="text-muted-foreground">
-                            {permissions.length} permissions across {Object.keys(categories).length} categories
-                        </p>
+                {/* Toolbar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                        <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                        <Combobox
+                            items={['all', ...Object.keys(categories)]}
+                            value={selectedCategory}
+                            onValueChange={(v: string | null) => setSelectedCategory(v ?? 'all')}
+                        >
+                            <ComboboxTrigger
+                                className={cn(buttonVariants({ variant: 'outline' }), 'w-[180px] justify-between font-normal')}
+                                aria-label="Filter by category"
+                            >
+                                <span className={selectedCategory === 'all' ? 'text-muted-foreground' : ''}>
+                                    {selectedCategory === 'all' ? 'All Categories' : selectedCategory}
+                                </span>
+                            </ComboboxTrigger>
+                            <ComboboxContent className="w-(--anchor-width) min-w-(--anchor-width) p-0">
+                                <ComboboxInput placeholder="Search categories…" className="h-9" showTrigger={false} />
+                                <ComboboxEmpty>No category found.</ComboboxEmpty>
+                                <ComboboxList>
+                                    {(c: string) => (
+                                        <ComboboxItem key={c} value={c}>
+                                            {c === 'all' ? 'All Categories' : c}
+                                        </ComboboxItem>
+                                    )}
+                                </ComboboxList>
+                            </ComboboxContent>
+                        </Combobox>
                         <Link href="/admin/roles">
                             <Button variant="outline">
                                 <Shield className="mr-2 h-4 w-4" />
@@ -157,29 +182,8 @@ export default function PermissionsIndex() {
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="flex gap-3">
-                    <div className="relative max-w-sm flex-1">
-                        <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                        <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
-                    </div>
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Categories</SelectItem>
-                            {Object.keys(categories).map((category) => (
-                                <SelectItem key={category} value={category}>
-                                    {category}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
                 {/* Permissions List */}
-                <Card>
+                <Card className="gap-0 py-0">
                     {Object.entries(groupedPermissions).map(([category, perms], index) => (
                         <div key={category}>
                             {index > 0 && <div className="border-t" />}
@@ -190,7 +194,7 @@ export default function PermissionsIndex() {
                             <div className="divide-y">
                                 {perms.map((perm) => (
                                     <div key={perm.id} className="flex items-center justify-between px-4 py-3">
-                                        <div className="min-w-0 flex-1">
+                                        <div className="min-w-[280px] flex-1">
                                             <div className="flex items-center gap-2">
                                                 <code className="text-sm font-medium">{perm.name}</code>
                                                 {perm.is_core && (
@@ -209,7 +213,25 @@ export default function PermissionsIndex() {
                                                     </Badge>
                                                 ))}
                                                 {perm.roles.length > 3 && (
-                                                    <span className="text-muted-foreground text-xs">+{perm.roles.length - 3}</span>
+                                                    <HoverCard openDelay={100} closeDelay={100}>
+                                                        <HoverCardTrigger asChild>
+                                                            <button
+                                                                type="button"
+                                                                className="text-muted-foreground hover:text-foreground cursor-default text-xs"
+                                                            >
+                                                                +{perm.roles.length - 3}
+                                                            </button>
+                                                        </HoverCardTrigger>
+                                                        <HoverCardContent className="w-auto max-w-xs min-w-40 p-2" align="end">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {perm.roles.slice(3).map((role) => (
+                                                                    <Badge key={role} variant="outline" className="text-xs capitalize">
+                                                                        {role}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </HoverCardContent>
+                                                    </HoverCard>
                                                 )}
                                                 {perm.roles.length === 0 && <span className="text-muted-foreground text-xs">No roles</span>}
                                             </div>
@@ -234,17 +256,6 @@ export default function PermissionsIndex() {
                         <div className="text-muted-foreground p-8 text-center">No permissions found matching your search.</div>
                     )}
                 </Card>
-
-                {/* Quick Link */}
-                <Link href="/admin/roles" className="block">
-                    <Card className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors">
-                        <div>
-                            <p className="font-medium">Need to assign permissions to roles?</p>
-                            <p className="text-muted-foreground text-sm">Go to Roles & Permissions to manage role assignments</p>
-                        </div>
-                        <ChevronRight className="text-muted-foreground h-5 w-5" />
-                    </Card>
-                </Link>
             </div>
 
             {/* Delete Confirmation Dialog */}

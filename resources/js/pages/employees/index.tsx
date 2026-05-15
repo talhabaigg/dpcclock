@@ -390,16 +390,18 @@ export default function EmployeesList() {
         {
             accessorKey: 'name',
             header: () => (
-                <SortHeader
-                    label="Employee"
-                    columnKey="name"
-                    currentSort={currentSort}
-                    currentDirection={currentDirection}
-                    onSort={handleSortChange}
-                />
+                <div className="min-w-[240px]">
+                    <SortHeader
+                        label="Employee"
+                        columnKey="name"
+                        currentSort={currentSort}
+                        currentDirection={currentDirection}
+                        onSort={handleSortChange}
+                    />
+                </div>
             ),
             cell: ({ row }) => (
-                <Link href={`/employees/${row.original.id}`} className="flex items-center gap-2">
+                <Link href={`/employees/${row.original.id}`} className="flex min-w-[240px] items-center gap-2">
                     <UserInfo
                         user={{
                             ...row.original,
@@ -549,13 +551,23 @@ export default function EmployeesList() {
         {
             id: 'actions',
             cell: ({ row }) => (
-                <div className="text-right">
-                    <Link href={`/employee/${row.original.id}/worktypes/sync`}>
-                        <Button variant="outline" size="sm" className="gap-2 opacity-0 transition-all group-hover:opacity-100">
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Retry Sync
-                        </Button>
-                    </Link>
+                <div className="flex justify-end">
+                    <TooltipProvider delay={150}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Link href={`/employee/${row.original.id}/worktypes/sync`} aria-label="Retry sync">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
+                                    >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                    </Button>
+                                </Link>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">Retry sync</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
             ),
         },

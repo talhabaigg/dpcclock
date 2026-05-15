@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 import { BarChart3, Table2 } from 'lucide-react';
 import { useState } from 'react';
@@ -86,65 +86,109 @@ export default function SCCommitmentsCard({ data, isEditing }: SCCommitmentsCard
                         <span className="text-[11px] text-muted-foreground">No subcontract commitments.</span>
                     </div>
                 ) : view === 'visual' ? (
-                    <TooltipProvider delayDuration={200}>
-                        <div className="px-1.5 py-1 flex flex-col gap-1 justify-center flex-1 min-h-0">
-                            {/* Hero: Remaining balance with tooltip */}
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex flex-col items-center cursor-default">
-                                        <span className="text-base font-bold tabular-nums leading-none">
-                                            {formatCompact(data.sc_summary.remaining_balance)}
-                                        </span>
-                                        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
-                                            remaining of {formatCompact(scTotal)}
-                                        </span>
+                    <div className="px-1.5 py-1 flex flex-col gap-1 justify-center flex-1 min-h-0">
+                        {/* Hero: Remaining balance with hover card */}
+                        <HoverCard>
+                            <HoverCardTrigger asChild delay={400}>
+                                <div className="flex flex-col items-center cursor-default">
+                                    <span className="text-base font-bold tabular-nums leading-none">
+                                        {formatCompact(data.sc_summary.remaining_balance)}
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
+                                        remaining of {formatCompact(scTotal)}
+                                    </span>
+                                </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="bottom" align="center" className="w-auto min-w-[260px] max-w-[320px] p-0 overflow-hidden">
+                                <div className="px-3 py-2 border-b bg-muted/40">
+                                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                        Subcontract Commitments
                                     </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-[10px] max-w-[280px]">
-                                    <div>Committed: {formatCurrency(scTotal)}</div>
-                                    <div className="pl-2 text-muted-foreground">Value: {formatCurrency(data.sc_summary.value)}</div>
+                                </div>
+                                <div className="px-3 py-2 space-y-1.5 text-xs">
+                                    <div className="flex items-baseline justify-between gap-4">
+                                        <span className="text-muted-foreground">Value</span>
+                                        <span className="font-medium tabular-nums">{formatCurrency(data.sc_summary.value)}</span>
+                                    </div>
                                     {data.sc_summary.variations !== 0 && (
-                                        <div className="pl-2 text-muted-foreground">+ Variations: {formatCurrency(data.sc_summary.variations)}</div>
+                                        <div className="flex items-baseline justify-between gap-4">
+                                            <span className="text-muted-foreground">Variations</span>
+                                            <span className="font-medium tabular-nums">
+                                                {data.sc_summary.variations > 0 ? '+' : ''}{formatCurrency(data.sc_summary.variations)}
+                                            </span>
+                                        </div>
                                     )}
-                                    <div>Invoiced: {formatCurrency(data.sc_summary.invoiced_to_date)} ({invoicedPercent.toFixed(0)}%)</div>
-                                    <div className="border-t border-border/50 mt-0.5 pt-0.5 font-semibold">
-                                        Remaining: {formatCurrency(data.sc_summary.remaining_balance)}
+                                    <div className="flex items-baseline justify-between gap-4 pt-1 border-t border-border/40">
+                                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Committed</span>
+                                        <span className="font-semibold tabular-nums">{formatCurrency(scTotal)}</span>
                                     </div>
-                                </TooltipContent>
-                            </Tooltip>
+                                </div>
+                                <div className="border-t px-3 py-2 space-y-1.5 text-xs">
+                                    <div className="flex items-baseline justify-between gap-4">
+                                        <span className="text-muted-foreground">Invoiced</span>
+                                        <span className="text-right">
+                                            <span className={cn(
+                                                'font-medium tabular-nums',
+                                                isLowInvoicing && 'text-amber-600 dark:text-amber-400',
+                                            )}>
+                                                {formatCurrency(data.sc_summary.invoiced_to_date)}
+                                            </span>
+                                            <span className={cn(
+                                                'block text-[10px] tabular-nums',
+                                                isLowInvoicing ? 'text-amber-600/80 dark:text-amber-400/80' : 'text-muted-foreground',
+                                            )}>
+                                                {invoicedPercent.toFixed(0)}% of committed
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="border-t px-3 py-2 flex items-baseline justify-between gap-4 bg-muted/30">
+                                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</span>
+                                    <span className="font-bold tabular-nums text-xs">
+                                        {formatCurrency(data.sc_summary.remaining_balance)}
+                                    </span>
+                                </div>
+                                {isLowInvoicing && (
+                                    <div className="border-t px-3 py-2">
+                                        <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
+                                            Low invoicing — under 20% of committed value claimed.
+                                        </p>
+                                    </div>
+                                )}
+                            </HoverCardContent>
+                        </HoverCard>
 
-                            {/* Single-accent bar: invoiced fill against grey track */}
+                        {/* Single-accent bar: invoiced fill against grey track */}
+                        <div
+                            className="w-full h-2.5 rounded-full bg-muted/60 overflow-hidden"
+                            role="progressbar"
+                            aria-label={`Subcontract invoicing: ${invoicedPercent.toFixed(0)}% of ${formatCompact(scTotal)} committed`}
+                            aria-valuenow={Math.round(invoicedPercent)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                        >
                             <div
-                                className="w-full h-2.5 rounded-full bg-muted/60 overflow-hidden"
-                                role="progressbar"
-                                aria-label={`Subcontract invoicing: ${invoicedPercent.toFixed(0)}% of ${formatCompact(scTotal)} committed`}
-                                aria-valuenow={Math.round(invoicedPercent)}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                            >
-                                <div
-                                    className={cn(
-                                        'h-full rounded-full transition-all duration-300',
-                                        isLowInvoicing ? 'bg-amber-500' : 'bg-blue-600',
-                                    )}
-                                    style={{ width: `${Math.max(invoicedPercent, 0.5)}%` }}
-                                />
-                            </div>
-
-                            {/* Direct-labeled inline row: Invoiced amount + percentage */}
-                            <div className="flex items-center justify-between text-[9px] leading-tight">
-                                <span className="text-muted-foreground">
-                                    Invoiced <span className="tabular-nums font-medium text-foreground">{formatCompact(data.sc_summary.invoiced_to_date)}</span>
-                                </span>
-                                <span className={cn(
-                                    'tabular-nums font-semibold',
-                                    isLowInvoicing ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
-                                )}>
-                                    {invoicedPercent.toFixed(0)}%
-                                </span>
-                            </div>
+                                className={cn(
+                                    'h-full rounded-full transition-all duration-300',
+                                    isLowInvoicing ? 'bg-amber-500' : 'bg-blue-600',
+                                )}
+                                style={{ width: `${Math.max(invoicedPercent, 0.5)}%` }}
+                            />
                         </div>
-                    </TooltipProvider>
+
+                        {/* Direct-labeled inline row: Invoiced amount + percentage */}
+                        <div className="flex items-center justify-between text-[9px] leading-tight">
+                            <span className="text-muted-foreground">
+                                Invoiced <span className="tabular-nums font-medium text-foreground">{formatCompact(data.sc_summary.invoiced_to_date)}</span>
+                            </span>
+                            <span className={cn(
+                                'tabular-nums font-semibold',
+                                isLowInvoicing ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+                            )}>
+                                {invoicedPercent.toFixed(0)}%
+                            </span>
+                        </div>
+                    </div>
                 ) : (
                     <div className="overflow-x-auto h-full flex-1 min-h-0">
                         <table className="w-full h-full border-collapse text-[10px]">

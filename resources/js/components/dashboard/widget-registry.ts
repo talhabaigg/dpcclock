@@ -59,7 +59,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     },
     {
         id: 'margin-health',
-        label: 'Margin Health',
+        label: 'Markup Health',
         minW: 1,
         minH: 1,
         defaultLayout: { x: 3, y: 0, w: 1, h: 2 },
