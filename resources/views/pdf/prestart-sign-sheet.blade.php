@@ -146,8 +146,19 @@
             <div class="detail-value">
                 @php
                     $weather = $prestart->weather;
+                    // Reject stale weather: must have been fetched on the prestart's work_date (Brisbane).
+                    $isStaleWeather = false;
+                    if (is_array($weather) && !empty($weather['fetched_at'])) {
+                        try {
+                            $fetchedDay = Carbon::parse($weather['fetched_at'])->timezone('Australia/Brisbane')->format('Y-m-d');
+                            $workDayStr = Carbon::parse($prestart->work_date)->format('Y-m-d');
+                            $isStaleWeather = $fetchedDay !== $workDayStr;
+                        } catch (\Throwable $e) {
+                            $isStaleWeather = true;
+                        }
+                    }
                 @endphp
-                @if(is_array($weather) && (!empty($weather['current']) || !empty($weather['forecast'])))
+                @if(!$isStaleWeather && is_array($weather) && (!empty($weather['current']) || !empty($weather['forecast'])))
                     @if(!empty($weather['current']))
                         @if(isset($weather['current']['temp'])){{ round($weather['current']['temp']) }}°C @endif
                         @if(!empty($weather['current']['condition']))— {{ $weather['current']['condition'] }} @endif
@@ -164,9 +175,9 @@
                     {{-- Legacy free-text weather --}}
                     {{ $weather }}
                 @else
-                    —
+                    <span style="color: #94a3b8;">Weather will be fetched on work date</span>
                 @endif
-                @if(is_array($weather) && !empty($weather['fetched_at']))
+                @if(!$isStaleWeather && is_array($weather) && !empty($weather['fetched_at']))
                     <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">
                         as at {{ Carbon::parse($weather['fetched_at'])->timezone('Australia/Brisbane')->format('d M Y g:ia') }}
                     </div>

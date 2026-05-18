@@ -282,7 +282,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                 </Dialog>
 
                 {/* Weather */}
-                <WeatherWidget weather={prestart.weather as any} />
+                <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} />
 
                 {/* Activities */}
                 {prestart.activities && prestart.activities.length > 0 && (

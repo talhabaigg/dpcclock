@@ -24,8 +24,25 @@ interface WeatherData {
 
 interface WeatherWidgetProps {
     weather: WeatherData | null;
+    workDate?: string | null;
     compact?: boolean;
     dense?: boolean;
+}
+
+function brisbaneDateOf(iso: string): string | null {
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return null;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Australia/Brisbane',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    const d = parts.find((p) => p.type === 'day')?.value;
+    if (!y || !m || !d) return null;
+    return `${y}-${m}-${d}`;
 }
 
 function formatBrisbane(iso: string): string {
@@ -54,12 +71,20 @@ function GoogleWeatherIcon({ iconBaseUri, size = 48 }: { iconBaseUri?: string | 
     );
 }
 
-export default function WeatherWidget({ weather, compact = false, dense = false }: WeatherWidgetProps) {
-    if (!weather || (!weather.current && !weather.forecast)) {
+export default function WeatherWidget({ weather, workDate, compact = false, dense = false }: WeatherWidgetProps) {
+    // Reject stale weather — if the stored payload was fetched on a different
+    // Brisbane day than the prestart's work_date, treat it as not yet fetched.
+    const isStale = (() => {
+        if (!workDate || !weather?.fetched_at) return false;
+        const fetchedDay = brisbaneDateOf(weather.fetched_at);
+        return fetchedDay !== null && fetchedDay !== workDate;
+    })();
+
+    if (isStale || !weather || (!weather.current && !weather.forecast)) {
         return (
             <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
                 <Cloud className="h-5 w-5" />
-                <span>Weather unavailable for this location</span>
+                <span>Weather will be fetched on work date</span>
             </div>
         );
     }

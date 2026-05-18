@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Log;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
@@ -141,5 +142,50 @@ class DailyPrestart extends Model implements HasMedia
             'activities' => $this->activities,
             'safety_concerns' => $this->safety_concerns,
         ];
+    }
+
+    /**
+     * Dispatch an async refresh of the weather payload if it's stale.
+     *
+     * Stale = work_date is today (Brisbane) and the stored weather was
+     * either never fetched or fetched on a different Brisbane day.
+     * Future- or past-dated prestarts are left alone.
+     *
+     * Runs as a queued job (ShouldBeUnique) so the request handler doesn't
+     * block on Google's Weather API and duplicate dispatches are deduped.
+     */
+    public function ensureFreshWeatherQueued(): void
+    {
+        $todayBrisbane = now('Australia/Brisbane')->format('Y-m-d');
+
+        $workDate = $this->work_date instanceof \Carbon\Carbon
+            ? $this->work_date->format('Y-m-d')
+            : (string) $this->work_date;
+
+        // Only refresh on the prestart's actual work day
+        if ($workDate !== $todayBrisbane) {
+            return;
+        }
+
+        $fetchedAt = is_array($this->weather) ? ($this->weather['fetched_at'] ?? null) : null;
+
+        if ($fetchedAt) {
+            try {
+                $fetchedDateBrisbane = \Carbon\Carbon::parse($fetchedAt)
+                    ->timezone('Australia/Brisbane')
+                    ->format('Y-m-d');
+                if ($fetchedDateBrisbane === $todayBrisbane) {
+                    return; // already fresh today
+                }
+            } catch (\Throwable $e) {
+                Log::warning('DailyPrestart::ensureFreshWeatherQueued - bad fetched_at format', [
+                    'prestart_id' => $this->id,
+                    'fetched_at' => $fetchedAt,
+                ]);
+                // Fall through and dispatch refresh
+            }
+        }
+
+        \App\Jobs\RefreshPrestartWeather::dispatch($this->id);
     }
 }

@@ -194,7 +194,7 @@ export default function PrestartSign() {
                         <CardTitle className="text-base">Prestart Summary</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 text-sm">
-                        <WeatherWidget weather={prestart.weather as any} dense />
+                        <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} dense />
 
                         {prestart.activities && prestart.activities.length > 0 && (
                             <div>

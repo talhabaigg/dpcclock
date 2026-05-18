@@ -140,7 +140,12 @@ class DailyPrestartController extends Controller
         ]);
 
         $data['created_by'] = auth()->id();
-        $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
+        // Only fetch weather if creating for today; future-dated prestarts
+        // get their weather populated by the queued refresh on the work_date.
+        $todayBrisbane = now('Australia/Brisbane')->format('Y-m-d');
+        $data['weather'] = $data['work_date'] === $todayBrisbane
+            ? $this->fetchWeatherForLocation($data['location_id'])
+            : null;
         $trainingsData = $data['trainings'] ?? [];
         unset($data['activity_files'], $data['safety_concern_files'], $data['builders_prestart_file'], $data['trainings']);
 
@@ -156,6 +161,7 @@ class DailyPrestartController extends Controller
     public function show(DailyPrestart $dailyPrestart)
     {
         $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee']);
+        $dailyPrestart->ensureFreshWeatherQueued();
 
         // Get location kiosk employees
         $kioskEmployees = collect();
@@ -368,11 +374,18 @@ class DailyPrestartController extends Controller
             'trainings.*.employee_ids.*' => 'integer|exists:employees,id',
         ]);
 
-        // Re-fetch weather if location or date changed
+        // Re-fetch weather only if (a) location or date changed AND (b) work_date is today.
+        // Future- or past-dated prestarts get their weather filled lazily by the queued
+        // refresh when work_date arrives — see DailyPrestart::ensureFreshWeatherQueued().
         $locationChanged = (int) $data['location_id'] !== $dailyPrestart->location_id;
         $dateChanged = $data['work_date'] !== $dailyPrestart->work_date;
-        if ($locationChanged || $dateChanged || empty($dailyPrestart->weather)) {
+        $todayBrisbane = now('Australia/Brisbane')->format('Y-m-d');
+        if ($data['work_date'] === $todayBrisbane &&
+            ($locationChanged || $dateChanged || empty($dailyPrestart->weather))) {
             $data['weather'] = $this->fetchWeatherForLocation($data['location_id']);
+        } elseif ($dateChanged && $data['work_date'] !== $todayBrisbane) {
+            // Moving to a non-today date — clear stale weather so the placeholder shows.
+            $data['weather'] = null;
         }
 
         $trainingsData = $data['trainings'] ?? [];
@@ -495,6 +508,7 @@ class DailyPrestartController extends Controller
     public function downloadSignSheet(DailyPrestart $dailyPrestart)
     {
         $dailyPrestart->load(['location', 'foreman', 'signatures.employee']);
+        $dailyPrestart->ensureFreshWeatherQueued();
 
         // Get kiosk employees for this location to calculate absentees
         $kioskEmployees = collect();
@@ -590,14 +604,9 @@ class DailyPrestartController extends Controller
             ]);
         }
 
-        // First sign-on of the day: refresh weather so the snapshot reflects
-        // morning-of conditions (prestarts are often created the night before).
-        if ($prestart->signatures()->doesntExist()) {
-            $freshWeather = $this->fetchWeatherForLocation($prestart->location_id);
-            if ($freshWeather) {
-                $prestart->update(['weather' => $freshWeather]);
-            }
-        }
+        // Queue a weather refresh if the stored payload isn't fresh for today.
+        // Runs async so the worker isn't blocked by Google's API latency.
+        $prestart->ensureFreshWeatherQueued();
 
         $trainings = Training::with('employees')
             ->forLocation($location->id)
