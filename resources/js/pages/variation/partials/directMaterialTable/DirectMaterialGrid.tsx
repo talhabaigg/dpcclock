@@ -112,6 +112,26 @@ const DirectMaterialGrid = forwardRef<DirectMaterialGridRef, DirectMaterialGridP
             syncToParent();
         }, [syncToParent]);
 
+        // Custom description-only item — clear price-list fields, set description.
+        const handlePickCustomMaterial = useCallback((rowIndex: number, description: string) => {
+            const api = gridRef.current?.api;
+            if (!api) return;
+            const rowNode = api.getDisplayedRowAtIndex(rowIndex);
+            if (!rowNode?.data) return;
+
+            const data = rowNode.data as DirectMaterialItem;
+            data.material_item_id = null;
+            data.material_code = '';
+            data.material_description = '';
+            data.description = description;
+            data.in_price_list = false;
+            // Don't clear unit_cost/cost_code — user may have already entered them
+            // or be about to. sell_cost recomputes from existing qty/unit/markup.
+            data.sell_cost = calculateSellCost(data.qty, data.unit_cost, data.sell_markup_pct);
+            api.refreshCells({ rowNodes: [rowNode], force: true });
+            syncToParent();
+        }, [syncToParent]);
+
         // After material picker closes: hydrate row with code + description + unit cost + cost code/type.
         const handlePickMaterial = useCallback(async (rowIndex: number, item: MaterialSearchResult) => {
             const api = gridRef.current?.api;
@@ -174,9 +194,10 @@ const DirectMaterialGrid = forwardRef<DirectMaterialGridRef, DirectMaterialGridP
                     costTypes,
                     suppliers,
                     onPickMaterial: handlePickMaterial,
+                    onPickCustomMaterial: handlePickCustomMaterial,
                     onPickSupplier: handlePickSupplier,
                 }),
-            [locationId, costCodes, costTypes, suppliers, handlePickMaterial, handlePickSupplier],
+            [locationId, costCodes, costTypes, suppliers, handlePickMaterial, handlePickCustomMaterial, handlePickSupplier],
         );
 
         const onGridReady = useCallback(() => {

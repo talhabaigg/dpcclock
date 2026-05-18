@@ -15,6 +15,7 @@ interface CreateColumnsArgs {
     costTypes: CostType[];
     suppliers: SupplierOption[];
     onPickMaterial: (rowIndex: number, item: MaterialSearchResult) => void;
+    onPickCustomMaterial: (rowIndex: number, description: string) => void;
     onPickSupplier: (rowIndex: number, supplier: SupplierOption) => void;
 }
 
@@ -24,6 +25,7 @@ export const createDirectMaterialColumnDefs = ({
     costTypes,
     suppliers,
     onPickMaterial,
+    onPickCustomMaterial,
     onPickSupplier,
 }: CreateColumnsArgs): ColDef[] => {
     return [
@@ -54,25 +56,72 @@ export const createDirectMaterialColumnDefs = ({
             headerName: 'Material',
             flex: 1.8,
             minWidth: 180,
-            editable: (params) => !!params.data?.supplier_id,
-            cellEditor: MaterialSearchEditor,
-            cellEditorPopup: true,
-            cellEditorPopupPosition: 'under',
+            editable: (params) => !params.node?.rowPinned,
+            // Map the cell's value to description for manual / no-supplier rows
+            // so the built-in text editor (used when no supplier) edits the right
+            // field, and so the renderer reads from a single value source.
+            valueGetter: (params) => {
+                if (params.node?.rowPinned) return params.data?.material_code ?? '';
+                const isManual = !params.data?.material_item_id && !!params.data?.description;
+                if (isManual || !params.data?.supplier_id) {
+                    return params.data?.description ?? '';
+                }
+                return params.data?.material_code ?? '';
+            },
+            valueSetter: (params) => {
+                if (params.node?.rowPinned) return false;
+                const newVal = (params.newValue ?? '').toString();
+                if (!params.data?.supplier_id) {
+                    // No supplier → text editor writes the description.
+                    const trimmed = newVal.trim();
+                    params.data.description = trimmed;
+                    params.data.material_item_id = null;
+                    params.data.material_code = '';
+                    params.data.material_description = '';
+                    params.data.in_price_list = false;
+                    return true;
+                }
+                // With supplier: MaterialSearchEditor either returns the picked
+                // code, or '' for a custom commit (description is already set
+                // via onPickCustom). We only touch material_code here.
+                params.data.material_code = newVal;
+                return true;
+            },
+            cellEditorSelector: (params: any) => {
+                if (!params.data?.supplier_id) {
+                    return {
+                        component: 'agTextCellEditor',
+                        params: { maxLength: 500 },
+                    };
+                }
+                return {
+                    component: MaterialSearchEditor,
+                    popup: true,
+                    popupPosition: 'under',
+                };
+            },
             cellEditorParams: (params: any) => ({
                 locationId,
                 supplierId: params.data?.supplier_id ?? null,
                 onPick: onPickMaterial,
+                onPickCustom: onPickCustomMaterial,
             }),
             valueFormatter: (params) => {
                 if (params.node?.rowPinned) return params.value || '';
+                const isManual = !params.data?.material_item_id && !!params.data?.description;
+                if (isManual) return `✎ ${params.data.description}`;
                 if (!params.value) {
-                    return params.data?.supplier_id ? 'Search material...' : 'Pick supplier first';
+                    return params.data?.supplier_id ? 'Search materials or add custom...' : 'Type description...';
                 }
                 const desc = params.data?.material_description;
                 return desc ? `${params.value} — ${desc}` : params.value;
             },
             cellStyle: (params) => {
                 if (params.node?.rowPinned) return undefined;
+                const isManual = !params.data?.material_item_id && !!params.data?.description;
+                if (isManual) {
+                    return { fontStyle: 'italic', color: isDark() ? '#a1a1aa' : '#71717a' };
+                }
                 return params.value ? {} : { color: isDark() ? '#52525b' : '#a1a1aa' };
             },
         },
@@ -98,11 +147,15 @@ export const createDirectMaterialColumnDefs = ({
             flex: 0.7,
             minWidth: 80,
             maxWidth: 110,
-            // Editable when a material is picked AND either (a) the item isn't
-            // in the project price list, or (b) the price list price is $0.
+            // Editable when:
+            //  - Manual (custom-description) row, OR
+            //  - A material is picked AND either (a) the item isn't in the project
+            //    price list, or (b) the price list price is $0.
             // Otherwise the price list is the source of truth and the cell is locked.
             editable: (params) => {
                 if (params.node?.rowPinned) return false;
+                const isManual = !params.data?.material_item_id && !!params.data?.description;
+                if (isManual) return true;
                 if (!params.data?.material_item_id) return false;
                 return params.data?.in_price_list === false || !Number(params.data?.unit_cost);
             },
