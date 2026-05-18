@@ -244,18 +244,30 @@ export default function VariationPricingTab({
         if (!item) return;
         const updated = [...pricingItems];
         let nextItem: PricingItem = { ...item };
+        const num = field === 'description' ? 0 : (typeof value === 'number' ? value : parseFloat(String(value)) || 0);
         if (field === 'description') {
             nextItem = { ...nextItem, description: String(value) };
         } else {
-            const num = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
             if (field === 'qty') nextItem = { ...nextItem, qty: num };
             if (field === 'labour_cost') nextItem = { ...nextItem, labour_cost: num };
             if (field === 'material_cost') nextItem = { ...nextItem, material_cost: num };
-            // Recompute total locally so the grid updates immediately.
-            const q = nextItem.qty;
-            const l = nextItem.labour_cost;
-            const m = nextItem.material_cost;
-            nextItem.total_cost = nextItem.takeoff_condition_id ? round2(l + m) : round2(q * (l + m));
+            // Recompute total locally so the grid updates immediately. On condition rows
+            // labour/material are stored as qty-multiplied totals (from the preview API),
+            // so when qty changes we scale them proportionally — otherwise the displayed
+            // total would never reflect the new qty until the backend response lands
+            // (and never at all for unsaved condition rows).
+            if (field === 'qty' && nextItem.takeoff_condition_id) {
+                const oldQty = Number(item.qty) || 0;
+                const scale = oldQty > 0 ? num / oldQty : 0;
+                nextItem.labour_cost = round2(Number(item.labour_cost) * scale);
+                nextItem.material_cost = round2(Number(item.material_cost) * scale);
+                nextItem.total_cost = round2(nextItem.labour_cost + nextItem.material_cost);
+            } else {
+                const q = nextItem.qty;
+                const l = nextItem.labour_cost;
+                const m = nextItem.material_cost;
+                nextItem.total_cost = nextItem.takeoff_condition_id ? round2(l + m) : round2(q * (l + m));
+            }
         }
         updated[rowIdx] = nextItem;
         onPricingItemsChange(updated);
@@ -264,7 +276,7 @@ export default function VariationPricingTab({
         if (item.id && variationId) {
             const payload: Record<string, unknown> = {};
             if (field === 'description') payload.description = String(value);
-            else payload[field] = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+            else payload[field] = num;
             api.put<{ pricing_item: PricingItem }>(`/variations/${variationId}/pricing-items/${item.id}`, payload)
                 .then((data) => {
                     const next = [...updated];
@@ -274,8 +286,29 @@ export default function VariationPricingTab({
                 .catch((err: unknown) => {
                     toast.error(err instanceof ApiError ? err.message : 'Failed to update');
                 });
+        } else if (field === 'qty' && item.takeoff_condition_id && locationId) {
+            // Unsaved condition row: refetch the preview so labour/material/total reflect
+            // the calculator's authoritative values for the new qty (linear scaling above
+            // is just for instant feedback and may diverge if the calculator is non-linear).
+            api.post<{ preview: { labour_base?: number; material_base?: number } }>(
+                `/locations/${locationId}/variation-preview`,
+                { condition_id: item.takeoff_condition_id, qty: num },
+            ).then((data) => {
+                const labour = Number(data.preview.labour_base) || 0;
+                const material = Number(data.preview.material_base) || 0;
+                const next = [...updated];
+                next[rowIdx] = {
+                    ...next[rowIdx],
+                    labour_cost: labour,
+                    material_cost: material,
+                    total_cost: round2(labour + material),
+                };
+                onPricingItemsChange(next);
+            }).catch(() => {
+                // Optimistic scaled values stay; silent failure is fine.
+            });
         }
-    }, [pricingItems, variationId, onPricingItemsChange]);
+    }, [pricingItems, variationId, locationId, onPricingItemsChange]);
 
     const handleSelectCondition = (conditionId: number, rowIdx: number) => {
         const condition = filteredConditions.find((c) => c.id === conditionId);

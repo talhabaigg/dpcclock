@@ -72,6 +72,7 @@ class TakeoffConditionController extends Controller
             'height' => $validated['height'] ?? null,
             'thickness' => $validated['thickness'] ?? null,
             'pricing_method' => $pricingMethod,
+            'sell_rate' => $validated['sell_rate'] ?? null,
         ]);
 
         if ($pricingMethod === 'unit_rate') {
@@ -142,6 +143,7 @@ class TakeoffConditionController extends Controller
             'height' => 'nullable|numeric|min:0.0001|max:100',
             'thickness' => 'nullable|numeric|min:0.0001|max:100',
             'pricing_method' => $sometimes.'required|string|in:unit_rate,detailed',
+            'sell_rate' => 'nullable|numeric|min:0',
 
             // BoQ items (unit_rate)
             'boq_items' => 'nullable|array',

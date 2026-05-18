@@ -883,6 +883,9 @@ class VariationController extends Controller
         $maxSort = $variation->pricingItems()->max('sort_order') ?? 0;
 
         $sellRate = isset($validated['sell_rate']) ? round((float) $validated['sell_rate'], 2) : null;
+        if ($sellRate === null && $conditionId && isset($condition) && $condition->sell_rate !== null) {
+            $sellRate = round((float) $condition->sell_rate, 2);
+        }
         $sellTotal = $sellRate !== null ? round($validated['qty'] * $sellRate, 2) : null;
 
         $item = $variation->pricingItems()->create([

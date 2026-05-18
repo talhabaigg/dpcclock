@@ -22,6 +22,7 @@ class TakeoffCondition extends Model
         'height',
         'thickness',
         'labour_unit_rate',
+        'sell_rate',
         'labour_rate_source',
         'manual_labour_rate',
         'pay_rate_template_id',
@@ -35,6 +36,7 @@ class TakeoffCondition extends Model
         'height' => 'float',
         'thickness' => 'float',
         'labour_unit_rate' => 'float',
+        'sell_rate' => 'float',
         'condition_number' => 'integer',
         'opacity' => 'integer',
     ];

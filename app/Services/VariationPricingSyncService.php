@@ -135,10 +135,18 @@ class VariationPricingSyncService
                 if ($sellRate !== null) {
                     $existing->sell_rate = $sellRate;
                     $existing->sell_total = round($existing->qty * $sellRate, 2);
+                } elseif ($condition?->sell_rate !== null) {
+                    // Adopted-from-manual or sell_rate never set — seed from the condition default.
+                    $existing->sell_rate = round((float) $condition->sell_rate, 2);
+                    $existing->sell_total = round($existing->qty * (float) $condition->sell_rate, 2);
                 }
                 $existing->save();
             } else {
                 $payload['sort_order'] = $this->nextAggregatedSortOrder($variationId);
+                if ($condition?->sell_rate !== null) {
+                    $payload['sell_rate'] = round((float) $condition->sell_rate, 2);
+                    $payload['sell_total'] = round($payload['qty'] * (float) $condition->sell_rate, 2);
+                }
                 $existing = VariationPricingItem::create($payload);
             }
 

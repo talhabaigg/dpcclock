@@ -113,6 +113,7 @@ export type TakeoffCondition = {
     thickness: number | null;
     pricing_method: 'unit_rate' | 'detailed';
     labour_unit_rate: number | null;
+    sell_rate: number | null;
     cost_codes: ConditionCostCode[];
     boq_items?: ConditionBoqItem[];
     condition_labour_codes?: ConditionLabourCodeItem[];
@@ -183,6 +184,7 @@ export function ConditionManager({
     const [formHeight, setFormHeight] = useState('');
     const [formThickness, setFormThickness] = useState('');
     const [formPricingMethod, setFormPricingMethod] = useState<'unit_rate' | 'detailed'>('unit_rate');
+    const [formSellRate, setFormSellRate] = useState('');
 
     // BoQ form state — unified items list, distinguished by `kind`.
     // Material rows reference cost_code_id; labour rows reference labour_cost_code_id.
@@ -346,6 +348,7 @@ export function ConditionManager({
         setFormHeight('');
         setFormThickness('');
         setFormPricingMethod('unit_rate');
+        setFormSellRate('');
         setFormBoqItems([]);
         setCostCodeSearch('');
         setCostCodeResults([]);
@@ -369,6 +372,7 @@ export function ConditionManager({
         setFormHeight(c.height?.toString() || '');
         setFormThickness(c.thickness?.toString() || '');
         setFormPricingMethod(c.pricing_method || 'unit_rate');
+        setFormSellRate(c.sell_rate != null ? c.sell_rate.toString() : '');
 
         // Load BoQ items. Falls back to translating the legacy shape (cost_codes + labour_unit_rate)
         // for any condition that hasn't been migrated into boq_items yet.
@@ -463,6 +467,7 @@ export function ConditionManager({
                 height: formHeight ? parseFloat(formHeight) : null,
                 thickness: formThickness ? parseFloat(formThickness) : null,
                 pricing_method: formPricingMethod,
+                sell_rate: formSellRate.trim() ? parseFloat(formSellRate) : null,
             };
 
             if (formPricingMethod === 'unit_rate') {
@@ -1076,6 +1081,38 @@ export function ConditionManager({
                                             )}
                                         </TabsList>
                                     </Tabs>
+                                </div>
+
+                                {/* Sell rate — auto-populates variation pricing items as the client sell rate */}
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="cond-sell-rate" className="flex items-center gap-1.5">
+                                        Sell rate
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Info className="h-3 w-3 text-muted-foreground/60" />
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-[260px] text-xs">
+                                                Default $/{formType === 'count' ? 'each' : formType === 'area' ? 'm²' : 'lm'} used when this condition lands in a variation. Independent of cost rates above. Existing variation rows keep any sell rate you've already entered.
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </Label>
+                                    <div className="relative">
+                                        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                                        <Input
+                                            id="cond-sell-rate"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            inputMode="decimal"
+                                            value={formSellRate}
+                                            onChange={(e) => setFormSellRate(e.target.value)}
+                                            placeholder="0.00"
+                                            className="pl-5 pr-12"
+                                        />
+                                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                            /{formType === 'count' ? 'each' : formType === 'area' ? 'm²' : 'lm'}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {/* Pricing-specific details */}
