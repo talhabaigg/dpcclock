@@ -649,46 +649,43 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                 <h2 className="text-xs font-bold">Variation Details</h2>
                                 <div className="flex items-center gap-3 shrink-0 text-xs">
                                     <div className="flex items-center gap-1.5">
-                                        <span className="text-muted-foreground">Var #</span>
-                                        {selectedLocation?.variation_next_number != null && variation?.status !== 'sent' ? (
-                                            <span className="bg-muted text-muted-foreground rounded-md border px-2.5 py-1 font-mono text-xs">
-                                                VA-{String(selectedLocation.variation_next_number).padStart(3, '0')}
-                                            </span>
-                                        ) : (
-                                            <Input
-                                                id="co_number"
-                                                value={data.co_number}
-                                                onChange={(e) => setData('co_number', e.target.value)}
-                                                placeholder="VAR-001"
-                                                className="h-7 w-24 text-xs placeholder:text-xs"
-                                            />
-                                        )}
+                                        <span className="text-muted-foreground text-xs">Var No.</span>
+                                        <Input
+                                            id="co_number"
+                                            value={data.co_number}
+                                            onChange={(e) => setData('co_number', e.target.value)}
+                                            placeholder="VAR-001"
+                                            className="h-7 w-24 font-mono text-xs placeholder:text-xs md:text-xs"
+                                        />
                                     </div>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 gap-1.5 text-xs font-normal"
-                                            >
-                                                <CalendarDays className="h-3.5 w-3.5" />
-                                                {data.date
-                                                    ? format(new Date(data.date + 'T00:00:00'), 'dd/MM/yyyy')
-                                                    : 'Set date'}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="end">
-                                            <Calendar
-                                                mode="single"
-                                                selected={data.date ? new Date(data.date + 'T00:00:00') : undefined}
-                                                onSelect={(day) => {
-                                                    if (day) {
-                                                        setData('date', format(day, 'yyyy-MM-dd'));
-                                                    }
-                                                }}
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-muted-foreground text-xs">Date</span>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 gap-1.5 text-xs font-normal"
+                                                >
+                                                    <CalendarDays className="h-3.5 w-3.5" />
+                                                    {data.date
+                                                        ? format(new Date(data.date + 'T00:00:00'), 'dd/MM/yyyy')
+                                                        : 'Set date'}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="end">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={data.date ? new Date(data.date + 'T00:00:00') : undefined}
+                                                    onSelect={(day) => {
+                                                        if (day) {
+                                                            setData('date', format(day, 'yyyy-MM-dd'));
+                                                        }
+                                                    }}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
                                 </div>
                             </div>
                             <div className="space-y-4">

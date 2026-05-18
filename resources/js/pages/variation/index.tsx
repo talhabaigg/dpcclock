@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -81,8 +82,12 @@ function formatCurrency(value: number | string) {
 
 const isInPremier = (variation: Pick<Variation, 'premier_co_id'>) => !!variation.premier_co_id;
 
+function buildShowUrl(variationId: number, locationId?: number | null) {
+    return locationId ? `/locations/${locationId}/variations/${variationId}/show` : `/variations/${variationId}/show`;
+}
+
 // ── Actions dropdown (desktop) ────────────────────────────────────────
-function VariationActions({ variation }: { variation: Variation }) {
+function VariationActions({ variation, locationId }: { variation: Variation; locationId?: number | null }) {
     const locked = isInPremier(variation);
     return (
         <DropdownMenu>
@@ -93,7 +98,7 @@ function VariationActions({ variation }: { variation: Variation }) {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => router.visit(`/variations/${variation.id}/show`)}>
+                <DropdownMenuItem onClick={() => router.visit(buildShowUrl(variation.id, locationId))}>
                     <Eye className="h-4 w-4" />
                     View
                 </DropdownMenuItem>
@@ -150,7 +155,7 @@ function VariationActions({ variation }: { variation: Variation }) {
 }
 
 // ── Actions sheet (mobile) ────────────────────────────────────────────
-function VariationActionsMobile({ variation }: { variation: Variation }) {
+function VariationActionsMobile({ variation, locationId }: { variation: Variation; locationId?: number | null }) {
     const locked = isInPremier(variation);
     return (
         <Sheet>
@@ -166,7 +171,7 @@ function VariationActionsMobile({ variation }: { variation: Variation }) {
                 </SheetHeader>
                 <nav className="flex flex-col gap-1 px-4 pb-6">
                     <button
-                        onClick={() => router.visit(`/variations/${variation.id}/show`)}
+                        onClick={() => router.visit(buildShowUrl(variation.id, locationId))}
                         className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-left"
                     >
                         <Eye className="text-muted-foreground h-4 w-4" />
@@ -648,7 +653,7 @@ export default function VariationIndex() {
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/variations/${variation.id}/show`} className="inline-block">
+                                                <Link href={buildShowUrl(variation.id, location?.id)} className="inline-block">
                                                     <Badge variant="outline" className="font-mono text-[10px] font-semibold hover:bg-accent">
                                                         {variation.co_number}
                                                     </Badge>
@@ -668,7 +673,7 @@ export default function VariationIndex() {
                                             <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                                                 {formatCurrency(variation.line_items_sum_revenue)}
                                             </span>
-                                            <VariationActionsMobile variation={variation} />
+                                            <VariationActionsMobile variation={variation} locationId={location?.id} />
                                         </div>
                                     </div>
                                 </div>
@@ -680,7 +685,7 @@ export default function VariationIndex() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="w-[100px] pl-4 text-xs">VAR #</TableHead>
+                                        <TableHead className="w-[100px] pl-4 text-xs">Var No.</TableHead>
                                         {!isLocationScoped && <TableHead className="text-xs">Location / Job</TableHead>}
                                         <TableHead className="hidden text-xs @4xl:table-cell">Date</TableHead>
                                         <TableHead className="text-xs">Status</TableHead>
@@ -688,6 +693,7 @@ export default function VariationIndex() {
                                         <TableHead className="hidden text-xs @4xl:table-cell">Type</TableHead>
                                         <TableHead className="text-right text-xs">Cost</TableHead>
                                         <TableHead className="text-right text-xs">Revenue</TableHead>
+                                        <TableHead className="text-right text-xs">Markup</TableHead>
                                         <TableHead className="w-[50px] pr-4"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -695,7 +701,7 @@ export default function VariationIndex() {
                                     {reqs.map((variation) => (
                                         <TableRow key={variation.id}>
                                             <TableCell className="pl-4">
-                                                <Link href={`/variations/${variation.id}/show`} className="inline-block">
+                                                <Link href={buildShowUrl(variation.id, location?.id)} className="inline-block">
                                                     <Badge variant="outline" className="font-mono text-[10px] font-semibold hover:bg-accent">
                                                         {variation.co_number}
                                                     </Badge>
@@ -729,17 +735,17 @@ export default function VariationIndex() {
                                                 </Badge>
                                             </TableCell>
 
-                                            <TableCell className="hidden max-w-[200px] @4xl:table-cell">
-                                                <TooltipProvider delay={2000}>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <span className="text-muted-foreground block truncate text-xs">
-                                                                {variation.description || '-'}
-                                                            </span>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>{variation.description || 'No description'}</TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
+                                            <TableCell className="hidden max-w-32 @4xl:table-cell">
+                                                <HoverCard>
+                                                    <HoverCardTrigger asChild delay={2000}>
+                                                        <span className="text-muted-foreground block max-w-32 cursor-default truncate text-xs">
+                                                            {variation.description || '-'}
+                                                        </span>
+                                                    </HoverCardTrigger>
+                                                    <HoverCardContent className="text-xs">
+                                                        {variation.description || 'No description'}
+                                                    </HoverCardContent>
+                                                </HoverCard>
                                             </TableCell>
 
                                             <TableCell className="hidden @4xl:table-cell">
@@ -763,9 +769,26 @@ export default function VariationIndex() {
                                                     {formatCurrency(variation.line_items_sum_revenue)}
                                                 </span>
                                             </TableCell>
+                                            <TableCell className="text-right">
+                                                {(() => {
+                                                    const revenue = Number(variation.line_items_sum_revenue) || 0;
+                                                    const cost = Number(variation.line_items_sum_total_cost) || 0;
+                                                    const markup = revenue - cost;
+                                                    if (revenue === 0) {
+                                                        return <span className="text-muted-foreground text-xs">-</span>;
+                                                    }
+                                                    const pct = ((markup / revenue) * 100).toFixed(2);
+                                                    return (
+                                                        <span className="text-xs font-semibold tabular-nums">
+                                                            {formatCurrency(markup)}{' '}
+                                                            <span className="text-muted-foreground font-normal">({pct}%)</span>
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </TableCell>
 
                                             <TableCell className="pr-4">
-                                                <VariationActions variation={variation} />
+                                                <VariationActions variation={variation} locationId={location?.id} />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -832,7 +855,7 @@ export default function VariationIndex() {
                         {reqs.length === 0 ? (
                             <VariationsEmpty hasFilters={totalActiveFilters > 0 || !!searchInput} onClear={clearAllFilters} />
                         ) : (
-                            <VariationCardsIndex filteredVariations={reqs} hideLocation={isLocationScoped} />
+                            <VariationCardsIndex filteredVariations={reqs} hideLocation={isLocationScoped} locationId={location?.id} />
                         )}
                     </TabsContent>
                 </Tabs>

@@ -242,7 +242,12 @@ class VariationController extends Controller
         ]);
     }
 
-    public function show(Variation $variation)
+    public function locationVariationShow(Location $location, Variation $variation)
+    {
+        return $this->show($variation, $location);
+    }
+
+    public function show(Variation $variation, ?Location $location = null)
     {
         $variation->load([
             'lineItems',
@@ -255,7 +260,7 @@ class VariationController extends Controller
             'directMaterials.supplier:id,code,name',
         ]);
 
-        return Inertia::render('variation/show', [
+        $props = [
             'variation' => $variation,
             'totals' => [
                 'cost' => $variation->lineItems->sum('total_cost'),
@@ -265,7 +270,13 @@ class VariationController extends Controller
                 'direct_material_cost' => $variation->directMaterials->sum(fn ($m) => (float) $m->qty * (float) $m->unit_cost),
                 'direct_material_sell' => $variation->directMaterials->sum('sell_cost'),
             ],
-        ]);
+        ];
+
+        if ($location && $location->exists) {
+            $props['locationScope'] = ['id' => $location->id, 'name' => $location->name];
+        }
+
+        return Inertia::render('variation/show', $props);
     }
 
     public function store(Request $request)

@@ -95,6 +95,7 @@ interface Props {
         direct_material_cost: number;
         direct_material_sell: number;
     };
+    locationScope?: { id: number; name: string } | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -137,17 +138,24 @@ function SectionHeading({ title, action }: { title: string; action?: React.React
 
 // ── Page ─────────────────────────────────────────────────────────────────
 
-export default function VariationShow({ variation, totals }: Props) {
+export default function VariationShow({ variation, totals, locationScope }: Props) {
     const locked = isSentOrApproved(variation.status);
     const totalCost = Number(totals.cost) || 0;
     const totalRevenue = Number(totals.pricing_sell) || 0;
     const margin = totalRevenue - totalCost;
     const marginPercent = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Variations', href: '/variations' },
-        { title: variation.co_number, href: `/variations/${variation.id}/show` },
-    ];
+    const breadcrumbs: BreadcrumbItem[] = locationScope
+        ? [
+              { title: 'Locations', href: '/locations' },
+              { title: locationScope.name, href: `/locations/${locationScope.id}` },
+              { title: 'Variations', href: `/locations/${locationScope.id}/variations` },
+              { title: variation.co_number, href: `/locations/${locationScope.id}/variations/${variation.id}/show` },
+          ]
+        : [
+              { title: 'Variations', href: '/variations' },
+              { title: variation.co_number, href: `/variations/${variation.id}/show` },
+          ];
 
     const hasSellRates = variation.pricing_items.some((p) => p.sell_total != null && Number(p.sell_total) > 0);
 

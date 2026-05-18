@@ -25,14 +25,18 @@ function formatCurrency(value: number | string) {
     return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
 }
 
-const VariationCard = ({ variation, hideLocation = false }: { variation: Variation; hideLocation?: boolean }) => {
+const buildShowUrl = (variationId: number, locationId?: number | null) =>
+    locationId ? `/locations/${locationId}/variations/${variationId}/show` : `/variations/${variationId}/show`;
+
+const VariationCard = ({ variation, hideLocation = false, locationId }: { variation: Variation; hideLocation?: boolean; locationId?: number | null }) => {
     const locked = isInPremier(variation);
     const cost = Number(variation.line_items_sum_total_cost) || 0;
     const revenue = Number(variation.line_items_sum_revenue) || 0;
     const margin = revenue - cost;
+    const showUrl = buildShowUrl(variation.id, locationId);
 
     return (
-        <Link href={`/variations/${variation.id}/show`} className="block max-w-full min-w-0">
+        <Link href={showUrl} className="block max-w-full min-w-0">
             <Card className="group relative gap-0 overflow-hidden py-0 transition-all duration-150 hover:shadow-md hover:ring-1 hover:ring-ring/20 active:scale-[0.99]">
                 <div className="space-y-2 px-3 py-3">
                     {/* Row 1: CO Number + Status badge */}
@@ -98,7 +102,7 @@ const VariationCard = ({ variation, hideLocation = false }: { variation: Variati
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuItem onClick={() => router.visit(`/variations/${variation.id}/show`)}>
+                                    <DropdownMenuItem onClick={() => router.visit(showUrl)}>
                                         <Eye className="h-4 w-4" />
                                         View
                                     </DropdownMenuItem>
