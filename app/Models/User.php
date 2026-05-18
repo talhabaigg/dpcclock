@@ -140,6 +140,23 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
         return $this->hasMany(AiChatMessage::class);
     }
 
+    public function routeNotificationForClicksend(): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $this->phone);
+        if ($digits === '' || $digits === null) {
+            return null;
+        }
+
+        $e164 = match (true) {
+            str_starts_with($digits, '614') && strlen($digits) === 11 => '+'.$digits,
+            str_starts_with($digits, '04') && strlen($digits) === 10 => '+61'.substr($digits, 1),
+            str_starts_with($digits, '4') && strlen($digits) === 9 => '+61'.$digits,
+            default => null,
+        };
+
+        return preg_match('/^\+614\d{8}$/', (string) $e164) ? $e164 : null;
+    }
+
     public function voiceCallSessions()
     {
         return $this->hasMany(VoiceCallSession::class);

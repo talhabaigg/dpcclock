@@ -89,4 +89,10 @@ return [
         'threshold' => env('RECAPTCHA_THRESHOLD', 0.5),
     ],
 
+    'clicksend' => [
+        'username' => env('CLICKSEND_USERNAME'),
+        'api_key' => env('CLICKSEND_API_KEY'),
+        'from' => env('CLICKSEND_FROM'),
+    ],
+
 ];
