@@ -14,6 +14,7 @@ export interface Condition {
     pricing_method: string;
     labour_unit_rate?: number;
     unit_rate_multiplier?: number;
+    sell_rate?: number | null;
     condition_type?: {
         id: number;
         name: string;

@@ -315,6 +315,13 @@ export default function VariationPricingTab({
         if (!condition) return;
         const condUnit = getNaturalUnit(condition);
         const currentQty = pricingItems[rowIdx]?.qty ?? 1;
+        const existingSellRate = pricingItems[rowIdx]?.sell_rate;
+        // Seed sell rate from the condition's default only if the row doesn't
+        // already have one (so user-typed values aren't clobbered on re-pick).
+        const seedSellRate = existingSellRate != null
+            ? existingSellRate
+            : (condition.sell_rate != null ? round2(condition.sell_rate) : null);
+        const seedSellTotal = seedSellRate != null ? round2(currentQty * seedSellRate) : null;
 
         // Update item with condition metadata immediately so the row reflects
         // the pick before the cost preview comes back.
@@ -324,6 +331,8 @@ export default function VariationPricingTab({
             takeoff_condition_id: condition.id,
             description: condition.name,
             unit: condUnit,
+            sell_rate: seedSellRate,
+            sell_total: seedSellTotal,
             condition: {
                 name: condition.name,
                 type: condition.type,
@@ -352,6 +361,8 @@ export default function VariationPricingTab({
                     labour_cost: labour,
                     material_cost: material,
                     total_cost: round2(labour + material),
+                    sell_rate: seedSellRate,
+                    sell_total: seedSellTotal,
                     condition: updated[rowIdx].condition,
                 };
                 onPricingItemsChange(next);
