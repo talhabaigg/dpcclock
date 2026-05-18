@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FormTemplate;
 use App\Services\FormPlaceholderResolver;
+use App\Services\FormVisibilityEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -71,25 +72,11 @@ class FormTemplateController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'category' => 'nullable|string|max:255',
-            'model_type' => 'nullable|string',
-            'is_active' => 'boolean',
-            'fields' => 'required|array|min:1',
-            'fields.*.label' => 'required|string|max:1000',
-            'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,heading,paragraph',
-            'fields.*.is_required' => 'boolean',
-            'fields.*.options' => 'nullable|array',
-            'fields.*.placeholder' => 'nullable|string|max:255',
-            'fields.*.help_text' => 'nullable|string|max:500',
-            'fields.*.default_value' => 'nullable|string|max:1000',
-        ]);
+        $validated = $request->validate($this->fieldValidationRules());
 
         $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
+        $this->validateVisibilityRules($validated);
 
-        // Continue with creation
         $template = FormTemplate::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -99,8 +86,10 @@ class FormTemplateController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        // Pass 1: create fields without visible_if so every field has an id.
+        $createdIds = [];
         foreach ($validated['fields'] as $index => $field) {
-            $template->fields()->create([
+            $created = $template->fields()->create([
                 'label' => $field['label'],
                 'type' => $field['type'],
                 'sort_order' => $index,
@@ -110,7 +99,11 @@ class FormTemplateController extends Controller
                 'help_text' => $field['help_text'] ?? null,
                 'default_value' => $field['default_value'] ?? null,
             ]);
+            $createdIds[$index] = $created->id;
         }
+
+        // Pass 2: resolve source_index → field_id and persist visible_if.
+        $this->applyVisibilityRules($template, $validated['fields'], $createdIds);
 
         return redirect()->route('form-templates.index')->with('success', 'Form template created.');
     }
@@ -120,30 +113,16 @@ class FormTemplateController extends Controller
         $formTemplate->load('fields');
 
         return Inertia::render('form-templates/form', [
-            'template' => $formTemplate,
+            'template' => $this->serializeTemplateForBuilder($formTemplate),
         ]);
     }
 
     public function update(Request $request, FormTemplate $formTemplate)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'category' => 'nullable|string|max:255',
-            'model_type' => 'nullable|string',
-            'is_active' => 'boolean',
-            'fields' => 'required|array|min:1',
-            'fields.*.id' => 'nullable|integer',
-            'fields.*.label' => 'required|string|max:1000',
-            'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,heading,paragraph',
-            'fields.*.is_required' => 'boolean',
-            'fields.*.options' => 'nullable|array',
-            'fields.*.placeholder' => 'nullable|string|max:255',
-            'fields.*.help_text' => 'nullable|string|max:500',
-            'fields.*.default_value' => 'nullable|string|max:1000',
-        ]);
+        $validated = $request->validate($this->fieldValidationRules(includeFieldId: true));
 
         $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
+        $this->validateVisibilityRules($validated);
 
         $formTemplate->update([
             'name' => $validated['name'],
@@ -154,35 +133,35 @@ class FormTemplateController extends Controller
             'updated_by' => $request->user()->id,
         ]);
 
-        // Sync fields: delete removed, update existing, create new
+        // Sync fields: delete removed, update existing, create new — clear
+        // visible_if on every field first so pass-2 can rewrite it cleanly.
         $existingIds = collect($validated['fields'])->pluck('id')->filter()->toArray();
         $formTemplate->fields()->whereNotIn('id', $existingIds)->delete();
 
+        $persistedIds = [];
         foreach ($validated['fields'] as $index => $field) {
+            $payload = [
+                'label' => $field['label'],
+                'type' => $field['type'],
+                'sort_order' => $index,
+                'is_required' => $field['is_required'] ?? false,
+                'options' => $field['options'] ?? null,
+                'placeholder' => $field['placeholder'] ?? null,
+                'help_text' => $field['help_text'] ?? null,
+                'default_value' => $field['default_value'] ?? null,
+                'visible_if' => null,
+            ];
+
             if (! empty($field['id'])) {
-                $formTemplate->fields()->where('id', $field['id'])->update([
-                    'label' => $field['label'],
-                    'type' => $field['type'],
-                    'sort_order' => $index,
-                    'is_required' => $field['is_required'] ?? false,
-                    'options' => $field['options'] ?? null,
-                    'placeholder' => $field['placeholder'] ?? null,
-                    'help_text' => $field['help_text'] ?? null,
-                    'default_value' => $field['default_value'] ?? null,
-                ]);
+                $formTemplate->fields()->where('id', $field['id'])->update($payload);
+                $persistedIds[$index] = (int) $field['id'];
             } else {
-                $formTemplate->fields()->create([
-                    'label' => $field['label'],
-                    'type' => $field['type'],
-                    'sort_order' => $index,
-                    'is_required' => $field['is_required'] ?? false,
-                    'options' => $field['options'] ?? null,
-                    'placeholder' => $field['placeholder'] ?? null,
-                    'help_text' => $field['help_text'] ?? null,
-                    'default_value' => $field['default_value'] ?? null,
-                ]);
+                $created = $formTemplate->fields()->create($payload);
+                $persistedIds[$index] = $created->id;
             }
         }
+
+        $this->applyVisibilityRules($formTemplate, $validated['fields'], $persistedIds);
 
         return redirect()->route('form-templates.index')->with('success', 'Form template updated.');
     }
@@ -198,26 +177,26 @@ class FormTemplateController extends Controller
     {
         $formTemplate->load('fields');
 
+        $orderedFields = $formTemplate->fields->sortBy('sort_order')->values();
+        $idToIndex = $orderedFields->mapWithKeys(fn ($f, $i) => [$f->id => $i])->all();
+
         $data = [
             'name' => $formTemplate->name,
             'description' => $formTemplate->description,
             'category' => $formTemplate->category,
             'model_type' => $formTemplate->model_type,
             'is_active' => $formTemplate->is_active,
-            'fields' => $formTemplate->fields
-                ->sortBy('sort_order')
-                ->values()
-                ->map(fn ($f) => [
-                    'label' => $f->label,
-                    'type' => $f->type,
-                    'sort_order' => $f->sort_order,
-                    'is_required' => $f->is_required,
-                    'options' => $f->options,
-                    'placeholder' => $f->placeholder,
-                    'help_text' => $f->help_text,
-                    'default_value' => $f->default_value,
-                ])
-                ->all(),
+            'fields' => $orderedFields->map(fn ($f) => [
+                'label' => $f->label,
+                'type' => $f->type,
+                'sort_order' => $f->sort_order,
+                'is_required' => $f->is_required,
+                'options' => $f->options,
+                'placeholder' => $f->placeholder,
+                'help_text' => $f->help_text,
+                'default_value' => $f->default_value,
+                'visible_if' => $this->visibleIfToWire($f->visible_if, $idToIndex),
+            ])->all(),
         ];
 
         $filename = str()->slug($formTemplate->name) . '-form-template.json';
@@ -248,18 +227,23 @@ class FormTemplateController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        foreach (array_values($data['fields']) as $index => $field) {
-            $template->fields()->create([
+        $createdIds = [];
+        $importedFields = array_values($data['fields']);
+        foreach ($importedFields as $index => $field) {
+            $created = $template->fields()->create([
                 'label' => $field['label'] ?? 'Untitled',
                 'type' => $field['type'] ?? 'text',
-                'sort_order' => $field['sort_order'] ?? $index,
+                'sort_order' => $index,
                 'is_required' => $field['is_required'] ?? false,
                 'options' => $field['options'] ?? null,
                 'placeholder' => $field['placeholder'] ?? null,
                 'help_text' => $field['help_text'] ?? null,
                 'default_value' => $field['default_value'] ?? null,
             ]);
+            $createdIds[$index] = $created->id;
         }
+
+        $this->applyVisibilityRules($template, $importedFields, $createdIds);
 
         return redirect()->route('form-templates.edit', $template)
             ->with('success', 'Form template imported.');
@@ -298,5 +282,179 @@ class FormTemplateController extends Controller
         if (! empty($unknown)) {
             throw \Illuminate\Validation\ValidationException::withMessages($unknown);
         }
+    }
+
+    /**
+     * Shared validation rules. update() additionally allows fields.*.id.
+     */
+    private function fieldValidationRules(bool $includeFieldId = false): array
+    {
+        $rules = [
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:500',
+            'category' => 'nullable|string|max:255',
+            'model_type' => 'nullable|string',
+            'is_active' => 'boolean',
+            'fields' => 'required|array|min:1',
+            'fields.*.label' => 'required|string|max:1000',
+            'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,heading,paragraph',
+            'fields.*.is_required' => 'boolean',
+            'fields.*.options' => 'nullable|array',
+            'fields.*.placeholder' => 'nullable|string|max:255',
+            'fields.*.help_text' => 'nullable|string|max:500',
+            'fields.*.default_value' => 'nullable|string|max:1000',
+            'fields.*.visible_if' => 'nullable|array',
+            'fields.*.visible_if.source_index' => 'required_with:fields.*.visible_if|integer|min:0',
+            'fields.*.visible_if.operator' => 'required_with:fields.*.visible_if|in:'.implode(',', FormVisibilityEvaluator::OPERATORS),
+            'fields.*.visible_if.value' => 'nullable|string|max:255',
+        ];
+
+        if ($includeFieldId) {
+            $rules['fields.*.id'] = 'nullable|integer';
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Reject visible_if rules that point forward, at self, at non-existent
+     * indexes, at fields whose type can't act as a source, or whose value isn't
+     * one of the source's options. Mirrors the constraint surfaced in the UI.
+     */
+    private function validateVisibilityRules(array $validated): void
+    {
+        $fields = $validated['fields'] ?? [];
+        $errors = [];
+
+        foreach ($fields as $i => $field) {
+            $rule = $field['visible_if'] ?? null;
+            if (! is_array($rule)) {
+                continue;
+            }
+
+            $sourceIndex = $rule['source_index'] ?? null;
+            $operator = $rule['operator'] ?? null;
+            $value = $rule['value'] ?? null;
+            $key = "fields.{$i}.visible_if";
+
+            if (! is_int($sourceIndex) || $sourceIndex < 0 || $sourceIndex >= count($fields)) {
+                $errors["{$key}.source_index"] = 'Source field is missing.';
+                continue;
+            }
+            if ($sourceIndex >= $i) {
+                $errors["{$key}.source_index"] = 'A field can only depend on a field that appears earlier in the form.';
+                continue;
+            }
+
+            $sourceField = $fields[$sourceIndex];
+            if (! in_array($sourceField['type'] ?? null, ['radio', 'select', 'checkbox'], true)) {
+                $errors["{$key}.source_index"] = 'Source field must be a radio, select, or checkbox question.';
+                continue;
+            }
+
+            if (in_array($operator, ['equals', 'not_equals'], true)) {
+                if ($value === null || $value === '') {
+                    $errors["{$key}.value"] = 'Pick a value for the rule.';
+                    continue;
+                }
+                $options = $sourceField['options'] ?? [];
+                if (is_array($options) && count($options) > 0 && ! in_array($value, $options, true)) {
+                    $errors["{$key}.value"] = 'Value must match one of the source field options.';
+                }
+            }
+        }
+
+        if (! empty($errors)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * Pass 2 of save: now that every field has an id, resolve each rule's
+     * source_index to a field_id and persist the visible_if blob.
+     *
+     * @param  array<int,int>  $indexToId
+     */
+    private function applyVisibilityRules(FormTemplate $template, array $fields, array $indexToId): void
+    {
+        foreach ($fields as $index => $field) {
+            $rule = $field['visible_if'] ?? null;
+            if (! is_array($rule)) {
+                continue;
+            }
+
+            $sourceId = $indexToId[$rule['source_index']] ?? null;
+            if ($sourceId === null) {
+                continue;
+            }
+
+            $fieldId = $indexToId[$index] ?? null;
+            if ($fieldId === null) {
+                continue;
+            }
+
+            $template->fields()->where('id', $fieldId)->update([
+                'visible_if' => [
+                    'field_id' => $sourceId,
+                    'operator' => $rule['operator'],
+                    'value' => in_array($rule['operator'], ['empty', 'not_empty'], true) ? null : ($rule['value'] ?? null),
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Convert the DB-shaped visible_if (field_id) to the wire shape (source_index)
+     * for the React builder and the JSON export.
+     *
+     * @param  array<int,int>  $idToIndex
+     */
+    private function visibleIfToWire(?array $rule, array $idToIndex): ?array
+    {
+        if (! is_array($rule) || empty($rule['field_id']) || empty($rule['operator'])) {
+            return null;
+        }
+
+        $sourceIndex = $idToIndex[(int) $rule['field_id']] ?? null;
+        if ($sourceIndex === null) {
+            return null;
+        }
+
+        return [
+            'source_index' => $sourceIndex,
+            'operator' => $rule['operator'],
+            'value' => $rule['value'] ?? null,
+        ];
+    }
+
+    /**
+     * Shape the template payload for the React builder: convert each field's
+     * visible_if from {field_id} to {source_index}.
+     */
+    private function serializeTemplateForBuilder(FormTemplate $formTemplate): array
+    {
+        $orderedFields = $formTemplate->fields->sortBy('sort_order')->values();
+        $idToIndex = $orderedFields->mapWithKeys(fn ($f, $i) => [$f->id => $i])->all();
+
+        return [
+            'id' => $formTemplate->id,
+            'name' => $formTemplate->name,
+            'description' => $formTemplate->description,
+            'category' => $formTemplate->category,
+            'model_type' => $formTemplate->model_type,
+            'is_active' => $formTemplate->is_active,
+            'fields' => $orderedFields->map(fn ($f) => [
+                'id' => $f->id,
+                'label' => $f->label,
+                'type' => $f->type,
+                'sort_order' => $f->sort_order,
+                'is_required' => $f->is_required,
+                'options' => $f->options,
+                'placeholder' => $f->placeholder,
+                'help_text' => $f->help_text,
+                'default_value' => $f->default_value,
+                'visible_if' => $this->visibleIfToWire($f->visible_if, $idToIndex),
+            ])->all(),
+        ];
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FormRequest;
 use App\Services\FormPlaceholderResolver;
 use App\Services\FormService;
+use App\Services\FormVisibilityEvaluator;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -13,6 +14,7 @@ class FormRequestController extends Controller
     public function __construct(
         private FormService $formService,
         private FormPlaceholderResolver $placeholderResolver,
+        private FormVisibilityEvaluator $visibilityEvaluator,
     ) {}
 
     // ─── Public actions (token-based, no auth) ───────────────
@@ -96,16 +98,10 @@ class FormRequestController extends Controller
             return view('forms.expired');
         }
 
-        $validated = $request->validate($this->buildValidationRules($formRequest));
+        $visibility = $this->computeVisibility($formRequest, $request->all());
+        $validated = $request->validate($this->buildValidationRules($formRequest, $visibility));
 
-        // Build responses keyed by field ID
-        $responses = [];
-        foreach ($formRequest->formTemplate->fields as $field) {
-            if ($field->isDisplayOnly()) {
-                continue;
-            }
-            $responses[$field->id] = $validated["field_{$field->id}"] ?? null;
-        }
+        $responses = $this->collectResponses($formRequest, $validated, $visibility);
 
         try {
             $this->formService->processSubmission($formRequest, $responses, $request);
@@ -196,16 +192,11 @@ class FormRequestController extends Controller
             return back()->withErrors(['form' => 'This form has been cancelled.']);
         }
 
-        $rules = $this->buildValidationRules($formRequest);
+        $visibility = $this->computeVisibility($formRequest, $request->all());
+        $rules = $this->buildValidationRules($formRequest, $visibility);
         $validated = $request->validate($rules);
 
-        $responses = [];
-        foreach ($formRequest->formTemplate->fields as $field) {
-            if ($field->isDisplayOnly()) {
-                continue;
-            }
-            $responses[$field->id] = $validated["field_{$field->id}"] ?? null;
-        }
+        $responses = $this->collectResponses($formRequest, $validated, $visibility);
 
         try {
             $this->formService->processSubmission($formRequest, $responses, $request);
@@ -231,8 +222,13 @@ class FormRequestController extends Controller
     /**
      * Build Laravel validation rules from a FormRequest's template fields.
      * Shared between public (token) and authenticated (in-app) submission.
+     *
+     * Hidden fields (per visible_if rules evaluated against the submitted
+     * values) are always nullable — never required, regardless of is_required.
+     *
+     * @param  array<int,bool>  $visibility keyed by field id; missing key = visible
      */
-    private function buildValidationRules(FormRequest $formRequest): array
+    private function buildValidationRules(FormRequest $formRequest, array $visibility = []): array
     {
         $rules = [];
         foreach ($formRequest->formTemplate->fields as $field) {
@@ -240,8 +236,9 @@ class FormRequestController extends Controller
                 continue;
             }
 
+            $isVisible = $visibility[$field->id] ?? true;
             $fieldRules = [];
-            $fieldRules[] = $field->is_required ? 'required' : 'nullable';
+            $fieldRules[] = ($field->is_required && $isVisible) ? 'required' : 'nullable';
 
             match ($field->type) {
                 'email' => $fieldRules[] = 'email:rfc',
@@ -270,6 +267,67 @@ class FormRequestController extends Controller
         }
 
         return $rules;
+    }
+
+    /**
+     * Walk fields in sort order, evaluating each visible_if rule against the
+     * values already submitted (or implied by) earlier-positioned fields.
+     * Returns a [fieldId => bool] map.
+     *
+     * @param  array<string,mixed>  $input the raw request body (field_{id} => value)
+     * @return array<int,bool>
+     */
+    private function computeVisibility(FormRequest $formRequest, array $input): array
+    {
+        $ordered = $formRequest->formTemplate->fields->sortBy('sort_order')->values();
+
+        // Two-pass: build the responses map first (treating hidden answers as
+        // null), then evaluate. We can't single-pass because evaluateAll needs
+        // to cascade sections, and a section's heading rule may reference a
+        // field above OR below — order of evaluation has to be deterministic.
+        // Walk the simple way: collect what the user actually submitted, run
+        // evaluateAll, then null hidden values, then re-run for stability.
+        $responses = [];
+        foreach ($ordered as $field) {
+            if ($field->isDisplayOnly()) {
+                continue;
+            }
+            $responses[$field->id] = $input["field_{$field->id}"] ?? null;
+        }
+
+        // First pass with raw input.
+        $visibility = $this->visibilityEvaluator->evaluateAll($ordered, $responses);
+
+        // Null hidden values and re-evaluate so downstream rules see the same
+        // state the server will validate against.
+        foreach ($responses as $id => $_) {
+            if (! ($visibility[$id] ?? true)) {
+                $responses[$id] = null;
+            }
+        }
+        return $this->visibilityEvaluator->evaluateAll($ordered, $responses);
+    }
+
+    /**
+     * @param  array<string,mixed>  $validated
+     * @param  array<int,bool>  $visibility
+     * @return array<int,mixed>
+     */
+    private function collectResponses(FormRequest $formRequest, array $validated, array $visibility): array
+    {
+        $responses = [];
+        foreach ($formRequest->formTemplate->fields as $field) {
+            if ($field->isDisplayOnly()) {
+                continue;
+            }
+
+            // Discard values from hidden fields server-side — never trust the client.
+            $responses[$field->id] = ($visibility[$field->id] ?? true)
+                ? ($validated["field_{$field->id}"] ?? null)
+                : null;
+        }
+
+        return $responses;
     }
 
     // ─── Admin actions (authenticated) ───────────────────────

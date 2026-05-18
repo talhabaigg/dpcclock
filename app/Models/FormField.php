@@ -17,6 +17,7 @@ class FormField extends Model
         'placeholder',
         'help_text',
         'default_value',
+        'visible_if',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class FormField extends Model
         return [
             'is_required' => 'boolean',
             'options' => 'array',
+            'visible_if' => 'array',
         ];
     }
 

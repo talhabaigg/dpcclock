@@ -251,6 +251,7 @@ interface FormFieldData {
     placeholder: string | null;
     help_text: string | null;
     default_value: string | null;
+    visible_if: { field_id: number; operator: 'equals' | 'not_equals' | 'empty' | 'not_empty'; value: string | null } | null;
 }
 
 interface FormRequestData {
@@ -1926,6 +1927,56 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 
 type FormResponseValue = string | string[];
 
+/**
+ * Mirror of FormVisibilityEvaluator on the server — same semantics, including
+ * section cascade. Fields are walked in order; each rule resolves against
+ * values produced by earlier (already-evaluated) fields. A heading opens a
+ * section: every field below it (until the next heading) inherits the
+ * heading's visibility AND-ed with its own rule. Hidden field values are
+ * treated as null for downstream rules.
+ */
+function evaluateVisibility(fields: FormFieldData[], values: Record<number, FormResponseValue>): Record<number, boolean> {
+    const visible: Record<number, boolean> = {};
+    const effective: Record<number, FormResponseValue | null> = {};
+    let sectionVisible = true;
+
+    const evalRule = (rule: NonNullable<FormFieldData['visible_if']>): boolean => {
+        const source = effective[rule.field_id];
+        const empty =
+            source === null ||
+            source === undefined ||
+            source === '' ||
+            (Array.isArray(source) && source.length === 0);
+        const matches = (() => {
+            if (rule.value === null || rule.value === undefined) return false;
+            if (Array.isArray(source)) return source.includes(rule.value);
+            return String(source ?? '') === rule.value;
+        })();
+        return (
+            rule.operator === 'empty' ? empty
+            : rule.operator === 'not_empty' ? !empty
+            : rule.operator === 'equals' ? matches
+            : rule.operator === 'not_equals' ? !matches
+            : true
+        );
+    };
+
+    for (const field of fields) {
+        let isVisible: boolean;
+        if (field.type === 'heading') {
+            sectionVisible = field.visible_if ? evalRule(field.visible_if) : true;
+            isVisible = sectionVisible;
+        } else {
+            const ownRule = field.visible_if ? evalRule(field.visible_if) : true;
+            isVisible = sectionVisible && ownRule;
+        }
+        visible[field.id] = isVisible;
+        effective[field.id] = isVisible ? (values[field.id] ?? null) : null;
+    }
+
+    return visible;
+}
+
 function FormFillPane({
     formRequest,
     onClose,
@@ -1938,6 +1989,11 @@ function FormFillPane({
     const [saving, setSaving] = useState(false);
 
     const fields = useMemo(() => formRequest?.form_template?.fields ?? [], [formRequest]);
+
+    // Visibility map: walks fields in order, evaluating each rule against the
+    // values collected so far. Hidden fields are excluded from required-check
+    // and stripped from the submission payload.
+    const visibility = useMemo(() => evaluateVisibility(fields, values), [fields, values]);
 
     useEffect(() => {
         if (!formRequest) return;
@@ -1976,6 +2032,7 @@ function FormFillPane({
         for (const field of fields) {
             if (!field.is_required) continue;
             if (['heading', 'paragraph'].includes(field.type)) continue;
+            if (!visibility[field.id]) continue;
             const v = values[field.id];
             const empty = Array.isArray(v) ? v.length === 0 : !v || !String(v).trim();
             if (empty) {
@@ -1990,7 +2047,8 @@ function FormFillPane({
         const payload: Record<string, FormResponseValue> = {};
         for (const field of fields) {
             if (['heading', 'paragraph'].includes(field.type)) continue;
-            payload[`field_${field.id}`] = values[field.id] ?? '';
+            // Discard values from hidden fields — server will too, but this keeps the wire clean.
+            payload[`field_${field.id}`] = visibility[field.id] ? (values[field.id] ?? '') : '';
         }
 
         setSaving(true);
@@ -2037,6 +2095,7 @@ function FormFillPane({
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
                     <div className="space-y-4">
                         {fields.map((field) => {
+                            if (!visibility[field.id]) return null;
                             if (field.type === 'heading') {
                                 return (
                                     <h3 key={field.id} className="border-b pb-1 text-xs font-semibold uppercase tracking-wide">

@@ -25,6 +25,7 @@ import {
     CircleDot,
     CheckSquare,
     Copy,
+    Eye,
     FileText,
     GripVertical,
     Hash,
@@ -42,6 +43,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type VisibilityOperator = 'equals' | 'not_equals' | 'empty' | 'not_empty';
+
+interface VisibleIfRule {
+    source_index: number;
+    operator: VisibilityOperator;
+    value: string | null;
+}
+
 interface FieldItem {
     id?: number;
     label: string;
@@ -51,6 +60,7 @@ interface FieldItem {
     placeholder: string;
     help_text: string;
     default_value: string;
+    visible_if: VisibleIfRule | null;
 }
 
 interface PlaceholderToken {
@@ -118,8 +128,36 @@ function getFieldIcon(type: string): React.ElementType {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function emptyField(): FieldItem {
-    return { label: '', type: 'text', is_required: false, options: [], placeholder: '', help_text: '', default_value: '' };
+    return { label: '', type: 'text', is_required: false, options: [], placeholder: '', help_text: '', default_value: '', visible_if: null };
 }
+
+/**
+ * After fields are reordered / removed / duplicated, remap each rule's
+ * source_index to wherever its source field ended up. Identity is by object
+ * reference: `prev[old_index]` is the same object as somewhere in `next`. If
+ * the source is gone or now appears at or after the dependent, drop the rule.
+ */
+function remapVisibleIf(prev: FieldItem[], next: FieldItem[]): FieldItem[] {
+    const objectToNewIndex = new Map<FieldItem, number>();
+    next.forEach((f, i) => objectToNewIndex.set(f, i));
+    return next.map((f, newIdx) => {
+        if (!f.visible_if) return f;
+        const sourceObj = prev[f.visible_if.source_index];
+        const newSourceIdx = sourceObj ? objectToNewIndex.get(sourceObj) : undefined;
+        if (newSourceIdx === undefined || newSourceIdx >= newIdx) {
+            return { ...f, visible_if: null };
+        }
+        if (newSourceIdx === f.visible_if.source_index) return f;
+        return { ...f, visible_if: { ...f.visible_if, source_index: newSourceIdx } };
+    });
+}
+
+const VISIBILITY_OPERATORS: { value: VisibilityOperator; label: string }[] = [
+    { value: 'equals', label: 'equals' },
+    { value: 'not_equals', label: 'does not equal' },
+    { value: 'empty', label: 'is empty' },
+    { value: 'not_empty', label: 'is not empty' },
+];
 
 /** Generate a stable sort key for each field based on its index (used by dnd-kit). */
 function fieldSortId(index: number) {
@@ -237,6 +275,8 @@ interface SortableFieldCardProps {
     field: FieldItem;
     index: number;
     totalFields: number;
+    allFields: FieldItem[];
+    parentHeading: FieldItem | null;
     isOpen: boolean;
     tokens: PlaceholderToken[];
     onToggle: (index: number) => void;
@@ -252,6 +292,8 @@ function SortableFieldCard({
     field,
     index,
     totalFields,
+    allFields,
+    parentHeading,
     isOpen,
     tokens,
     onToggle,
@@ -291,6 +333,22 @@ function SortableFieldCard({
     const defaultPreview = useMemo(() => resolvePreview(field.default_value, tokens), [field.default_value, tokens]);
     const labelPreview = useMemo(() => resolvePreview(field.label, tokens), [field.label, tokens]);
 
+    // Eligible source fields: earlier fields that are radio / select / checkbox.
+    const eligibleSources = useMemo(
+        () =>
+            allFields
+                .slice(0, index)
+                .map((f, i) => ({ field: f, index: i }))
+                .filter(({ field: f }) => TYPES_WITH_OPTIONS.includes(f.type)),
+        [allFields, index],
+    );
+
+    const ruleSourceField =
+        field.visible_if !== null ? allFields[field.visible_if.source_index] ?? null : null;
+    const ruleNeedsValue =
+        field.visible_if !== null &&
+        (field.visible_if.operator === 'equals' || field.visible_if.operator === 'not_equals');
+
     const sortId = fieldSortId(index);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortId });
 
@@ -301,8 +359,10 @@ function SortableFieldCard({
 
     const Icon = getFieldIcon(field.type);
     const isDisplay = DISPLAY_ONLY_TYPES.includes(field.type);
+    const isHeading = field.type === 'heading';
     const hasOptions = TYPES_WITH_OPTIONS.includes(field.type);
     const fieldTypeLabel = FIELD_TYPES.find((ft) => ft.value === field.type)?.label ?? field.type;
+    const inConditionalSection = !!parentHeading?.visible_if;
 
     return (
         <div
@@ -312,7 +372,7 @@ function SortableFieldCard({
                 isDragging
                     ? 'z-50 bg-muted/40'
                     : 'bg-transparent hover:bg-muted/30'
-            }`}
+            } ${inConditionalSection ? 'border-l-2 border-l-foreground/15 pl-1' : ''}`}
         >
             <Collapsible open={isOpen} onOpenChange={() => onToggle(index)}>
                 {/* ── Card Header ── */}
@@ -344,6 +404,11 @@ function SortableFieldCard({
                                 <span className="text-foreground">· Required</span>
                             )}
                             {isDisplay && <span>· Display</span>}
+                            {field.visible_if && (
+                                <span className="inline-flex items-center gap-0.5 text-foreground/80">
+                                    · <Eye className="h-3 w-3" /> Conditional
+                                </span>
+                            )}
                         </div>
 
                         {/* Spacer */}
@@ -626,6 +691,136 @@ function SortableFieldCard({
                                 </div>
                             )}
 
+                            {/* Conditional visibility */}
+                            {eligibleSources.length > 0 && (
+                                <div className="mt-2 border-t border-dashed border-border/50 pt-2">
+                                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                                        <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <Eye className="h-3 w-3" /> Show this {isHeading ? 'section' : 'field'} when
+                                        </Label>
+                                        {field.visible_if && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onUpdate(index, { visible_if: null })}
+                                                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                    {isHeading && field.visible_if && (
+                                        <p className="mb-1.5 text-xs text-muted-foreground/80 italic">
+                                            Cascades to every field below until the next heading.
+                                        </p>
+                                    )}
+
+                                    {!field.visible_if ? (
+                                        <button
+                                            type="button"
+                                            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                            onClick={() => {
+                                                const first = eligibleSources[0];
+                                                if (!first) return;
+                                                const firstOption = first.field.options[0] ?? '';
+                                                onUpdate(index, {
+                                                    visible_if: {
+                                                        source_index: first.index,
+                                                        operator: 'equals',
+                                                        value: firstOption || null,
+                                                    },
+                                                });
+                                            }}
+                                        >
+                                            <Plus className="h-3 w-3" /> Add condition
+                                        </button>
+                                    ) : (
+                                        <div className="grid gap-1.5">
+                                            <Select
+                                                value={String(field.visible_if.source_index)}
+                                                onValueChange={(v) => {
+                                                    const nextSourceIdx = Number(v);
+                                                    const src = allFields[nextSourceIdx];
+                                                    const nextValue =
+                                                        field.visible_if && (field.visible_if.operator === 'equals' || field.visible_if.operator === 'not_equals')
+                                                            ? src?.options.includes(field.visible_if.value ?? '')
+                                                                ? field.visible_if.value
+                                                                : src?.options[0] ?? null
+                                                            : null;
+                                                    onUpdate(index, {
+                                                        visible_if: {
+                                                            ...field.visible_if!,
+                                                            source_index: nextSourceIdx,
+                                                            value: nextValue,
+                                                        },
+                                                    });
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-7 text-xs md:text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {eligibleSources.map(({ field: srcField, index: srcIdx }) => (
+                                                        <SelectItem key={srcIdx} value={String(srcIdx)}>
+                                                            Q{srcIdx + 1}. {srcField.label || 'Untitled'}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+
+                                            <Select
+                                                value={field.visible_if.operator}
+                                                onValueChange={(v) => {
+                                                    const operator = v as VisibilityOperator;
+                                                    const needsValue = operator === 'equals' || operator === 'not_equals';
+                                                    onUpdate(index, {
+                                                        visible_if: {
+                                                            ...field.visible_if!,
+                                                            operator,
+                                                            value: needsValue
+                                                                ? field.visible_if!.value ?? ruleSourceField?.options[0] ?? null
+                                                                : null,
+                                                        },
+                                                    });
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-7 text-xs md:text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {VISIBILITY_OPERATORS.map((op) => (
+                                                        <SelectItem key={op.value} value={op.value}>
+                                                            {op.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+
+                                            {ruleNeedsValue && (
+                                                <Select
+                                                    value={field.visible_if.value ?? ''}
+                                                    onValueChange={(v) =>
+                                                        onUpdate(index, {
+                                                            visible_if: { ...field.visible_if!, value: v },
+                                                        })
+                                                    }
+                                                >
+                                                    <SelectTrigger className="h-7 text-xs md:text-xs">
+                                                        <SelectValue placeholder="Pick a value..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(ruleSourceField?.options ?? []).map((opt, i) => (
+                                                            <SelectItem key={i} value={opt}>
+                                                                {opt || `Option ${i + 1}`}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                         </div>
                     </div>
                 </CollapsibleContent>
@@ -634,10 +829,70 @@ function SortableFieldCard({
     );
 }
 
-// ─── Field Preview ───────────────────────────────────────────────────────────
+// ─── Field Preview (interactive) ─────────────────────────────────────────────
 
-function FieldPreview({ field }: { field: FieldItem }) {
+type PreviewValue = string | string[];
+type PreviewValues = Record<number, PreviewValue>;
+
+/**
+ * Mirror of FormVisibilityEvaluator on the server, but keyed by field array
+ * INDEX (not DB id) because in-progress builder fields don't have stable ids
+ * yet. visible_if rules reference source_index, so this lines up naturally.
+ */
+function evaluatePreviewVisibility(fields: FieldItem[], values: PreviewValues): Record<number, boolean> {
+    const visible: Record<number, boolean> = {};
+    const effective: Record<number, PreviewValue | null> = {};
+    let sectionVisible = true;
+
+    const evalRule = (rule: VisibleIfRule): boolean => {
+        const source = effective[rule.source_index];
+        const empty =
+            source === null ||
+            source === undefined ||
+            source === '' ||
+            (Array.isArray(source) && source.length === 0);
+        const matches = (() => {
+            if (rule.value === null || rule.value === undefined) return false;
+            if (Array.isArray(source)) return source.includes(rule.value);
+            return String(source ?? '') === rule.value;
+        })();
+        return (
+            rule.operator === 'empty' ? empty
+            : rule.operator === 'not_empty' ? !empty
+            : rule.operator === 'equals' ? matches
+            : rule.operator === 'not_equals' ? !matches
+            : true
+        );
+    };
+
+    for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
+        let isVisible: boolean;
+        if (f.type === 'heading') {
+            sectionVisible = f.visible_if ? evalRule(f.visible_if) : true;
+            isVisible = sectionVisible;
+        } else {
+            const own = f.visible_if ? evalRule(f.visible_if) : true;
+            isVisible = sectionVisible && own;
+        }
+        visible[i] = isVisible;
+        effective[i] = isVisible ? (values[i] ?? null) : null;
+    }
+    return visible;
+}
+
+interface FieldPreviewProps {
+    field: FieldItem;
+    index: number;
+    value: PreviewValue | undefined;
+    onChange: (v: PreviewValue) => void;
+}
+
+function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
     const displayLabel = field.label || 'Untitled';
+    const required = field.is_required;
+    const stringValue = typeof value === 'string' ? value : '';
+    const arrayValue = Array.isArray(value) ? value : [];
 
     if (field.type === 'heading') {
         return <p className="text-xs font-semibold">{displayLabel}</p>;
@@ -648,49 +903,76 @@ function FieldPreview({ field }: { field: FieldItem }) {
     if (field.type === 'textarea') {
         return (
             <div>
-                <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-                <div className="h-12 rounded-md border border-dashed bg-background px-2 py-1 text-xs text-muted-foreground/50">
-                    {field.placeholder || 'Enter text...'}
-                </div>
+                <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+                <textarea
+                    value={stringValue}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder={field.placeholder || 'Enter text...'}
+                    className="h-12 w-full resize-none rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-foreground/30"
+                />
             </div>
         );
     }
     if (field.type === 'select') {
         return (
             <div>
-                <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-                <div className="flex h-7 items-center justify-between rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
-                    <span>Select an option...</span>
-                    <ChevronDown className="h-3 w-3" />
-                </div>
+                <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+                <select
+                    value={stringValue}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-7 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-foreground/30"
+                >
+                    <option value="">Select an option...</option>
+                    {field.options.map((opt, i) => (
+                        <option key={i} value={opt}>{opt || `Option ${i + 1}`}</option>
+                    ))}
+                </select>
             </div>
         );
     }
     if (field.type === 'radio') {
+        const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
         return (
             <div>
-                <p className="mb-1.5 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
+                <p className="mb-1.5 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
                 <div className="space-y-1">
-                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).map((opt, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
-                            <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
-                            <span className="text-xs text-muted-foreground">{opt || `Option ${i + 1}`}</span>
-                        </div>
+                    {opts.map((opt, i) => (
+                        <label key={i} className="flex cursor-pointer items-center gap-1.5">
+                            <input
+                                type="radio"
+                                name={`preview-radio-${index}`}
+                                checked={stringValue === opt}
+                                onChange={() => onChange(opt)}
+                                className="h-3 w-3 accent-foreground"
+                            />
+                            <span className="text-xs">{opt || `Option ${i + 1}`}</span>
+                        </label>
                     ))}
                 </div>
             </div>
         );
     }
     if (field.type === 'checkbox') {
+        const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
         return (
             <div>
-                <p className="mb-1.5 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
+                <p className="mb-1.5 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
                 <div className="space-y-1">
-                    {(field.options.length > 0 ? field.options : ['Option 1', 'Option 2']).map((opt, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
-                            <div className="h-3.5 w-3.5 rounded-sm border-2 border-muted-foreground/30" />
-                            <span className="text-xs text-muted-foreground">{opt || `Option ${i + 1}`}</span>
-                        </div>
+                    {opts.map((opt, i) => (
+                        <label key={i} className="flex cursor-pointer items-center gap-1.5">
+                            <input
+                                type="checkbox"
+                                checked={arrayValue.includes(opt)}
+                                onChange={(e) => {
+                                    const next = e.target.checked
+                                        ? [...arrayValue, opt]
+                                        : arrayValue.filter((v) => v !== opt);
+                                    onChange(next);
+                                }}
+                                className="h-3 w-3 accent-foreground"
+                            />
+                            <span className="text-xs">{opt || `Option ${i + 1}`}</span>
+                        </label>
                     ))}
                 </div>
             </div>
@@ -698,12 +980,22 @@ function FieldPreview({ field }: { field: FieldItem }) {
     }
 
     // Default: text, number, email, phone, date
+    const inputType =
+        field.type === 'number' ? 'number'
+        : field.type === 'email' ? 'email'
+        : field.type === 'phone' ? 'tel'
+        : field.type === 'date' ? 'date'
+        : 'text';
     return (
         <div>
-            <p className="mb-1 text-xs font-medium">{displayLabel} {field.is_required && <span className="text-red-500">*</span>}</p>
-            <div className="flex h-7 items-center rounded-md border bg-background px-2 text-xs text-muted-foreground/50">
-                {field.placeholder || `Enter ${field.type}...`}
-            </div>
+            <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+            <input
+                type={inputType}
+                value={stringValue}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={field.placeholder || `Enter ${field.type}...`}
+                className="h-7 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-foreground/30"
+            />
         </div>
     );
 }
@@ -720,7 +1012,7 @@ export default function FormTemplateForm({ template }: PageProps) {
         template?.model_type === 'App\\Models\\EmploymentApplication' ? 'employment_application' : '',
     );
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
-    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '' })) : [emptyField()]);
+    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '', visible_if: f.visible_if ?? null })) : [emptyField()]);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [openFields, setOpenFields] = useState<Record<number, boolean>>(() => {
@@ -771,6 +1063,68 @@ export default function FormTemplateForm({ template }: PageProps) {
 
     const sortIds = useMemo(() => fields.map((_, i) => fieldSortId(i)), [fields.length]);
 
+    // Interactive preview state — keyed by field array index. Seeded from
+    // default_value on first render and whenever a new field appears.
+    const [previewValues, setPreviewValues] = useState<PreviewValues>({});
+    useEffect(() => {
+        setPreviewValues((prev) => {
+            const next: PreviewValues = {};
+            fields.forEach((f, i) => {
+                if (prev[i] !== undefined) {
+                    next[i] = prev[i];
+                    return;
+                }
+                if (f.type === 'checkbox') {
+                    next[i] = f.default_value
+                        ? f.default_value.split(',').map((v) => v.trim()).filter(Boolean)
+                        : [];
+                } else {
+                    next[i] = f.default_value ?? '';
+                }
+            });
+            return next;
+        });
+    }, [fields]);
+
+    const previewVisibility = useMemo(() => evaluatePreviewVisibility(fields, previewValues), [fields, previewValues]);
+    const visibleCount = useMemo(() => fields.filter((_, i) => previewVisibility[i]).length, [fields, previewVisibility]);
+    const hiddenCount = fields.length - visibleCount;
+
+    function setPreviewValue(index: number, v: PreviewValue) {
+        setPreviewValues((prev) => ({ ...prev, [index]: v }));
+    }
+
+    function resetPreview() {
+        const fresh: PreviewValues = {};
+        fields.forEach((f, i) => {
+            if (f.type === 'checkbox') {
+                fresh[i] = f.default_value
+                    ? f.default_value.split(',').map((v) => v.trim()).filter(Boolean)
+                    : [];
+            } else {
+                fresh[i] = f.default_value ?? '';
+            }
+        });
+        setPreviewValues(fresh);
+    }
+
+    // Map each field to its parent heading (most recent heading at a lower
+    // index). Headings themselves have no parent. Used to draw a visual cue
+    // when a field belongs to a conditional section.
+    const parentHeadings = useMemo<(FieldItem | null)[]>(() => {
+        const result: (FieldItem | null)[] = [];
+        let current: FieldItem | null = null;
+        for (const f of fields) {
+            if (f.type === 'heading') {
+                result.push(null);
+                current = f;
+            } else {
+                result.push(current);
+            }
+        }
+        return result;
+    }, [fields]);
+
     // ── Field operations ──
 
     function addField(type = 'text') {
@@ -779,24 +1133,44 @@ export default function FormTemplateForm({ template }: PageProps) {
 
     function removeField(index: number) {
         if (fields.length <= 1) return;
-        setFields(fields.filter((_, i) => i !== index));
+        const next = fields.filter((_, i) => i !== index);
+        setFields(remapVisibleIf(fields, next));
     }
 
     function duplicateField(index: number) {
         const clone = { ...fields[index], id: undefined, options: [...fields[index].options] };
         const next = [...fields];
         next.splice(index + 1, 0, clone);
-        setFields(next);
+        setFields(remapVisibleIf(fields, next));
     }
 
     function updateField(index: number, updates: Partial<FieldItem>) {
         const next = [...fields];
+        const previousType = next[index].type;
         next[index] = { ...next[index], ...updates };
         if (updates.type && !TYPES_WITH_OPTIONS.includes(updates.type)) {
             next[index].options = [];
         }
         if (updates.type && DISPLAY_ONLY_TYPES.includes(updates.type)) {
             next[index].is_required = false;
+            // Paragraph is inline text — no rule allowed. Heading IS a section
+            // boundary, so its rule cascades to the section's fields.
+            if (updates.type === 'paragraph') {
+                next[index].visible_if = null;
+            }
+        }
+        // If the source field is no longer an option-bearing type, invalidate
+        // any dependent visibility rules that reference it.
+        if (
+            updates.type &&
+            TYPES_WITH_OPTIONS.includes(previousType) &&
+            !TYPES_WITH_OPTIONS.includes(updates.type)
+        ) {
+            for (let i = index + 1; i < next.length; i++) {
+                if (next[i].visible_if?.source_index === index) {
+                    next[i] = { ...next[i], visible_if: null };
+                }
+            }
         }
         setFields(next);
     }
@@ -829,7 +1203,7 @@ export default function FormTemplateForm({ template }: PageProps) {
             const oldIndex = sortIds.indexOf(active.id as string);
             const newIndex = sortIds.indexOf(over.id as string);
 
-            setFields((prev) => arrayMove(prev, oldIndex, newIndex));
+            setFields((prev) => remapVisibleIf(prev, arrayMove(prev, oldIndex, newIndex)));
         },
         [sortIds],
     );
@@ -853,6 +1227,18 @@ export default function FormTemplateForm({ template }: PageProps) {
             }
         }
 
+        // Filtering out empty-label fields shifts source_indexes. Remap any
+        // visible_if rules against the filtered list before sending; drop the
+        // rule if its source got filtered out.
+        const oldIndexToNew = new Map<number, number>();
+        validFields.forEach((f, newIdx) => oldIndexToNew.set(fields.indexOf(f), newIdx));
+        const remappedFields = validFields.map((f) => {
+            if (!f.visible_if) return f;
+            const newSourceIdx = oldIndexToNew.get(f.visible_if.source_index);
+            if (newSourceIdx === undefined) return { ...f, visible_if: null };
+            return { ...f, visible_if: { ...f.visible_if, source_index: newSourceIdx } };
+        });
+
         setErrors({});
         setSaving(true);
 
@@ -862,7 +1248,7 @@ export default function FormTemplateForm({ template }: PageProps) {
             category: category.trim() || null,
             model_type: modelType || null,
             is_active: isActive,
-            fields: validFields.map((f) => ({
+            fields: remappedFields.map((f) => ({
                 id: f.id,
                 label: f.label.trim(),
                 type: f.type,
@@ -871,6 +1257,13 @@ export default function FormTemplateForm({ template }: PageProps) {
                 placeholder: (f.placeholder ?? '').trim() || null,
                 help_text: (f.help_text ?? '').trim() || null,
                 default_value: (f.default_value ?? '').trim() || null,
+                visible_if: f.visible_if
+                    ? {
+                          source_index: f.visible_if.source_index,
+                          operator: f.visible_if.operator as string,
+                          value: f.visible_if.value,
+                      }
+                    : null,
             })),
         };
 
@@ -1065,6 +1458,8 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                 field={field}
                                                 index={index}
                                                 totalFields={fields.length}
+                                                allFields={fields}
+                                                parentHeading={parentHeadings[index]}
                                                 isOpen={openFields[index] ?? true}
                                                 tokens={tokens}
                                                 onToggle={toggleField}
@@ -1105,9 +1500,18 @@ export default function FormTemplateForm({ template }: PageProps) {
                     {/* ── Right Column: Live Preview ── */}
                     <div className="hidden min-w-0 lg:block">
                         <div className="sticky top-6">
-                            <h2 className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                                Live Preview
-                            </h2>
+                            <div className="mb-3 flex items-center justify-between">
+                                <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                    Live Preview <span className="text-muted-foreground/50">· try it</span>
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={resetPreview}
+                                    className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                    Reset
+                                </button>
+                            </div>
 
                             <div className="border-l border-border/60 pl-5">
                                 <h4 className="text-xs font-medium">
@@ -1124,21 +1528,30 @@ export default function FormTemplateForm({ template }: PageProps) {
                                             Add fields to see a preview
                                         </p>
                                     ) : (
-                                        fields.map(
-                                            (field, index) =>
-                                                field.label.trim() !== '' && (
-                                                    <div key={index}>
-                                                        <FieldPreview field={field} />
-                                                    </div>
-                                                ),
+                                        fields.map((field, index) =>
+                                            field.label.trim() !== '' && previewVisibility[index] ? (
+                                                <div key={index}>
+                                                    <FieldPreview
+                                                        field={field}
+                                                        index={index}
+                                                        value={previewValues[index]}
+                                                        onChange={(v) => setPreviewValue(index, v)}
+                                                    />
+                                                </div>
+                                            ) : null,
                                         )
                                     )}
                                 </div>
 
-                                {/* Fake submit button — flat, neutral */}
+                                {/* Footer: submit + hidden-count nudge */}
                                 {fields.filter((f) => f.label.trim() !== '').length > 0 && (
-                                    <div className="mt-5 border-t border-dashed border-border/50 pt-3 text-xs text-muted-foreground">
-                                        Submit →
+                                    <div className="mt-5 flex items-center justify-between border-t border-dashed border-border/50 pt-3 text-xs text-muted-foreground">
+                                        <span>Submit →</span>
+                                        {hiddenCount > 0 && (
+                                            <span className="italic text-muted-foreground/70">
+                                                {hiddenCount} field{hiddenCount === 1 ? '' : 's'} hidden by conditions
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                             </div>

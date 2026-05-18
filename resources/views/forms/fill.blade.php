@@ -30,6 +30,7 @@
         /* Field groups */
         .field-group { margin-bottom: 20px; }
         .field-group:last-child { margin-bottom: 0; }
+        .field-group.is-hidden { display: none; }
         .field-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #1e293b; }
         .field-group .required-star { color: #dc2626; margin-left: 2px; }
         .field-group .help-text { font-size: 12px; color: #64748b; margin-top: 4px; }
@@ -111,16 +112,17 @@
                 </div>
                 <div class="form-body">
                     @foreach($fields as $field)
+                        @php $visibleIfAttr = $field->visible_if ? json_encode($field->visible_if) : null; @endphp
                         @if($field->type === 'heading')
-                            <div class="field-group">
+                            <div class="field-group" data-field-id="{{ $field->id }}" data-field-type="heading" @if($visibleIfAttr) data-visible-if='{{ $visibleIfAttr }}' @endif>
                                 <div class="section-heading">{{ $field->label }}</div>
                             </div>
                         @elseif($field->type === 'paragraph')
-                            <div class="field-group">
+                            <div class="field-group" data-field-id="{{ $field->id }}" data-field-type="paragraph" @if($visibleIfAttr) data-visible-if='{{ $visibleIfAttr }}' @endif>
                                 <div class="info-text">{{ $field->label }}</div>
                             </div>
                         @else
-                            <div class="field-group">
+                            <div class="field-group" data-field-id="{{ $field->id }}" data-field-type="{{ $field->type }}" @if($visibleIfAttr) data-visible-if='{{ $visibleIfAttr }}' @endif>
                                 <label for="field_{{ $field->id }}">
                                     {{ $field->label }}
                                     @if($field->is_required)

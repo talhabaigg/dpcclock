@@ -384,10 +384,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/form-templates/placeholders/list', [FormTemplateController::class, 'placeholders'])->name('form-templates.placeholders');
 
         // Phase-form mappings (which form auto-sends on which status, to whom)
-        Route::get('/application-phase-forms', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'index'])->name('application-phase-forms.index');
-        Route::post('/application-phase-forms', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'store'])->name('application-phase-forms.store');
-        Route::put('/application-phase-forms/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'update'])->name('application-phase-forms.update');
-        Route::delete('/application-phase-forms/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'destroy'])->name('application-phase-forms.destroy');
+        // URL avoids the `/app*` prefix because the prod nginx Reverb location block swallows it.
+        Route::get('/phase-form-mappings', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'index'])->name('application-phase-forms.index');
+        Route::post('/phase-form-mappings', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'store'])->name('application-phase-forms.store');
+        Route::put('/phase-form-mappings/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'update'])->name('application-phase-forms.update');
+        Route::delete('/phase-form-mappings/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'destroy'])->name('application-phase-forms.destroy');
     });
 
     // Form Requests (admin actions)

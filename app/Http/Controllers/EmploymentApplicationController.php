@@ -461,6 +461,7 @@ class EmploymentApplicationController extends Controller
                         'placeholder' => $placeholderResolver->interpolate($field->placeholder, $employmentApplication),
                         'help_text' => $field->help_text,
                         'default_value' => $placeholderResolver->interpolate($field->default_value, $employmentApplication),
+                        'visible_if' => $field->visible_if,
                     ])->values(),
                 ] : null,
                 'sent_by' => $fr->sentBy ? [

@@ -1,7 +1,15 @@
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,8 +18,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { Pencil, Plus, Trash2, Workflow } from 'lucide-react';
+import { EllipsisVertical, Plus, Workflow } from 'lucide-react';
 import { useState } from 'react';
+
+function getInitials(name: string): string {
+    return name
+        .split(' ')
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+}
 
 interface Mapping {
     id: number;
@@ -37,7 +55,7 @@ interface PageProps {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Form Templates', href: '/form-templates' },
-    { title: 'Phase Form Mappings', href: '/application-phase-forms' },
+    { title: 'Phase Form Mappings', href: '/phase-form-mappings' },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
@@ -154,27 +172,35 @@ export default function ApplicationPhaseFormsIndex({
         router.delete(route('application-phase-forms.destroy', m.id));
     }
 
-    function assigneeDisplay(m: Mapping): string {
+    function renderAssignee(m: Mapping) {
         if (m.assignee_strategy === 'role') {
             const role = roles.find((r) => r.name === m.assignee_value);
-            return role ? `Role: ${role.name}` : `Role: ${m.assignee_value} (not found)`;
+            return (
+                <span className="text-muted-foreground">
+                    Role: {role ? role.name : `${m.assignee_value} (not found)`}
+                </span>
+            );
         }
         const user = users.find((u) => String(u.id) === String(m.assignee_value));
-        return user ? `User: ${user.name}` : `User #${m.assignee_value} (not found)`;
+        const label = user ? user.name : `User #${m.assignee_value} (not found)`;
+        return (
+            <div className="flex items-center gap-2">
+                <Avatar className="h-6 w-6">
+                    <AvatarFallback className="bg-muted text-primary text-[10px] font-medium">
+                        {getInitials(label)}
+                    </AvatarFallback>
+                </Avatar>
+                <span className={user ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+            </div>
+        );
     }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Phase Form Mappings" />
 
-            <div className="mx-auto max-w-5xl p-4 lg:p-6">
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-xl font-semibold tracking-tight">Phase Form Mappings</h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            When an application enters a status, send the configured form to the assigned role or user.
-                        </p>
-                    </div>
+            <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
+                <div className="mb-6 flex items-center justify-end">
                     <Button size="sm" onClick={openCreate}>
                         <Plus className="mr-1.5 h-4 w-4" />
                         New mapping
@@ -200,7 +226,7 @@ export default function ApplicationPhaseFormsIndex({
                 ) : (
                     <Card className="py-2 gap-2">
                         <CardContent className="p-0">
-                            <Table>
+                            <Table className="text-xs">
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
                                         <TableHead className="pl-4">Status</TableHead>
@@ -208,7 +234,7 @@ export default function ApplicationPhaseFormsIndex({
                                         <TableHead>Assignee</TableHead>
                                         <TableHead className="text-center">Required</TableHead>
                                         <TableHead className="text-center">Active</TableHead>
-                                        <TableHead className="w-[100px] pr-4 text-right">Actions</TableHead>
+                                        <TableHead className="w-12 pr-4 text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -220,14 +246,14 @@ export default function ApplicationPhaseFormsIndex({
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="font-medium">{m.form_template.name}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">{assigneeDisplay(m)}</TableCell>
+                                            <TableCell>{renderAssignee(m)}</TableCell>
                                             <TableCell className="text-center">
                                                 {m.is_required ? (
                                                     <Badge className="border-amber-500/20 bg-amber-500/10 text-amber-700 shadow-none hover:bg-amber-500/10">
                                                         Required
                                                     </Badge>
                                                 ) : (
-                                                    <span className="text-xs text-muted-foreground">Optional</span>
+                                                    <span className="text-muted-foreground">Optional</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-center">
@@ -242,26 +268,33 @@ export default function ApplicationPhaseFormsIndex({
                                                 )}
                                             </TableCell>
                                             <TableCell className="pr-4 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0"
-                                                        onClick={() => openEdit(m)}
-                                                        aria-label="Edit mapping"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                                        onClick={() => handleDelete(m)}
-                                                        aria-label="Delete mapping"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            aria-label="Row actions"
+                                                        >
+                                                            <EllipsisVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="min-w-max">
+                                                        <DropdownMenuItem
+                                                            className="whitespace-nowrap"
+                                                            onClick={() => openEdit(m)}
+                                                        >
+                                                            Edit
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                            onClick={() => handleDelete(m)}
+                                                        >
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))}
