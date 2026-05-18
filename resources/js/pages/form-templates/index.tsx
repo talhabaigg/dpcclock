@@ -1,13 +1,20 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { EllipsisVertical, FileText, Plus, Search, Upload } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
 interface FormTemplate {
     id: number;
@@ -36,6 +43,14 @@ function formatDate(dateString: string): string {
 
 export default function FormTemplatesIndex({ templates }: PageProps) {
     const [search, setSearch] = useState('');
+    const importRef = useRef<HTMLInputElement>(null);
+
+    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        router.post(route('form-templates.import'), { file }, { forceFormData: true });
+        e.target.value = '';
+    };
 
     const filtered = useMemo(() => {
         if (!search.trim()) return templates;
@@ -53,6 +68,13 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
             <Head title="Form Templates" />
 
             <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
+                <input
+                    ref={importRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={handleImport}
+                />
                 {templates.length === 0 ? (
                     /* Empty state -- shown only when there are truly no templates */
                     <Card className="py-2 gap-2">
@@ -64,12 +86,18 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                             <p className="text-muted-foreground mt-1 max-w-sm text-sm">
                                 Form templates let you define reusable field structures. Create your first template to get started.
                             </p>
-                            <Link href={route('form-templates.create')} className="mt-5">
-                                <Button size="sm">
-                                    <Plus className="mr-1.5 h-4 w-4" />
-                                    Create Template
+                            <div className="mt-5 flex items-center gap-2">
+                                <Button size="sm" variant="outline" onClick={() => importRef.current?.click()}>
+                                    <Upload className="mr-1.5 h-4 w-4" />
+                                    Import JSON
                                 </Button>
-                            </Link>
+                                <Link href={route('form-templates.create')}>
+                                    <Button size="sm">
+                                        <Plus className="mr-1.5 h-4 w-4" />
+                                        Create Template
+                                    </Button>
+                                </Link>
+                            </div>
                         </CardContent>
                     </Card>
                 ) : (
@@ -85,12 +113,18 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                                     className="h-9 pl-8 text-sm"
                                 />
                             </div>
-                            <Link href={route('form-templates.create')} className="shrink-0">
-                                <Button size="sm">
-                                    <Plus className="h-4 w-4 sm:mr-1.5" />
-                                    <span className="hidden sm:inline">New Template</span>
+                            <div className="flex shrink-0 items-center gap-2">
+                                <Button size="sm" variant="outline" onClick={() => importRef.current?.click()}>
+                                    <Upload className="h-4 w-4 sm:mr-1.5" />
+                                    <span className="hidden sm:inline">Import</span>
                                 </Button>
-                            </Link>
+                                <Link href={route('form-templates.create')}>
+                                    <Button size="sm">
+                                        <Plus className="h-4 w-4 sm:mr-1.5" />
+                                        <span className="hidden sm:inline">New Template</span>
+                                    </Button>
+                                </Link>
+                            </div>
                         </div>
 
                         {/* Table */}
@@ -158,34 +192,46 @@ export default function FormTemplatesIndex({ templates }: PageProps) {
                                                         </span>
                                                     </TableCell>
                                                     <TableCell className="pr-4 text-right">
-                                                        <div className="flex items-center justify-end gap-1">
-                                                            <Link
-                                                                href={route('form-templates.edit', t.id)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-8 w-8 p-0"
-                                                                    aria-label={`Edit ${t.name}`}
-                                                                >
-                                                                    <Pencil className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </Link>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                                                aria-label={`Delete ${t.name}`}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (confirm('Delete this form template?')) {
-                                                                        router.delete(route('form-templates.destroy', t.id));
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                            </Button>
+                                                        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-8 w-8 p-0"
+                                                                        aria-label={`Row actions for ${t.name}`}
+                                                                    >
+                                                                        <EllipsisVertical className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="min-w-max">
+                                                                    <DropdownMenuItem
+                                                                        className="whitespace-nowrap"
+                                                                        onClick={() => router.visit(route('form-templates.edit', t.id))}
+                                                                    >
+                                                                        Edit
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        className="whitespace-nowrap"
+                                                                        onClick={() => {
+                                                                            window.location.href = route('form-templates.export', t.id);
+                                                                        }}
+                                                                    >
+                                                                        Download
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                        onClick={() => {
+                                                                            if (confirm('Delete this form template?')) {
+                                                                                router.delete(route('form-templates.destroy', t.id));
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

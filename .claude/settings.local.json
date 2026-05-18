@@ -110,7 +110,14 @@
       "Bash(xargs basename *)",
       "Bash(lsof -iTCP:3306 -sTCP:LISTEN)",
       "Bash(brew services *)",
-      "Bash(nc -zv 127.0.0.1 3306)"
+      "Bash(nc -zv 127.0.0.1 3306)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git merge *)",
+      "Read(//private/tmp/**)",
+      "Bash(cp \"/Users/talhabaig/Downloads/CONSTRUCTION MANAGER SIGN OFF.docx\" cmso.docx)",
+      "Bash(unzip -p cmso.docx word/document.xml)",
+      "Bash(python3 -c \"import sys, re; x=sys.stdin.read\\(\\); t=re.findall\\(r'<w:t[^>]*>\\([^<]*\\)</w:t>', x\\); print\\('\\\\n'.join\\(t\\)\\)\")"
     ]
   }
 }

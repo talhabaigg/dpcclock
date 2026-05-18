@@ -379,6 +379,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/form-templates/{formTemplate}/edit', [FormTemplateController::class, 'edit'])->name('form-templates.edit');
         Route::put('/form-templates/{formTemplate}', [FormTemplateController::class, 'update'])->name('form-templates.update');
         Route::delete('/form-templates/{formTemplate}', [FormTemplateController::class, 'destroy'])->name('form-templates.destroy');
+        Route::get('/form-templates/{formTemplate}/export', [FormTemplateController::class, 'export'])->name('form-templates.export');
+        Route::post('/form-templates/import', [FormTemplateController::class, 'import'])->name('form-templates.import');
         Route::get('/form-templates/placeholders/list', [FormTemplateController::class, 'placeholders'])->name('form-templates.placeholders');
 
         // Phase-form mappings (which form auto-sends on which status, to whom)

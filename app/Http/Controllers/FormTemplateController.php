@@ -194,6 +194,77 @@ class FormTemplateController extends Controller
         return redirect()->route('form-templates.index')->with('success', 'Form template deleted.');
     }
 
+    public function export(FormTemplate $formTemplate)
+    {
+        $formTemplate->load('fields');
+
+        $data = [
+            'name' => $formTemplate->name,
+            'description' => $formTemplate->description,
+            'category' => $formTemplate->category,
+            'model_type' => $formTemplate->model_type,
+            'is_active' => $formTemplate->is_active,
+            'fields' => $formTemplate->fields
+                ->sortBy('sort_order')
+                ->values()
+                ->map(fn ($f) => [
+                    'label' => $f->label,
+                    'type' => $f->type,
+                    'sort_order' => $f->sort_order,
+                    'is_required' => $f->is_required,
+                    'options' => $f->options,
+                    'placeholder' => $f->placeholder,
+                    'help_text' => $f->help_text,
+                    'default_value' => $f->default_value,
+                ])
+                ->all(),
+        ];
+
+        $filename = str()->slug($formTemplate->name) . '-form-template.json';
+
+        return response()->json($data, 200, [
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:json,txt',
+        ]);
+
+        $data = json_decode($request->file('file')->get(), true);
+
+        if (! is_array($data) || ! isset($data['name'], $data['fields']) || ! is_array($data['fields']) || count($data['fields']) === 0) {
+            return back()->with('error', 'Invalid form template file.');
+        }
+
+        $template = FormTemplate::create([
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'category' => $data['category'] ?? null,
+            'model_type' => $this->resolveModelType($data['model_type'] ?? null),
+            'is_active' => $data['is_active'] ?? true,
+            'created_by' => $request->user()->id,
+        ]);
+
+        foreach (array_values($data['fields']) as $index => $field) {
+            $template->fields()->create([
+                'label' => $field['label'] ?? 'Untitled',
+                'type' => $field['type'] ?? 'text',
+                'sort_order' => $field['sort_order'] ?? $index,
+                'is_required' => $field['is_required'] ?? false,
+                'options' => $field['options'] ?? null,
+                'placeholder' => $field['placeholder'] ?? null,
+                'help_text' => $field['help_text'] ?? null,
+                'default_value' => $field['default_value'] ?? null,
+            ]);
+        }
+
+        return redirect()->route('form-templates.edit', $template)
+            ->with('success', 'Form template imported.');
+    }
+
     private function resolveModelType(?string $value): ?string
     {
         return match ($value) {
