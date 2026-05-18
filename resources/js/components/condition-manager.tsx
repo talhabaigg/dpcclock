@@ -230,6 +230,9 @@ export function ConditionManager({
     // Project-level master hourly rate (one rate per project, drives detailed labour pricing)
     const [masterHourlyRate, setMasterHourlyRate] = useState<number | null>(null);
 
+    // Sidebar search — filters conditions by name
+    const [sidebarSearch, setSidebarSearch] = useState('');
+
     // Load conditions, pay rate templates, condition types, and labour cost codes
     useEffect(() => {
         if (!open || !locationId) return;
@@ -322,8 +325,13 @@ export function ConditionManager({
 
     const selectedCondition = conditions.find((c) => c.id === selectedId) || null;
 
+    const searchQuery = sidebarSearch.trim().toLowerCase();
+    const filteredConditions = searchQuery
+        ? conditions.filter((c) => c.name.toLowerCase().includes(searchQuery))
+        : conditions;
+
     const groupedConditions: Record<string, TakeoffCondition[]> = {};
-    for (const c of conditions) {
+    for (const c of filteredConditions) {
         if (!groupedConditions[c.type]) groupedConditions[c.type] = [];
         groupedConditions[c.type].push(c);
     }
@@ -865,6 +873,27 @@ export function ConditionManager({
             <DialogContent className="sm:max-w-none w-[min(96vw,1400px)] h-[88vh] max-h-[92vh] flex flex-row gap-0 p-0 [&_input]:!text-xs [&_textarea]:!text-xs [&_[data-slot=input]]:!text-xs [&_label]:!text-xs [&_[data-slot=label]]:!text-xs">
                 {/* Sidebar — full height column */}
                 <div className="w-64 shrink-0 flex flex-col border-r min-h-0">
+                        <div className="shrink-0 border-b p-2">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={sidebarSearch}
+                                    onChange={(e) => setSidebarSearch(e.target.value)}
+                                    placeholder="Search conditions…"
+                                    className="h-7 pl-7 pr-7 text-xs"
+                                />
+                                {sidebarSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSidebarSearch('')}
+                                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                         <div className="flex-1 min-h-0 overflow-y-auto p-1">
                             {(['linear', 'area', 'count'] as const).map((type) => {
                                 const items = groupedConditions[type];
@@ -915,6 +944,11 @@ export function ConditionManager({
                             {conditions.length === 0 && (
                                 <p className="text-xs text-muted-foreground text-center py-10 px-4">
                                     No conditions yet.
+                                </p>
+                            )}
+                            {conditions.length > 0 && filteredConditions.length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-10 px-4">
+                                    No conditions match “{sidebarSearch}”.
                                 </p>
                             )}
                         </div>

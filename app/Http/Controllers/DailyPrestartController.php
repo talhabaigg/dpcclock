@@ -647,6 +647,11 @@ class DailyPrestartController extends Controller
         $employee = Employee::findOrFail($employeeId);
         $prestart = DailyPrestart::findOrFail($request->prestart_id);
 
+        // Kiosk pages are often left open overnight — the worker's POST may be
+        // the only server hit of the day for this prestart. Trigger the queued
+        // refresh here too so stale weather gets corrected.
+        $prestart->ensureFreshWeatherQueued();
+
         // Store signature with content snapshot (including trainings)
         $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
             ->forLocation($prestart->location_id)

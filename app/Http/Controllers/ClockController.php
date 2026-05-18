@@ -79,6 +79,18 @@ class ClockController extends Controller
         $kiosk = Kiosk::findOrFail($data['kioskId']);
         $employee = Employee::findOrFail($data['employeeId']);
 
+        // Queue a weather refresh on today's prestart for this location, if any.
+        // ensureFreshWeatherQueued() is a no-op when weather is already fresh,
+        // so this effectively fires on the first clock-in of the day.
+        $kiosk->loadMissing('location');
+        if ($kiosk->location) {
+            $prestart = DailyPrestart::active()
+                ->forLocation($kiosk->location->id)
+                ->forDate(now('Australia/Brisbane')->toDateString())
+                ->first();
+            $prestart?->ensureFreshWeatherQueued();
+        }
+
         $now = now('Australia/Brisbane');
         $defaultStart = $now->copy()->setTimeFromTimeString($kiosk->default_start_time);
 
