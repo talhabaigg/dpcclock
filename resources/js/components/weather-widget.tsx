@@ -28,6 +28,19 @@ interface WeatherWidgetProps {
     dense?: boolean;
 }
 
+function formatBrisbane(iso: string): string {
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('en-AU', {
+        timeZone: 'Australia/Brisbane',
+        day: '2-digit',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    }).format(date);
+}
+
 function GoogleWeatherIcon({ iconBaseUri, size = 48 }: { iconBaseUri?: string | null; size?: number }) {
     if (!iconBaseUri) return <Cloud className="h-10 w-10 text-gray-400" />;
     return (
@@ -71,6 +84,11 @@ export default function WeatherWidget({ weather, compact = false, dense = false 
                         </span>
                     )}
                 </div>
+                {weather.fetched_at && (
+                    <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">
+                        as at {formatBrisbane(weather.fetched_at)}
+                    </span>
+                )}
             </div>
         );
     }
@@ -195,6 +213,12 @@ export default function WeatherWidget({ weather, compact = false, dense = false 
                             </span>
                         )}
                     </div>
+                </div>
+            )}
+
+            {weather.fetched_at && (
+                <div className={cn('border-t border-sky-200/40 dark:border-sky-800/30 bg-white/30 dark:bg-white/[0.03] text-right text-muted-foreground', dense ? 'px-3 py-0.5 text-[10px]' : 'px-4 py-1 text-[11px]')}>
+                    as at {formatBrisbane(weather.fetched_at)}
                 </div>
             )}
         </div>

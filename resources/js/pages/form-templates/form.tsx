@@ -895,38 +895,59 @@ function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
     const arrayValue = Array.isArray(value) ? value : [];
 
     if (field.type === 'heading') {
-        return <p className="text-xs font-semibold">{displayLabel}</p>;
+        return (
+            <div className="border-b-2 border-slate-200 pb-1.5 text-[14px] font-semibold text-slate-900">
+                {displayLabel}
+            </div>
+        );
     }
     if (field.type === 'paragraph') {
-        return <p className="text-xs text-muted-foreground">{displayLabel}</p>;
+        return <p className="py-1 text-[12px] leading-relaxed text-slate-500">{displayLabel}</p>;
     }
+
+    const label = (
+        <label className="mb-1.5 block text-[12px] font-medium text-slate-800">
+            {displayLabel}
+            {required && <span className="ml-0.5 text-red-600">*</span>}
+        </label>
+    );
+    const help = field.help_text ? (
+        <p className="mt-1 text-[10px] text-slate-500">{field.help_text}</p>
+    ) : null;
+    const inputClasses =
+        'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[12px] text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10';
+
     if (field.type === 'textarea') {
         return (
             <div>
-                <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+                {label}
                 <textarea
                     value={stringValue}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder={field.placeholder || 'Enter text...'}
-                    className="h-12 w-full resize-none rounded-md border bg-background px-2 py-1 text-xs outline-none focus:border-foreground/30"
+                    placeholder={field.placeholder || ''}
+                    className={`${inputClasses} min-h-[60px] resize-y`}
                 />
+                {help}
             </div>
         );
     }
     if (field.type === 'select') {
         return (
             <div>
-                <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+                {label}
                 <select
                     value={stringValue}
                     onChange={(e) => onChange(e.target.value)}
-                    className="h-7 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-foreground/30"
+                    className={inputClasses}
                 >
-                    <option value="">Select an option...</option>
+                    <option value="">Select an option</option>
                     {field.options.map((opt, i) => (
-                        <option key={i} value={opt}>{opt || `Option ${i + 1}`}</option>
+                        <option key={i} value={opt}>
+                            {opt || `Option ${i + 1}`}
+                        </option>
                     ))}
                 </select>
+                {help}
             </div>
         );
     }
@@ -934,21 +955,22 @@ function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
         const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
         return (
             <div>
-                <p className="mb-1.5 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
-                <div className="space-y-1">
+                {label}
+                <div className="flex flex-col gap-1.5">
                     {opts.map((opt, i) => (
-                        <label key={i} className="flex cursor-pointer items-center gap-1.5">
+                        <label key={i} className="flex cursor-pointer items-center gap-2 text-[12px] text-slate-700">
                             <input
                                 type="radio"
                                 name={`preview-radio-${index}`}
                                 checked={stringValue === opt}
                                 onChange={() => onChange(opt)}
-                                className="h-3 w-3 accent-foreground"
+                                className="h-3.5 w-3.5 shrink-0 accent-blue-600"
                             />
-                            <span className="text-xs">{opt || `Option ${i + 1}`}</span>
+                            <span>{opt || `Option ${i + 1}`}</span>
                         </label>
                     ))}
                 </div>
+                {help}
             </div>
         );
     }
@@ -956,10 +978,10 @@ function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
         const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
         return (
             <div>
-                <p className="mb-1.5 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
-                <div className="space-y-1">
+                {label}
+                <div className="flex flex-col gap-1.5">
                     {opts.map((opt, i) => (
-                        <label key={i} className="flex cursor-pointer items-center gap-1.5">
+                        <label key={i} className="flex cursor-pointer items-center gap-2 text-[12px] text-slate-700">
                             <input
                                 type="checkbox"
                                 checked={arrayValue.includes(opt)}
@@ -969,12 +991,13 @@ function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
                                         : arrayValue.filter((v) => v !== opt);
                                     onChange(next);
                                 }}
-                                className="h-3 w-3 accent-foreground"
+                                className="h-3.5 w-3.5 shrink-0 accent-blue-600"
                             />
-                            <span className="text-xs">{opt || `Option ${i + 1}`}</span>
+                            <span>{opt || `Option ${i + 1}`}</span>
                         </label>
                     ))}
                 </div>
+                {help}
             </div>
         );
     }
@@ -988,14 +1011,15 @@ function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
         : 'text';
     return (
         <div>
-            <p className="mb-1 text-xs font-medium">{displayLabel} {required && <span className="text-red-500">*</span>}</p>
+            {label}
             <input
                 type={inputType}
                 value={stringValue}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder={field.placeholder || `Enter ${field.type}...`}
-                className="h-7 w-full rounded-md border bg-background px-2 text-xs outline-none focus:border-foreground/30"
+                placeholder={field.placeholder || ''}
+                className={inputClasses}
             />
+            {help}
         </div>
     );
 }
@@ -1052,7 +1076,7 @@ export default function FormTemplateForm({ template }: PageProps) {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Form Templates', href: '/form-templates' },
-        { title: isEditing ? template.name : 'New Form', href: '#' },
+        { title: isEditing ? `Editing — ${template.name}` : 'New Form', href: '#' },
     ];
 
     // ── dnd-kit sensors ──
@@ -1285,37 +1309,6 @@ export default function FormTemplateForm({ template }: PageProps) {
             <Head title={isEditing ? `Edit — ${template.name}` : 'New Form Template'} />
 
             <div className="mx-auto max-w-4xl overflow-hidden p-4 lg:p-6">
-                {/* ── Page Header ── */}
-                <div className="mb-6 flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">
-                            {isEditing ? 'Edit Form Template' : 'New Form Template'}
-                        </h1>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            {isEditing
-                                ? 'Modify your form structure and settings'
-                                : 'Design a reusable form template with custom fields'}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => window.history.back()}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSubmit} disabled={saving} className="min-w-[100px]">
-                            {saving ? (
-                                <span className="flex items-center gap-2">
-                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                    Saving...
-                                </span>
-                            ) : isEditing ? (
-                                'Update Form'
-                            ) : (
-                                'Create Form'
-                            )}
-                        </Button>
-                    </div>
-                </div>
-
                 {/* ── Error Alert ── */}
                 {Object.keys(errors).length > 0 && (
                     <Alert variant="destructive" className="mb-6">
@@ -1486,10 +1479,19 @@ export default function FormTemplateForm({ template }: PageProps) {
                             </button>
                         </section>
 
-                        {/* ── Bottom Actions (mobile-friendly) ── */}
-                        <div className="mt-6 flex items-center gap-3 border-t pt-4 lg:hidden">
-                            <Button onClick={handleSubmit} disabled={saving} className="flex-1">
-                                {saving ? 'Saving...' : isEditing ? 'Update Form' : 'Create Form'}
+                        {/* Footer actions */}
+                        <div className="flex items-center gap-2 border-t pt-4">
+                            <Button onClick={handleSubmit} disabled={saving} className="min-w-[120px]">
+                                {saving ? (
+                                    <span className="flex items-center gap-2">
+                                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                        Saving...
+                                    </span>
+                                ) : isEditing ? (
+                                    'Update Form'
+                                ) : (
+                                    'Create Form'
+                                )}
                             </Button>
                             <Button variant="outline" onClick={() => window.history.back()}>
                                 Cancel
@@ -1499,61 +1501,99 @@ export default function FormTemplateForm({ template }: PageProps) {
 
                     {/* ── Right Column: Live Preview ── */}
                     <div className="hidden min-w-0 lg:block">
-                        <div className="sticky top-6">
-                            <div className="mb-3 flex items-center justify-between">
-                                <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                                    Live Preview <span className="text-muted-foreground/50">· try it</span>
-                                </h2>
-                                <button
-                                    type="button"
-                                    onClick={resetPreview}
-                                    className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                >
-                                    Reset
-                                </button>
-                            </div>
+                        <div className="sticky top-2 -mt-2">
+                            <div className="mx-auto w-full max-w-[340px]">
+                                <div className="rounded-[2.5rem] bg-neutral-900 p-2.5 shadow-2xl shadow-black/20 ring-1 ring-inset ring-white/5 dark:bg-neutral-800">
+                                    <div className="relative overflow-hidden rounded-[2rem] bg-slate-100 [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,sans-serif]">
+                                        {/* Dynamic island */}
+                                        <div className="flex justify-center bg-slate-100 pt-2.5">
+                                            <div className="h-5 w-24 rounded-full bg-neutral-900 dark:bg-neutral-800" />
+                                        </div>
 
-                            <div className="border-l border-border/60 pl-5">
-                                <h4 className="text-xs font-medium">
-                                    {name || <span className="italic text-muted-foreground/50">Form Title</span>}
-                                </h4>
-                                {description && (
-                                    <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-                                )}
+                                        {/* Screen content (≈ iPhone 9:19.5 ratio at 340w → ~736h) */}
+                                        <div className="h-[720px] overflow-y-auto px-3 pt-3 pb-4 text-slate-800">
+                                            {/* Header */}
+                                            <div className="py-2 text-center">
+                                                <h1 className="text-[14px] font-semibold text-slate-900">
+                                                    {name || <span className="italic text-slate-400">Form Title</span>}
+                                                </h1>
+                                                <p className="mt-0.5 text-[10px] text-slate-500">Please fill out the form below</p>
+                                            </div>
 
-                                {/* Field previews */}
-                                <div className="mt-4 space-y-3.5">
-                                    {fields.filter((f) => f.label.trim() !== '').length === 0 ? (
-                                        <p className="py-6 text-xs text-muted-foreground/50">
-                                            Add fields to see a preview
-                                        </p>
-                                    ) : (
-                                        fields.map((field, index) =>
-                                            field.label.trim() !== '' && previewVisibility[index] ? (
-                                                <div key={index}>
-                                                    <FieldPreview
-                                                        field={field}
-                                                        index={index}
-                                                        value={previewValues[index]}
-                                                        onChange={(v) => setPreviewValue(index, v)}
-                                                    />
+                                            {/* Greeting */}
+                                            <div className="mb-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-slate-700">
+                                                Hi <strong className="text-slate-900">there</strong>, please complete the following form and submit when ready.
+                                            </div>
+
+                                            {/* Form card */}
+                                            <div className="mb-2.5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                                <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+                                                    <h2 className="text-[11px] font-semibold text-slate-600">
+                                                        {name || 'Form Title'}
+                                                    </h2>
                                                 </div>
-                                            ) : null,
-                                        )
-                                    )}
+                                                <div className="space-y-4 px-3 py-3">
+                                                    {description && (
+                                                        <p className="text-[11px] text-slate-500">{description}</p>
+                                                    )}
+                                                    {fields.filter((f) => f.label.trim() !== '').length === 0 ? (
+                                                        <p className="py-4 text-center text-[11px] text-slate-400">
+                                                            Add fields to see a preview
+                                                        </p>
+                                                    ) : (
+                                                        fields.map((field, index) =>
+                                                            field.label.trim() !== '' && previewVisibility[index] ? (
+                                                                <div key={index}>
+                                                                    <FieldPreview
+                                                                        field={field}
+                                                                        index={index}
+                                                                        value={previewValues[index]}
+                                                                        onChange={(v) => setPreviewValue(index, v)}
+                                                                    />
+                                                                </div>
+                                                            ) : null,
+                                                        )
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Submit */}
+                                            {fields.filter((f) => f.label.trim() !== '').length > 0 && (
+                                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                                                    <button
+                                                        type="button"
+                                                        className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[12px] font-semibold text-white transition hover:bg-blue-700"
+                                                    >
+                                                        Submit Form
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Home indicator */}
+                                        <div className="flex justify-center bg-slate-100 py-2">
+                                            <div className="h-1 w-24 rounded-full bg-slate-900/25" />
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {/* Footer: submit + hidden-count nudge */}
-                                {fields.filter((f) => f.label.trim() !== '').length > 0 && (
-                                    <div className="mt-5 flex items-center justify-between border-t border-dashed border-border/50 pt-3 text-xs text-muted-foreground">
-                                        <span>Submit →</span>
-                                        {hiddenCount > 0 && (
-                                            <span className="italic text-muted-foreground/70">
-                                                {hiddenCount} field{hiddenCount === 1 ? '' : 's'} hidden by conditions
+                                <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-muted-foreground/70">
+                                    <button
+                                        type="button"
+                                        onClick={resetPreview}
+                                        className="transition-colors hover:text-foreground"
+                                    >
+                                        Reset preview
+                                    </button>
+                                    {hiddenCount > 0 && (
+                                        <>
+                                            <span className="text-muted-foreground/40">·</span>
+                                            <span className="italic">
+                                                {hiddenCount} field{hiddenCount === 1 ? '' : 's'} hidden
                                             </span>
-                                        )}
-                                    </div>
-                                )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

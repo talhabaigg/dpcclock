@@ -2,7 +2,7 @@
     use Carbon\Carbon;
     $location = $prestart->location;
     $foreman = $prestart->foreman;
-    $signatures = $prestart->signatures;
+    $signatures = $prestart->signatures->sortBy('signed_at')->values();
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -130,8 +130,8 @@
             <div class="detail-value">{{ Carbon::parse($prestart->work_date)->format('D d/m/Y') }}</div>
         </div>
         <div class="detail-item">
-            <div class="detail-label">No. of Workers</div>
-            <div class="detail-value">{{ $totalWorkers }}</div>
+            <div class="detail-label">No. of Workers Present</div>
+            <div class="detail-value">{{ $workersPresent }}</div>
         </div>
         <div class="detail-item">
             <div class="detail-label">No. of Absentees</div>
@@ -165,6 +165,11 @@
                     {{ $weather }}
                 @else
                     —
+                @endif
+                @if(is_array($weather) && !empty($weather['fetched_at']))
+                    <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">
+                        as at {{ Carbon::parse($weather['fetched_at'])->timezone('Australia/Brisbane')->format('d M Y g:ia') }}
+                    </div>
                 @endif
             </div>
         </div>

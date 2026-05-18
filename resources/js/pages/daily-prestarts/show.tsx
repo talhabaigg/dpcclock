@@ -1,16 +1,18 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { CheckCircle2, Download, GraduationCap, Lock, MessageSquare, Pencil, Trash2, Unlock } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Download, GraduationCap, Lock, MessageSquare, Pencil, Trash2, Unlock } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -31,8 +33,12 @@ interface UnsignedEmployee {
     name: string;
     is_present_at_site: boolean;
     absence_reason: string | null;
+    reason_label: string | null;
+    reason_value: string | null;
     note: string | null;
     clock_in_time: string | null;
+    updated_by_name: string | null;
+    updated_at: string | null;
 }
 
 interface Prestart {
@@ -64,6 +70,7 @@ interface Props {
     prestart: Prestart;
     unsignedEmployees: UnsignedEmployee[];
     trainings: TrainingItem[];
+    reasonOptions: Record<string, string>;
 }
 
 const DAILY_CHECKLIST = [
@@ -75,15 +82,98 @@ const DAILY_CHECKLIST = [
     'Current Licences & Qualifications are relevant to work tasks',
 ];
 
-export default function DailyPrestartShow({ prestart, unsignedEmployees, trainings }: Props) {
+export default function DailyPrestartShow({ prestart, unsignedEmployees, trainings, reasonOptions }: Props) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
 
     const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
     const [noteText, setNoteText] = useState('');
+    const [reasonValue, setReasonValue] = useState<string>('none');
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    const [sortBy, setSortBy] = useState<'name' | 'status'>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+    const [bulkReason, setBulkReason] = useState<string>('none');
+    const [bulkNote, setBulkNote] = useState('');
+    const [bulkSaving, setBulkSaving] = useState(false);
+
+    const statusRank = (e: UnsignedEmployee) => {
+        if (e.is_present_at_site) return 0;
+        if (e.absence_reason) return 1;
+        return 2;
+    };
+
+    const sortedUnsigned = useMemo(() => {
+        const dir = sortDir === 'asc' ? 1 : -1;
+        return [...unsignedEmployees].sort((a, b) => {
+            if (sortBy === 'name') {
+                return a.name.localeCompare(b.name) * dir;
+            }
+            const ra = statusRank(a);
+            const rb = statusRank(b);
+            if (ra !== rb) return (ra - rb) * dir;
+            return (a.absence_reason ?? '').localeCompare(b.absence_reason ?? '') * dir;
+        });
+    }, [unsignedEmployees, sortBy, sortDir]);
+
+    const toggleSort = (col: 'name' | 'status') => {
+        if (sortBy === col) {
+            setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(col);
+            setSortDir('asc');
+        }
+    };
+
+    const toggleSelected = (id: number) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const allVisibleSelected = sortedUnsigned.length > 0 && sortedUnsigned.every((e) => selectedIds.has(e.id));
+    const toggleSelectAll = () => {
+        if (allVisibleSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(sortedUnsigned.map((e) => e.id)));
+        }
+    };
+
+    const openBulkDialog = () => {
+        setBulkReason('none');
+        setBulkNote('');
+        setBulkDialogOpen(true);
+    };
+
+    const saveBulk = () => {
+        if (selectedIds.size === 0) return;
+        router.post(
+            route('daily-prestarts.bulk-update-absence-note', { dailyPrestart: prestart.id }),
+            {
+                employee_ids: Array.from(selectedIds),
+                reason: bulkReason === 'none' ? null : bulkReason,
+                note: bulkNote || null,
+            },
+            {
+                onBefore: () => setBulkSaving(true),
+                onSuccess: () => {
+                    setBulkDialogOpen(false);
+                    setSelectedIds(new Set());
+                    setBulkReason('none');
+                    setBulkNote('');
+                },
+                onFinish: () => setBulkSaving(false),
+                preserveScroll: true,
+            }
+        );
+    };
 
     const confirmDelete = () => {
         router.delete(`/daily-prestarts/${prestart.id}`, {
@@ -94,6 +184,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
     const openNoteEditor = (employee: UnsignedEmployee) => {
         setEditingEmployeeId(employee.id);
         setNoteText(employee.note ?? '');
+        setReasonValue(employee.reason_value ?? 'none');
     };
 
     const saveNote = () => {
@@ -101,12 +192,16 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
         router.post(
             route('daily-prestarts.update-absence-note', { dailyPrestart: prestart.id, employee: editingEmployeeId }),
-            { note: noteText || null },
+            {
+                reason: reasonValue === 'none' ? null : reasonValue,
+                note: noteText || null,
+            },
             {
                 onBefore: () => setIsSaving(true),
                 onSuccess: () => {
                     setEditingEmployeeId(null);
                     setNoteText('');
+                    setReasonValue('none');
                 },
                 onFinish: () => setIsSaving(false),
                 preserveScroll: true,
@@ -329,27 +424,77 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
                 {/* Unsigned Employees */}
                 {unsignedEmployees.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Not Signed ({unsignedEmployees.length})</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Employee</TableHead>
-                                            <TableHead>Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {unsignedEmployees.map((emp) => (
-                                            <TableRow key={emp.id}>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <h2 className="text-base font-semibold">Not Signed ({unsignedEmployees.length})</h2>
+                            {selectedIds.size > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
+                                    <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
+                                        Clear
+                                    </Button>
+                                    <Button size="sm" onClick={openBulkDialog}>
+                                        Apply Reason / Note
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-10">
+                                            <Checkbox
+                                                checked={allVisibleSelected}
+                                                onCheckedChange={toggleSelectAll}
+                                                aria-label="Select all"
+                                            />
+                                        </TableHead>
+                                        <TableHead>
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1 font-medium hover:text-slate-900"
+                                                onClick={() => toggleSort('name')}
+                                            >
+                                                Employee
+                                                {sortBy === 'name' ? (
+                                                    sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                ) : (
+                                                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                                )}
+                                            </button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1 font-medium hover:text-slate-900"
+                                                onClick={() => toggleSort('status')}
+                                            >
+                                                Status
+                                                {sortBy === 'status' ? (
+                                                    sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                ) : (
+                                                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                                )}
+                                            </button>
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sortedUnsigned.map((emp) => (
+                                        <TableRow key={emp.id} data-selected={selectedIds.has(emp.id) ? 'true' : undefined}>
+                                            <TableCell>
+                                                <Checkbox
+                                                    checked={selectedIds.has(emp.id)}
+                                                    onCheckedChange={() => toggleSelected(emp.id)}
+                                                    aria-label={`Select ${emp.name}`}
+                                                />
+                                            </TableCell>
                                                 <TableCell>{emp.name}</TableCell>
                                                 <TableCell>
                                                     <div className="space-y-2">
                                                         <div className="flex items-start justify-between gap-2">
-                                                            <div>
+                                                            <div className="flex flex-wrap items-center gap-1.5">
                                                                 {emp.is_present_at_site ? (
                                                                     <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
                                                                         Present - Not Signed
@@ -364,7 +509,12 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                     </Badge>
                                                                 )}
                                                                 {emp.clock_in_time && (
-                                                                    <span className="text-xs text-slate-500 ml-2">at {emp.clock_in_time}</span>
+                                                                    <span className="text-xs text-slate-500">at {emp.clock_in_time}</span>
+                                                                )}
+                                                                {emp.reason_label && (
+                                                                    <Badge variant="outline" className="bg-violet-50 text-violet-900 border-violet-200">
+                                                                        {emp.reason_label}
+                                                                    </Badge>
                                                                 )}
                                                             </div>
                                                             {editingEmployeeId === emp.id && (
@@ -380,19 +530,38 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                     </PopoverTrigger>
                                                                     <PopoverContent className="w-80" side="left">
                                                                         <div className="space-y-3">
-                                                                            <h4 className="font-medium text-sm">Add Note</h4>
-                                                                            <Textarea
-                                                                                placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
-                                                                                value={noteText}
-                                                                                onChange={(e) => setNoteText(e.target.value)}
-                                                                                onKeyDown={(e) => {
-                                                                                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                                                                                        e.preventDefault();
-                                                                                        saveNote();
-                                                                                    }
-                                                                                }}
-                                                                                className="min-h-20 text-sm"
-                                                                            />
+                                                                            <h4 className="font-medium text-sm">Absence Reason & Note</h4>
+                                                                            <div className="space-y-1.5">
+                                                                                <label className="text-xs font-medium text-slate-600">Reason</label>
+                                                                                <Select value={reasonValue} onValueChange={setReasonValue}>
+                                                                                    <SelectTrigger className="w-full">
+                                                                                        <SelectValue placeholder="Select reason" />
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        <SelectItem value="none">No reason set</SelectItem>
+                                                                                        {Object.entries(reasonOptions).map(([key, label]) => (
+                                                                                            <SelectItem key={key} value={key}>
+                                                                                                {label}
+                                                                                            </SelectItem>
+                                                                                        ))}
+                                                                                    </SelectContent>
+                                                                                </Select>
+                                                                            </div>
+                                                                            <div className="space-y-1.5">
+                                                                                <label className="text-xs font-medium text-slate-600">Note</label>
+                                                                                <Textarea
+                                                                                    placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
+                                                                                    value={noteText}
+                                                                                    onChange={(e) => setNoteText(e.target.value)}
+                                                                                    onKeyDown={(e) => {
+                                                                                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                                                                            e.preventDefault();
+                                                                                            saveNote();
+                                                                                        }
+                                                                                    }}
+                                                                                    className="min-h-20 text-sm"
+                                                                                />
+                                                                            </div>
                                                                             <div className="flex justify-end gap-2">
                                                                                 <Button variant="outline" size="sm" onClick={() => setEditingEmployeeId(null)} disabled={isSaving}>
                                                                                     Cancel
@@ -421,55 +590,101 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                 {emp.note}
                                                             </div>
                                                         )}
+                                                        {emp.updated_by_name && (emp.note || emp.reason_label) && (
+                                                            <p className="text-[11px] text-slate-500">
+                                                                by {emp.updated_by_name}
+                                                                {emp.updated_at && <> · {emp.updated_at}</>}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 )}
 
-                {/* Signatures */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Signatures ({prestart.signatures.length})</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {prestart.signatures.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">No signatures yet.</p>
-                        ) : (
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Employee</TableHead>
-                                            <TableHead>Signed At</TableHead>
-                                            <TableHead>Signature</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {prestart.signatures.map((sig) => (
-                                            <TableRow key={sig.id}>
-                                                <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
-                                                <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
-                                                <TableCell>
-                                                    <img
-                                                        src={sig.signature}
-                                                        alt="Signature"
-                                                        className="h-10 max-w-[200px] object-contain dark:invert"
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
+                {/* Bulk apply reason/note dialog */}
+                <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Apply Reason / Note to {selectedIds.size} {selectedIds.size === 1 ? 'worker' : 'workers'}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-slate-600">Reason</label>
+                                <Select value={bulkReason} onValueChange={setBulkReason}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select reason" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No reason set</SelectItem>
+                                        {Object.entries(reasonOptions).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>
+                                                {label}
+                                            </SelectItem>
                                         ))}
-                                    </TableBody>
-                                </Table>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-slate-600">Note</label>
+                                <Textarea
+                                    placeholder="Optional note applied to all selected workers"
+                                    value={bulkNote}
+                                    onChange={(e) => setBulkNote(e.target.value)}
+                                    className="min-h-20 text-sm"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                This will overwrite any existing reason/note for the selected workers.
+                            </p>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setBulkDialogOpen(false)} disabled={bulkSaving}>Cancel</Button>
+                            <Button onClick={saveBulk} disabled={bulkSaving}>
+                                {bulkSaving ? 'Saving...' : 'Apply'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Signatures */}
+                <div className="space-y-3">
+                    <h2 className="text-base font-semibold">Signatures ({prestart.signatures.length})</h2>
+                    {prestart.signatures.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">No signatures yet.</p>
+                    ) : (
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Employee</TableHead>
+                                        <TableHead>Signed At</TableHead>
+                                        <TableHead>Signature</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {prestart.signatures.map((sig) => (
+                                        <TableRow key={sig.id}>
+                                            <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
+                                            <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
+                                            <TableCell>
+                                                <img
+                                                    src={sig.signature}
+                                                    alt="Signature"
+                                                    className="h-10 max-w-[200px] object-contain dark:invert"
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </div>
             </div>
 
         </AppLayout>

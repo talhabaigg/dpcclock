@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Clock;
 use App\Models\DailyPrestart;
-use App\Models\DailyPrestartAbsenceNote;
 use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Kiosk;
 use App\Models\Location;
+use App\Models\PrestartAbsentee;
 use App\Models\Training;
 use App\Services\WeatherService;
 use Carbon\Carbon;
@@ -155,7 +155,7 @@ class DailyPrestartController extends Controller
 
     public function show(DailyPrestart $dailyPrestart)
     {
-        $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee', 'absenceNotes']);
+        $dailyPrestart->load(['location', 'foreman', 'createdBy', 'media', 'signatures.employee']);
 
         // Get location kiosk employees
         $kioskEmployees = collect();
@@ -170,14 +170,24 @@ class DailyPrestartController extends Controller
         // Get signed employee IDs
         $signedIds = $dailyPrestart->signatures->pluck('employee_id')->toArray();
 
+        // Load foreman-recorded absentee records (reason + notes) from prestart_absentees
+        $absenteeRecords = PrestartAbsentee::where('daily_prestart_id', $dailyPrestart->id)
+            ->with('updatedByUser:id,name')
+            ->get()
+            ->keyBy('employee_id');
+        $reasonLabels = PrestartAbsentee::REASON_OPTIONS;
+
         // Get unsigned employees with their absence status from timesheet
         $unsignedEmployees = $kioskEmployees
             ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
-            ->map(function ($emp) use ($dailyPrestart) {
-                // Get any note for this employee
-                $note = $dailyPrestart->absenceNotes
-                    ->where('employee_id', $emp->id)
-                    ->first()?->note;
+            ->map(function ($emp) use ($dailyPrestart, $absenteeRecords, $reasonLabels) {
+                // Foreman-recorded reason + notes (canonical source: prestart_absentees)
+                $absenteeRecord = $absenteeRecords->get($emp->id);
+                $note = $absenteeRecord?->notes;
+                $reasonValue = $absenteeRecord?->reason;
+                $reasonLabel = $reasonValue ? ($reasonLabels[$reasonValue] ?? $reasonValue) : null;
+                $updatedByName = $absenteeRecord?->updatedByUser?->name;
+                $updatedAt = $absenteeRecord?->updated_at?->timezone('Australia/Brisbane')->format('d M Y g:ia');
 
                 // Get all clock entries for this employee on the prestart date, ordered chronologically
                 $clocks = Clock::where('eh_employee_id', $emp->eh_employee_id)
@@ -206,6 +216,10 @@ class DailyPrestartController extends Controller
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
                             'is_present_at_site' => true,
                             'absence_reason' => null,
+                            'reason_label' => $reasonLabel,
+                            'reason_value' => $reasonValue,
+                            'updated_by_name' => $updatedByName,
+                            'updated_at' => $updatedAt,
                             'note' => $note,
                             'clock_in_time' => $firstWorkClock->created_at->format('g:i a'),
                         ];
@@ -221,6 +235,10 @@ class DailyPrestartController extends Controller
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
                             'is_present_at_site' => false,
                             'absence_reason' => "Clocked in at {$parentCode}",
+                            'reason_label' => $reasonLabel,
+                            'reason_value' => $reasonValue,
+                            'updated_by_name' => $updatedByName,
+                            'updated_at' => $updatedAt,
                             'note' => $note,
                             'clock_in_time' => $firstWorkClock->created_at->format('g:i a'),
                         ];
@@ -243,6 +261,10 @@ class DailyPrestartController extends Controller
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
                             'is_present_at_site' => false,
                             'absence_reason' => "On {$leaveReason}",
+                            'reason_label' => $reasonLabel,
+                            'reason_value' => $reasonValue,
+                            'updated_by_name' => $updatedByName,
+                            'updated_at' => $updatedAt,
                             'note' => $note,
                             'clock_in_time' => null,
                         ];
@@ -258,6 +280,10 @@ class DailyPrestartController extends Controller
                             'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
                             'is_present_at_site' => false,
                             'absence_reason' => "Other project - {$leaveReason} at {$parentCode}",
+                            'reason_label' => $reasonLabel,
+                            'reason_value' => $reasonValue,
+                            'updated_by_name' => $updatedByName,
+                            'updated_at' => $updatedAt,
                             'note' => $note,
                             'clock_in_time' => null,
                         ];
@@ -270,6 +296,10 @@ class DailyPrestartController extends Controller
                     'name' => $emp->display_name ?? $emp->preferred_name ?? $emp->name,
                     'is_present_at_site' => false,
                     'absence_reason' => 'Absent (Unexplained)',
+                    'reason_label' => $reasonLabel,
+                    'reason_value' => $reasonValue,
+                    'updated_by_name' => $updatedByName,
+                    'updated_at' => $updatedAt,
                     'note' => $note,
                     'clock_in_time' => null,
                 ];
@@ -285,6 +315,7 @@ class DailyPrestartController extends Controller
             'prestart' => $dailyPrestart,
             'unsignedEmployees' => $unsignedEmployees,
             'trainings' => $trainings,
+            'reasonOptions' => PrestartAbsentee::REASON_OPTIONS,
         ]);
     }
 
@@ -386,20 +417,57 @@ class DailyPrestartController extends Controller
             return back()->withErrors(['error' => 'Unauthorized']);
         }
 
-        $request->validate([
+        $data = $request->validate([
+            'reason' => 'nullable|string|in:' . implode(',', array_keys(PrestartAbsentee::REASON_OPTIONS)),
             'note' => 'nullable|string|max:1000',
         ]);
 
-        DailyPrestartAbsenceNote::updateOrCreate(
+        PrestartAbsentee::updateOrCreate(
             [
                 'daily_prestart_id' => $dailyPrestart->id,
                 'employee_id' => $employee->id,
             ],
             [
-                'note' => $request->note ?? null,
+                'reason' => $data['reason'] ?? null,
+                'notes' => $data['note'] ?? null,
                 'updated_by' => auth()->id(),
             ]
         );
+
+        return back();
+    }
+
+    public function bulkUpdateAbsenceNote(Request $request, DailyPrestart $dailyPrestart)
+    {
+        $kiosk = Kiosk::where('eh_location_id', $dailyPrestart->location->eh_location_id)->first();
+        $isKioskManager = $kiosk && $kiosk->managers()->where('users.id', auth()->id())->exists();
+        $isForeman = $dailyPrestart->foreman_id === auth()->id();
+        $isAdmin = auth()->user()?->hasRole('admin');
+
+        if (! $isKioskManager && ! $isForeman && ! $isAdmin) {
+            return back()->withErrors(['error' => 'Unauthorized']);
+        }
+
+        $data = $request->validate([
+            'employee_ids' => 'required|array|min:1',
+            'employee_ids.*' => 'integer|exists:employees,id',
+            'reason' => 'nullable|string|in:' . implode(',', array_keys(PrestartAbsentee::REASON_OPTIONS)),
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        foreach ($data['employee_ids'] as $employeeId) {
+            PrestartAbsentee::updateOrCreate(
+                [
+                    'daily_prestart_id' => $dailyPrestart->id,
+                    'employee_id' => $employeeId,
+                ],
+                [
+                    'reason' => $data['reason'] ?? null,
+                    'notes' => $data['note'] ?? null,
+                    'updated_by' => auth()->id(),
+                ]
+            );
+        }
 
         return back();
     }
@@ -448,7 +516,7 @@ class DailyPrestartController extends Controller
 
         $html = view('pdf.prestart-sign-sheet', [
             'prestart' => $dailyPrestart,
-            'totalWorkers' => $kioskEmployees->count(),
+            'workersPresent' => $dailyPrestart->signatures->count(),
             'absentees' => $absentees,
             'trainings' => $trainings,
         ])->render();
