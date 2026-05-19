@@ -70,12 +70,45 @@ interface Props {
     trainings: TrainingFromServer[];
 }
 
-function SortableItem({ id, description, onRemove }: { id: string; description: string; onRemove: () => void }) {
+function SortableItem({
+    id,
+    description,
+    onRemove,
+    onEdit,
+}: {
+    id: string;
+    description: string;
+    onRemove: () => void;
+    onEdit?: (description: string) => void;
+}) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const [isEditing, setIsEditing] = useState(false);
+    const [draft, setDraft] = useState(description);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
+    };
+
+    const startEdit = () => {
+        if (!onEdit) return;
+        setDraft(description);
+        setIsEditing(true);
+        requestAnimationFrame(() => inputRef.current?.focus());
+    };
+
+    const commitEdit = () => {
+        const trimmed = draft.trim();
+        if (trimmed && trimmed !== description) {
+            onEdit?.(trimmed);
+        }
+        setIsEditing(false);
+    };
+
+    const cancelEdit = () => {
+        setDraft(description);
+        setIsEditing(false);
     };
 
     return (
@@ -87,7 +120,33 @@ function SortableItem({ id, description, onRemove }: { id: string; description: 
             <button type="button" className="cursor-grab touch-none text-muted-foreground" {...attributes} {...listeners}>
                 <GripVertical className="h-4 w-4" />
             </button>
-            <span className="flex-1">{description}</span>
+            {isEditing ? (
+                <Textarea
+                    ref={inputRef}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            commitEdit();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEdit();
+                        }
+                    }}
+                    rows={2}
+                    className="flex-1 px-2 py-1 text-sm"
+                />
+            ) : (
+                <span
+                    className={`flex-1 ${onEdit ? 'cursor-text rounded-sm hover:bg-accent/40' : ''}`}
+                    onClick={startEdit}
+                    title={onEdit ? 'Click to edit' : undefined}
+                >
+                    {description}
+                </span>
+            )}
             <button type="button" onClick={onRemove}>
                 <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
             </button>
@@ -258,6 +317,10 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
         activityKeys.splice(i, 1);
     };
 
+    const updateActivity = (i: number, description: string) => {
+        setData('activities', data.activities.map((a, idx) => (idx === i ? { ...a, description } : a)));
+    };
+
     const removeConcern = (i: number) => {
         setData('safety_concerns', data.safety_concerns.filter((_, idx) => idx !== i));
         concernKeys.splice(i, 1);
@@ -403,6 +466,7 @@ export default function DailyPrestartForm({ prestart, duplicateFrom, locations, 
                                                 id={activityKeys[i]}
                                                 description={activity.description}
                                                 onRemove={() => removeActivity(i)}
+                                                onEdit={(desc) => updateActivity(i, desc)}
                                             />
                                         ))}
                                     </ul>
