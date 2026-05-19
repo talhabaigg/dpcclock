@@ -12,8 +12,8 @@ import { Separator } from '@/components/ui/separator';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
-import { ChevronDown, Copy, Download, Eye, Info, Pencil, Printer, Send } from 'lucide-react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { Bug, ChevronDown, Copy, Download, Eye, Info, Pencil, Printer, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -68,6 +68,8 @@ interface Props {
         co_number: string;
         type: string;
         description: string;
+        reference_number: string | null;
+        display_description: string;
         status: string;
         co_date: string;
         location_id: number;
@@ -94,6 +96,7 @@ interface Props {
         pricing_sell: number;
         direct_material_cost: number;
         direct_material_sell: number;
+        client_total: number;
     };
     locationScope?: { id: number; name: string } | null;
 }
@@ -102,6 +105,11 @@ interface Props {
 
 function formatCurrency(value: number | string) {
     return `$${Math.ceil(Number(value) || 0).toLocaleString('en-US')}`;
+}
+
+function formatMoney2(value: number | string | null | undefined) {
+    if (value == null) return '—';
+    return `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatTimestamp(iso: string | null | undefined, by: string | null | undefined): string {
@@ -139,11 +147,13 @@ function SectionHeading({ title, action }: { title: string; action?: React.React
 // ── Page ─────────────────────────────────────────────────────────────────
 
 export default function VariationShow({ variation, totals, locationScope }: Props) {
+    const { props: pageProps } = usePage<{ appEnv?: string }>();
+    const isLocal = pageProps.appEnv === 'local';
     const locked = isSentOrApproved(variation.status);
     const totalCost = Number(totals.cost) || 0;
-    const totalRevenue = Number(totals.pricing_sell) || 0;
-    const margin = totalRevenue - totalCost;
-    const marginPercent = totalRevenue > 0 ? (margin / totalRevenue) * 100 : 0;
+    const totalRevenue = Number(totals.client_total) || 0;
+    const markup = totalRevenue - totalCost;
+    const markupPercent = totalCost > 0 ? (markup / totalCost) * 100 : 0;
 
     const breadcrumbs: BreadcrumbItem[] = locationScope
         ? [
@@ -218,6 +228,17 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                     <Copy className="h-4 w-4" />
                                     Duplicate
                                 </DropdownMenuItem>
+                                {isLocal && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem asChild>
+                                            <a href={`/variations/${variation.id}/debug-premier-payload`}>
+                                                <Bug className="h-4 w-4" />
+                                                Download Premier JSON
+                                            </a>
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                 </div>
@@ -238,17 +259,17 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                     </Card>
                     <Card className="py-0">
                         <CardContent className="flex flex-col px-3 py-2">
-                            <p className="text-muted-foreground text-xs">Margin</p>
-                            <p className={cn('text-sm font-semibold tabular-nums', margin < 0 && 'text-destructive')}>
-                                {formatCurrency(margin)}
+                            <p className="text-muted-foreground text-xs">Markup</p>
+                            <p className={cn('text-sm font-semibold tabular-nums', markup < 0 && 'text-destructive')}>
+                                {formatCurrency(markup)}
                             </p>
                         </CardContent>
                     </Card>
                     <Card className="py-0">
                         <CardContent className="flex flex-col px-3 py-2">
-                            <p className="text-muted-foreground text-xs">Margin %</p>
-                            <p className={cn('text-sm font-semibold tabular-nums', marginPercent < 0 && 'text-destructive')}>
-                                {marginPercent.toFixed(1)}%
+                            <p className="text-muted-foreground text-xs">Markup %</p>
+                            <p className={cn('text-sm font-semibold tabular-nums', markupPercent < 0 && 'text-destructive')}>
+                                {markupPercent.toFixed(1)}%
                             </p>
                         </CardContent>
                     </Card>
@@ -259,6 +280,7 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                     <SectionHeading title="Variation Details" />
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <DetailField label="CO Number" value={variation.co_number} />
+                        <DetailField label="Reference No." value={variation.reference_number} />
                         <DetailField label="Status" value={variation.status} />
                         <DetailField label="Type" value={variation.type} />
                         <DetailField label="Date" value={variation.co_date ? new Date(variation.co_date + 'T00:00:00').toLocaleDateString('en-GB') : null} />
@@ -274,12 +296,12 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                             <DetailField label="Extra Days" value={String(variation.extra_days)} />
                         )}
                     </div>
-                    {variation.description && (
+                    {variation.display_description && (
                         <>
                             <Separator />
                             <div>
                                 <span className="text-muted-foreground text-xs">Description</span>
-                                <p className="mt-1 text-xs whitespace-pre-wrap">{variation.description}</p>
+                                <p className="mt-1 text-xs whitespace-pre-wrap">{variation.display_description}</p>
                             </div>
                         </>
                     )}
@@ -300,6 +322,7 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                         <th className="text-muted-foreground px-3 py-2 text-center font-medium">Unit</th>
                                         <th className="text-muted-foreground px-3 py-2 text-right font-medium">Labour</th>
                                         <th className="text-muted-foreground px-3 py-2 text-right font-medium">Material</th>
+                                        <th className="text-muted-foreground px-3 py-2 text-right font-medium">Unit Rate</th>
                                         <th className="text-muted-foreground px-3 py-2 text-right font-medium">Total</th>
                                         {hasSellRates && (
                                             <>
@@ -330,13 +353,16 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                             </td>
                                             <td className="px-3 py-2 text-right tabular-nums">{Number(item.qty).toFixed(2)}</td>
                                             <td className="px-3 py-2 text-center">{item.unit}</td>
-                                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.labour_cost)}</td>
-                                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(item.material_cost)}</td>
-                                            <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(item.total_cost)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(item.labour_cost)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(item.material_cost)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums">
+                                                {Number(item.qty) > 0 ? formatMoney2(Number(item.total_cost) / Number(item.qty)) : '—'}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-medium tabular-nums">{formatMoney2(item.total_cost)}</td>
                                             {hasSellRates && (
                                                 <>
-                                                    <td className="px-3 py-2 text-right tabular-nums">{item.sell_rate != null ? formatCurrency(item.sell_rate) : '—'}</td>
-                                                    <td className="px-3 py-2 text-right font-medium tabular-nums">{item.sell_total != null ? formatCurrency(item.sell_total) : '—'}</td>
+                                                    <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(item.sell_rate)}</td>
+                                                    <td className="px-3 py-2 text-right font-medium tabular-nums">{formatMoney2(item.sell_total)}</td>
                                                 </>
                                             )}
                                         </tr>
@@ -346,19 +372,20 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                     <tr className="bg-muted/30 border-t font-semibold">
                                         <td className="px-3 py-2" colSpan={3}>Totals</td>
                                         <td className="px-3 py-2 text-right tabular-nums">
-                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.labour_cost), 0))}
+                                            {formatMoney2(variation.pricing_items.reduce((s, i) => s + Number(i.labour_cost), 0))}
                                         </td>
                                         <td className="px-3 py-2 text-right tabular-nums">
-                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.material_cost), 0))}
+                                            {formatMoney2(variation.pricing_items.reduce((s, i) => s + Number(i.material_cost), 0))}
                                         </td>
+                                        <td className="px-3 py-2"></td>
                                         <td className="px-3 py-2 text-right tabular-nums">
-                                            {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.total_cost), 0))}
+                                            {formatMoney2(variation.pricing_items.reduce((s, i) => s + Number(i.total_cost), 0))}
                                         </td>
                                         {hasSellRates && (
                                             <>
                                                 <td className="px-3 py-2"></td>
                                                 <td className="px-3 py-2 text-right tabular-nums">
-                                                    {formatCurrency(variation.pricing_items.reduce((s, i) => s + Number(i.sell_total || 0), 0))}
+                                                    {formatMoney2(variation.pricing_items.reduce((s, i) => s + Number(i.sell_total || 0), 0))}
                                                 </td>
                                             </>
                                         )}
@@ -406,13 +433,13 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                                     </span>
                                                 </td>
                                                 <td className="max-w-[220px] truncate px-3 py-2 font-mono">{materialLabel}</td>
-                                                <td className="max-w-[180px] truncate px-3 py-2">{supplierLabel}</td>
-                                                <td className="max-w-[180px] truncate px-3 py-2">{costCodeLabel}</td>
-                                                <td className="max-w-[220px] truncate px-3 py-2">{m.description || '—'}</td>
+                                                <td className="max-w-32 truncate px-3 py-2">{supplierLabel}</td>
+                                                <td className="max-w-32 truncate px-3 py-2">{costCodeLabel}</td>
+                                                <td className="max-w-32 truncate px-3 py-2">{m.description || '—'}</td>
                                                 <td className="px-3 py-2 text-right tabular-nums">{qty.toFixed(2)}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(unitCost)}</td>
-                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(totalCost)}</td>
-                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(m.sell_cost)}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(unitCost)}</td>
+                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{formatMoney2(totalCost)}</td>
+                                                <td className="px-3 py-2 text-right font-medium tabular-nums">{formatMoney2(m.sell_cost)}</td>
                                             </tr>
                                         );
                                     })}
@@ -420,8 +447,8 @@ export default function VariationShow({ variation, totals, locationScope }: Prop
                                 <tfoot>
                                     <tr className="bg-muted/30 border-t font-semibold">
                                         <td className="px-3 py-2" colSpan={7}>Totals</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(totals.direct_material_cost)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(totals.direct_material_sell)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(totals.direct_material_cost)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney2(totals.direct_material_sell)}</td>
                                     </tr>
                                 </tfoot>
                             </table>

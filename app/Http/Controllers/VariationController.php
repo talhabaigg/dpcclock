@@ -260,6 +260,15 @@ class VariationController extends Controller
             'directMaterials.supplier:id,code,name',
         ]);
 
+        // Mirror ClientVariationTab's grand total: pricing items use the
+        // saved sell_total (qty × sell_rate); direct materials compound the
+        // per-row sell_markup_pct AND client_markup_pct on top of cost.
+        $directMaterialClientTotal = $variation->directMaterials->sum(function ($m) {
+            $perUnitSell = (float) $m->unit_cost * (1 + ((float) ($m->sell_markup_pct ?? 0)) / 100);
+
+            return (float) $m->qty * $perUnitSell * (1 + ((float) ($m->client_markup_pct ?? 0)) / 100);
+        });
+
         $props = [
             'variation' => $variation,
             'totals' => [
@@ -269,6 +278,7 @@ class VariationController extends Controller
                 'pricing_sell' => $variation->pricingItems->sum('sell_total'),
                 'direct_material_cost' => $variation->directMaterials->sum(fn ($m) => (float) $m->qty * (float) $m->unit_cost),
                 'direct_material_sell' => $variation->directMaterials->sum('sell_cost'),
+                'client_total' => round($variation->pricingItems->sum('sell_total') + $directMaterialClientTotal, 2),
             ],
         ];
 
@@ -285,6 +295,7 @@ class VariationController extends Controller
             'location_id' => 'required|exists:locations,id',
             'type' => 'required|string',
             'co_number' => 'required|string',
+            'reference_number' => 'nullable|string|max:100',
             'description' => 'required|string',
             'client_notes' => 'nullable|string',
             'extra_days' => 'nullable|integer|min:0',
@@ -305,7 +316,7 @@ class VariationController extends Controller
             'location_id' => $validated['location_id'],
             'type' => $validated['type'],
             'co_number' => $validated['co_number'],
-            'description' => $validated['description'],
+            'description' => Variation::encodeDescription($validated['reference_number'] ?? null, $validated['description']),
             'client_notes' => $validated['client_notes'] ?? null,
             'extra_days' => $validated['extra_days'] ?? null,
             'created_by' => auth()->user()->name ?? null,
@@ -342,6 +353,7 @@ class VariationController extends Controller
             'location_id' => 'required|exists:locations,id',
             'type' => 'required|string',
             'co_number' => 'required|string',
+            'reference_number' => 'nullable|string|max:100',
             'description' => 'required|string',
             'client_notes' => 'nullable|string',
             'extra_days' => 'nullable|integer|min:0',
@@ -362,7 +374,7 @@ class VariationController extends Controller
             'location_id' => $validated['location_id'],
             'type' => $validated['type'],
             'co_number' => $validated['co_number'],
-            'description' => $validated['description'],
+            'description' => Variation::encodeDescription($validated['reference_number'] ?? null, $validated['description']),
             'client_notes' => $validated['client_notes'] ?? null,
             'extra_days' => $validated['extra_days'] ?? null,
 
@@ -539,30 +551,7 @@ class VariationController extends Controller
 
         $coNumber = $assignedCoNumber ?? $variation->co_number;
 
-        $lineItems = $variation->lineItems->map(function ($item) {
-            $isRevenue = strtoupper((string) $item->cost_type) === 'REV';
-
-            return [
-                'LineNumber' => $item->line_number,
-                'JobCostItem' => $item->cost_item,
-                'JobCostType' => $item->cost_type,
-                'LineDescription' => $item->description,
-                'Quantity' => $isRevenue ? 1 : $item->qty,
-                'UnitCost' => $isRevenue ? 0 : $item->unit_cost,
-                'Amount' => $isRevenue ? (float) $item->revenue : $item->total_cost,
-            ];
-        })->toArray();
-
-        $data = [
-            'Company' => $companyId,
-            'JobSubledger' => 'SWCJOB',
-            'Job' => $variation->location->external_id,
-            'ChangeOrderNumber' => $coNumber,
-            'Description' => $variation->description,
-            'ChangeOrderDate' => $variation->co_date,
-            'ExtraDays' => (int) ($variation->extra_days ?? 0),
-            'ChangeOrderLines' => $lineItems,
-        ];
+        $data = $this->buildPremierPayload($variation, $coNumber, $companyId);
 
         $response = Http::withToken($token)
             ->acceptJson()
@@ -591,6 +580,59 @@ class VariationController extends Controller
         }
     }
 
+    /**
+     * Build the exact JSON payload sent to Premier's CreateChangeOrders endpoint.
+     * Shared between the live send flow and the local-env debug download.
+     */
+    private function buildPremierPayload(Variation $variation, string $coNumber, string $companyId): array
+    {
+        $lineItems = $variation->lineItems->map(function ($item) {
+            $isRevenue = strtoupper((string) $item->cost_type) === 'REV';
+
+            return [
+                'LineNumber' => $item->line_number,
+                'JobCostItem' => $item->cost_item,
+                'JobCostType' => $item->cost_type,
+                'LineDescription' => $item->description,
+                'Quantity' => $isRevenue ? 1 : $item->qty,
+                'UnitCost' => $isRevenue ? 0 : $item->unit_cost,
+                'Amount' => $isRevenue ? (float) $item->revenue : $item->total_cost,
+            ];
+        })->toArray();
+
+        return [
+            'Company' => $companyId,
+            'JobSubledger' => 'SWCJOB',
+            'Job' => $variation->location->external_id,
+            'ChangeOrderNumber' => $coNumber,
+            'ChangeType' => $variation->type,
+            'Description' => $variation->description,
+            'ChangeOrderDate' => $variation->co_date,
+            'ExtraDays' => (int) ($variation->extra_days ?? 0),
+            'ChangeOrderLines' => $lineItems,
+        ];
+    }
+
+    /**
+     * Local-env-only debug endpoint: download the exact JSON payload that
+     * sendToPremier would post, without bumping numbering or hitting Premier.
+     */
+    public function debugPremierPayload(Variation $variation)
+    {
+        abort_unless(app()->environment('local'), 404);
+
+        $variation->load(['lineItems', 'location']);
+
+        $companyId = '3341c7c6-2abb-49e1-8a59-839d1bcff972';
+        $payload = $this->buildPremierPayload($variation, $variation->co_number, $companyId);
+
+        $filename = "premier-payload-{$variation->id}-{$variation->co_number}.json";
+
+        return response()->json($payload, 200, [
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
     public function duplicate(Variation $variation)
     {
         $newVariation = $variation->replicate();
@@ -616,6 +658,7 @@ class VariationController extends Controller
             'location_id' => 'required|exists:locations,id',
             'drawing_id' => 'nullable|exists:drawings,id',
             'co_number' => 'required|string|max:50',
+            'reference_number' => 'nullable|string|max:100',
             'description' => 'required|string|max:255',
             'type' => 'nullable|string',
         ]);
@@ -625,7 +668,7 @@ class VariationController extends Controller
             'drawing_id' => $validated['drawing_id'] ?? null,
             'type' => $validated['type'] ?? 'extra',
             'co_number' => $validated['co_number'],
-            'description' => $validated['description'],
+            'description' => Variation::encodeDescription($validated['reference_number'] ?? null, $validated['description']),
             'created_by' => auth()->user()->name ?? null,
             'co_date' => now()->toDateString(),
             'status' => 'pending',

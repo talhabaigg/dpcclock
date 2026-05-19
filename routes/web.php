@@ -1056,6 +1056,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:variations.sync');
     Route::get('/variations/{variation}/send-to-premier', [VariationController::class, 'sendToPremier'])->name('variations.send')
         ->middleware('permission:variations.send');
+    Route::get('/variations/{variation}/debug-premier-payload', [VariationController::class, 'debugPremierPayload'])
+        ->name('variations.debug-premier-payload');
     Route::get('/variations/{id}/download/excel', [VariationController::class, 'download'])->name('variations.download')
         ->middleware('permission:variations.export');
 

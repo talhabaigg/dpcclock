@@ -51,6 +51,8 @@ interface VariationData {
     location_id: number;
     type: string;
     co_number: string;
+    reference_number: string | null;
+    display_description: string;
     status: string;
     description: string;
     client_notes: string | null;
@@ -136,7 +138,8 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
         location_id: variation ? String(variation.location_id) : selectedLocationId ? String(selectedLocationId) : '',
         type: variation?.type ?? 'YET2SUBMIT',
         co_number: variation?.co_number ?? '',
-        description: variation?.description ?? '',
+        reference_number: variation?.reference_number ?? '',
+        description: variation?.display_description ?? variation?.description ?? '',
         client_notes: variation?.client_notes ?? '',
         extra_days: variation?.extra_days != null ? String(variation.extra_days) : '',
         amount: variation?.amount ?? '',
@@ -260,17 +263,18 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
     const hasAutoNumbering = selectedLocation?.variation_next_number != null && variation?.status !== 'sent';
     const detailsComplete = !!(data.location_id && (hasAutoNumbering || data.co_number.trim()) && data.description.trim());
 
-    // Sync the auto-generated VA-XXX number into form state whenever the
-    // selected project changes. The header renders a badge for this case
-    // (no manual input), so without this sync `data.co_number` would stay
-    // empty and submit validation would falsely complain about an unfilled field.
+    // Sync the auto-generated VA-XXX number into form state on CREATE only.
+    // On edit, `variation.co_number` is the source of truth — running this
+    // post-save would clobber a user-overridden number with the location's
+    // current next-number counter.
     useEffect(() => {
+        if (variation) return;
         if (!hasAutoNumbering || selectedLocation?.variation_next_number == null) return;
         const generated = `VA-${String(selectedLocation.variation_next_number).padStart(3, '0')}`;
         if (data.co_number !== generated) {
             setData('co_number', generated);
         }
-     
+
     }, [hasAutoNumbering, selectedLocation?.variation_next_number]);
 
 
@@ -431,6 +435,7 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                     const response = await api.post<{ variation: { id: number } }>('/variations/quick-store', {
                         location_id: parseInt(data.location_id),
                         co_number: data.co_number,
+                        reference_number: data.reference_number || null,
                         description: data.description,
                         type: data.type || 'extra',
                     });
@@ -736,15 +741,27 @@ const VariationCreate = ({ locations, costCodes, variation, conditions = [], sel
                                     </Popover>
                                 </div>
 
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="description" className="text-xs font-normal">Description</Label>
-                                    <Input
-                                        id="description"
-                                        value={data.description}
-                                        onChange={(e) => setData('description', e.target.value)}
-                                        placeholder="e.g. Additional waterproofing to Level 3 balcony"
-                                        className="text-xs placeholder:text-xs"
-                                    />
+                                <div className="grid gap-3 sm:grid-cols-[200px_1fr]">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="reference_number" className="text-xs font-normal">Reference No.</Label>
+                                        <Input
+                                            id="reference_number"
+                                            value={data.reference_number}
+                                            onChange={(e) => setData('reference_number', e.target.value)}
+                                            placeholder="e.g. SI-312"
+                                            className="text-xs placeholder:text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="description" className="text-xs font-normal">Description</Label>
+                                        <Input
+                                            id="description"
+                                            value={data.description}
+                                            onChange={(e) => setData('description', e.target.value)}
+                                            placeholder="e.g. Additional waterproofing to Level 3 balcony"
+                                            className="text-xs placeholder:text-xs"
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Change Type + Extra Days */}

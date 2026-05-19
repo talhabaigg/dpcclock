@@ -12,6 +12,8 @@ export interface Variation {
     co_date: string;
     status: string;
     description: string;
+    display_description: string;
+    reference_number: string | null;
     type: string;
     premier_co_id: number | string | null;
     line_items_sum_total_cost: number | string;
@@ -32,7 +34,7 @@ const VariationCard = ({ variation, hideLocation = false, locationId }: { variat
     const locked = isInPremier(variation);
     const cost = Number(variation.line_items_sum_total_cost) || 0;
     const revenue = Number(variation.line_items_sum_revenue) || 0;
-    const margin = revenue - cost;
+    const markup = revenue - cost;
     const showUrl = buildShowUrl(variation.id, locationId);
 
     return (
@@ -51,7 +53,10 @@ const VariationCard = ({ variation, hideLocation = false, locationId }: { variat
 
                     {/* Row 2: Description */}
                     <p className="line-clamp-2 text-xs text-muted-foreground">
-                        {variation.description || 'No description'}
+                        {variation.reference_number && (
+                            <span className="mr-1 font-mono">{variation.reference_number}</span>
+                        )}
+                        {variation.display_description || variation.description || 'No description'}
                     </p>
 
                     {/* Row 3: Financials */}
@@ -65,9 +70,9 @@ const VariationCard = ({ variation, hideLocation = false, locationId }: { variat
                             <span className="font-semibold text-emerald-700 dark:text-emerald-400">{formatCurrency(revenue)}</span>
                         </div>
                         <div className="flex items-center justify-between border-t pt-0.5">
-                            <span className="text-muted-foreground">Margin</span>
-                            <span className={cn('font-bold', margin >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
-                                {formatCurrency(margin)}
+                            <span className="text-muted-foreground">Markup</span>
+                            <span className={cn('font-bold', markup >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+                                {formatCurrency(markup)}
                             </span>
                         </div>
                     </div>

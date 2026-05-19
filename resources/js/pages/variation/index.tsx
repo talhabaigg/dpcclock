@@ -36,6 +36,8 @@ interface Variation {
     co_date: string;
     status: string;
     description: string;
+    display_description: string;
+    reference_number: string | null;
     type: string;
     premier_co_id: number | string | null;
     line_items_sum_total_cost: number | string;
@@ -662,7 +664,12 @@ export default function VariationIndex() {
                                                     {variation.status}
                                                 </Badge>
                                             </div>
-                                            <p className="mt-1 truncate text-sm font-medium">{variation.description}</p>
+                                            <p className="mt-1 truncate text-sm font-medium">
+                                                {variation.reference_number && (
+                                                    <span className="text-muted-foreground mr-1 font-mono text-xs">{variation.reference_number}</span>
+                                                )}
+                                                {variation.display_description || variation.description}
+                                            </p>
                                             <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                                 {variation.location && <span>{variation.location.name}</span>}
                                                 <span>{new Date(variation.co_date).toLocaleDateString('en-GB')}</span>
@@ -739,11 +746,14 @@ export default function VariationIndex() {
                                                 <HoverCard>
                                                     <HoverCardTrigger asChild delay={2000}>
                                                         <span className="text-muted-foreground block max-w-32 cursor-default truncate text-xs">
-                                                            {variation.description || '-'}
+                                                            {variation.display_description || variation.description || '-'}
                                                         </span>
                                                     </HoverCardTrigger>
                                                     <HoverCardContent className="text-xs">
-                                                        {variation.description || 'No description'}
+                                                        {variation.reference_number && (
+                                                            <div className="text-muted-foreground mb-1 font-mono">{variation.reference_number}</div>
+                                                        )}
+                                                        {variation.display_description || variation.description || 'No description'}
                                                     </HoverCardContent>
                                                 </HoverCard>
                                             </TableCell>
@@ -774,10 +784,10 @@ export default function VariationIndex() {
                                                     const revenue = Number(variation.line_items_sum_revenue) || 0;
                                                     const cost = Number(variation.line_items_sum_total_cost) || 0;
                                                     const markup = revenue - cost;
-                                                    if (revenue === 0) {
+                                                    if (cost === 0) {
                                                         return <span className="text-muted-foreground text-xs">-</span>;
                                                     }
-                                                    const pct = ((markup / revenue) * 100).toFixed(2);
+                                                    const pct = ((markup / cost) * 100).toFixed(2);
                                                     return (
                                                         <span className="text-xs font-semibold tabular-nums">
                                                             {formatCurrency(markup)}{' '}
