@@ -294,6 +294,8 @@ class LabourDashboardController extends Controller
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
             'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available,industrial_action',
+            'worktypes' => 'nullable|array',
+            'worktypes.*' => 'string|max:255',
             'search' => 'nullable|string|max:255',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|in:10,25,50,100',
@@ -366,45 +368,59 @@ class LabourDashboardController extends Controller
             ->whereNotNull('hours_worked')
             ->where('hours_worked', '>', 0);
 
-        match ($category) {
-            'available' => null,
-            'worked', 'nt', 'ot' => $query->whereIn('eh_worktype_id', $normalIds)
-                ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
-            'weather' => $query->whereIn('eh_location_id', $weatherEhIds),
-            'safety' => $query->whereIn('eh_location_id', $safetyEhIds),
-            'al' => $query->whereIn('eh_worktype_id', $alIds),
-            'sick' => $query->whereIn('eh_worktype_id', $sickIds),
-            'rdo' => $query->whereIn('eh_worktype_id', $rdoIds),
-            'ph' => $query->whereIn('eh_worktype_id', $phIds),
-            'lost' => $query->where(function ($q) use ($weatherSafetyEhIds, $alIds, $sickIds, $rdoIds, $phIds) {
-                $q->whereIn('eh_location_id', $weatherSafetyEhIds)
-                  ->orWhereIn('eh_worktype_id', array_merge($alIds, $sickIds, $rdoIds, $phIds));
-            }),
-            'non_standard' => $query->whereNotIn('eh_worktype_id', $bucketedIds)
-                ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
-            'industrial_action' => $query->where('eh_worktype_id', 2585103),
-        };
+        // If worktypes[] is provided, it takes precedence over the category's worktype/location filter.
+        // This lets callers drill through to "all clocks for these specific worktypes" without
+        // the category's extra constraints (normal-work-codes intersect, weather/safety exclusion, NT/OT split).
+        $worktypeFilter = $request->input('worktypes');
+        $useWorktypeFilter = is_array($worktypeFilter) && !empty($worktypeFilter);
+
+        if (!$useWorktypeFilter) {
+            match ($category) {
+                'available' => null,
+                'worked', 'nt', 'ot' => $query->whereIn('eh_worktype_id', $normalIds)
+                    ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
+                'weather' => $query->whereIn('eh_location_id', $weatherEhIds),
+                'safety' => $query->whereIn('eh_location_id', $safetyEhIds),
+                'al' => $query->whereIn('eh_worktype_id', $alIds),
+                'sick' => $query->whereIn('eh_worktype_id', $sickIds),
+                'rdo' => $query->whereIn('eh_worktype_id', $rdoIds),
+                'ph' => $query->whereIn('eh_worktype_id', $phIds),
+                'lost' => $query->where(function ($q) use ($weatherSafetyEhIds, $alIds, $sickIds, $rdoIds, $phIds) {
+                    $q->whereIn('eh_location_id', $weatherSafetyEhIds)
+                      ->orWhereIn('eh_worktype_id', array_merge($alIds, $sickIds, $rdoIds, $phIds));
+                }),
+                'non_standard' => $query->whereNotIn('eh_worktype_id', $bucketedIds)
+                    ->whereNotIn('eh_location_id', $weatherSafetyEhIds),
+                'industrial_action' => $query->where('eh_worktype_id', 2585103),
+            };
+        } else {
+            $wtIds = Worktype::whereIn('name', $worktypeFilter)->pluck('eh_worktype_id')->toArray();
+            $query->whereIn('eh_worktype_id', $wtIds ?: [0]);
+        }
 
         $clocks = $query->orderBy('clock_in')->limit(10000)->get();
 
-        // For OT category, keep only days where the employee's daily normal-work total exceeded the threshold
-        if ($category === 'ot') {
+        // For OT category, keep only days where the employee's daily normal-work total exceeded the threshold.
+        // Skip when a worktype filter is in play — the caller wants raw hours, not the daily-threshold split.
+        if ($category === 'ot' && !$useWorktypeFilter) {
             $grouped = $clocks->groupBy(fn ($c) => $c->eh_employee_id . '|' . Carbon::parse($c->clock_in)->toDateString());
             $clocks = $grouped->filter(fn ($g) => $g->sum('hours_worked') > self::DAILY_HOURS_THRESHOLD)
                 ->flatten(1)->values();
         }
 
-        // Hydrate names
-        $empLookup = Employee::whereIn('eh_employee_id', $clocks->pluck('eh_employee_id')->unique())
-            ->get(['eh_employee_id', 'name', 'preferred_name'])->keyBy('eh_employee_id');
+        // Hydrate names. Include soft-deleted employees so archived staff still resolve to a name.
+        $empLookup = Employee::withTrashed()
+            ->whereIn('eh_employee_id', $clocks->pluck('eh_employee_id')->unique())
+            ->get(['eh_employee_id', 'name', 'preferred_name', 'deleted_at'])->keyBy('eh_employee_id');
         $locLookup = Location::whereIn('eh_location_id', $clocks->pluck('eh_location_id')->unique())
             ->get(['eh_location_id', 'name'])->keyBy('eh_location_id');
         $wtLookup = Worktype::whereIn('eh_worktype_id', $clocks->pluck('eh_worktype_id')->unique())
             ->get(['eh_worktype_id', 'name', 'eh_external_id', 'mapping_type'])->keyBy('eh_worktype_id');
 
-        // Daily totals for NT/OT split when relevant
+        // Daily totals for NT/OT split when relevant. Skipped when worktypes[] is the driver —
+        // the caller wants raw clock hours, not a daily-threshold split.
         $dailyTotals = null;
-        if (in_array($category, ['nt', 'ot', 'worked'], true)) {
+        if (!$useWorktypeFilter && in_array($category, ['nt', 'ot', 'worked'], true)) {
             $dailyTotals = $clocks
                 ->groupBy(fn ($c) => $c->eh_employee_id . '|' . Carbon::parse($c->clock_in)->toDateString())
                 ->map(fn ($g) => $g->sum('hours_worked'));
@@ -416,9 +432,11 @@ class LabourDashboardController extends Controller
             $wt = $wtLookup->get($c->eh_worktype_id);
             $dt = Carbon::parse($c->clock_in);
 
+            $resolvedName = $emp?->display_name ?: $emp?->name;
+            $archivedSuffix = $emp && $emp->deleted_at ? ' (archived)' : '';
             $row = [
                 'id' => $c->id,
-                'employee_name' => $emp?->display_name ?: $emp?->name ?: ('(unknown ' . $c->eh_employee_id . ')'),
+                'employee_name' => $resolvedName ? $resolvedName . $archivedSuffix : ('(unknown ' . $c->eh_employee_id . ')'),
                 'eh_employee_id' => $c->eh_employee_id,
                 'date' => $dt->format('Y-m-d'),
                 'day' => $dt->format('D'),
@@ -510,6 +528,7 @@ class LabourDashboardController extends Controller
             'project_ids' => array_values($selectedLocations->pluck('id')->all()),
             'available_projects' => $availableProjects,
             'truncated' => $clocks->count() >= 10000,
+            'worktypes' => $useWorktypeFilter ? array_values($worktypeFilter) : [],
             'filters' => [
                 'search' => $search !== '' ? $search : null,
                 'per_page' => $perPage,

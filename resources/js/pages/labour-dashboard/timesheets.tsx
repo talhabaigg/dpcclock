@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Combobox,
@@ -95,6 +94,7 @@ interface TimesheetsPageProps {
     project_ids: number[];
     available_projects: ProjectOption[];
     truncated: boolean;
+    worktypes?: string[];
     filters: Filters;
 }
 
@@ -152,9 +152,11 @@ export default function Timesheets({
     project_ids,
     available_projects,
     truncated,
+    worktypes,
     filters,
 }: TimesheetsPageProps) {
-    const showNtOt = category === 'nt' || category === 'ot' || category === 'worked';
+    const hasWorktypeFilter = (worktypes?.length ?? 0) > 0;
+    const showNtOt = !hasWorktypeFilter && (category === 'nt' || category === 'ot' || category === 'worked');
     const backUrl = `/labour-dashboard?projects=${project_ids.join(',')}&from=${date_from}&to=${date_to}`;
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -162,8 +164,8 @@ export default function Timesheets({
         { title: CATEGORY_LABELS[category], href: '#' },
     ];
 
-    const navigate = (params: Record<string, string | number | undefined | null>) => {
-        const query: Record<string, string | number | undefined> = {
+    const navigate = (params: Record<string, string | number | string[] | undefined | null>) => {
+        const query: Record<string, string | number | string[] | undefined> = {
             location_ids: project_ids.join(','),
             date_from,
             date_to,
@@ -174,6 +176,9 @@ export default function Timesheets({
             sort_dir: filters.sort_dir,
             ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, v ?? undefined])),
         };
+        if (hasWorktypeFilter && worktypes) {
+            query.worktypes = worktypes;
+        }
         router.get('/labour-dashboard/timesheets', query, {
             preserveState: true,
             preserveScroll: true,
@@ -431,15 +436,8 @@ export default function Timesheets({
                                         <TableCell>
                                             <div className="flex flex-col">
                                                 <span>{row.worktype_name}</span>
-                                                {(row.worktype_external_id || (row.worktype_mapping_type && row.worktype_mapping_type !== 'WorkType')) && (
-                                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                                        {row.worktype_external_id && <span>{row.worktype_external_id}</span>}
-                                                        {row.worktype_mapping_type && row.worktype_mapping_type !== 'WorkType' && (
-                                                            <Badge variant="outline" className="px-1 py-0 text-[9px]">
-                                                                {row.worktype_mapping_type}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
+                                                {row.worktype_external_id && (
+                                                    <span className="text-[10px] text-muted-foreground">{row.worktype_external_id}</span>
                                                 )}
                                             </div>
                                         </TableCell>

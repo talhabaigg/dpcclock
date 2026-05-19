@@ -650,6 +650,8 @@ export default function Dashboard({
                         premierLatestDate={premierLatestDate ?? undefined}
                         reportDate={productionUploads.find((u) => u.id === selectedUploadId)?.report_date}
                         payrollHoursByWorktype={payrollHoursByWorktype}
+                        projectStartDate={timelineData?.actual_start_date ?? timelineData?.start_date ?? undefined}
+                        asOfDate={asOfDate}
                     />
                 )}
             </div>

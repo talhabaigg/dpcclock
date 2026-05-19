@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { useHttp } from '@inertiajs/react';
+import { Link, useHttp } from '@inertiajs/react';
 import { AlertTriangle, ChevronDown, Info, Search, Settings2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -50,6 +50,8 @@ interface ProductionAnalysisProps {
     premierLatestDate?: string;
     reportDate?: string;
     payrollHoursByWorktype: Record<string, number>;
+    projectStartDate?: string;
+    asOfDate?: string;
 }
 
 const CATEGORIES: { key: Category; label: string }[] = [
@@ -345,6 +347,8 @@ export default function ProductionAnalysis({
     premierLatestDate,
     reportDate,
     payrollHoursByWorktype,
+    projectStartDate,
+    asOfDate,
 }: ProductionAnalysisProps) {
     const settings = dashboardSettings ?? {};
 
@@ -355,6 +359,34 @@ export default function ProductionAnalysis({
     const [foremanWorktypes, setForemanWorktypes] = useState<string[]>(settings.analysis_foreman_worktypes ?? []);
     const [leadingHandsWorktypes, setLeadingHandsWorktypes] = useState<string[]>(settings.analysis_leading_hands_worktypes ?? []);
     const [labourerWorktypes, setLabourerWorktypes] = useState<string[]>(settings.analysis_labourer_worktypes ?? []);
+
+    const buildTimesheetUrl = (worktypes: string[]) => {
+        const dateFrom = projectStartDate ?? new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const dateTo = asOfDate ?? new Date().toISOString().slice(0, 10);
+        const params = new URLSearchParams({
+            category: 'worked',
+            date_from: dateFrom,
+            date_to: dateTo,
+            location_ids: String(locationId),
+        });
+        for (const wt of worktypes) {
+            params.append('worktypes[]', wt);
+        }
+        return `/labour-dashboard/timesheets?${params.toString()}`;
+    };
+
+    const worktypesByCategory: Record<Category, string[]> = {
+        wages: wagesWorktypes,
+        foreman: foremanWorktypes,
+        leading_hands: leadingHandsWorktypes,
+        labourer: labourerWorktypes,
+    };
+    const allMappedWorktypes = [
+        ...wagesWorktypes,
+        ...foremanWorktypes,
+        ...leadingHandsWorktypes,
+        ...labourerWorktypes,
+    ];
 
     const availableWorktypeNames = useMemo(
         () => Object.keys(payrollHoursByWorktype).sort(),
@@ -886,7 +918,17 @@ export default function ProductionAnalysis({
                                             {isBlankHours ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidDpcHours)}
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums text-xs">
-                                            {row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.paidPayrollHours)}
+                                            {row.paidPayrollHours === 0 ? (
+                                                <span className="text-muted-foreground">(Blank)</span>
+                                            ) : (
+                                                <Link
+                                                    href={buildTimesheetUrl(worktypesByCategory[row.key])}
+                                                    className="text-foreground underline-offset-2 hover:underline hover:text-primary"
+                                                    title="View timesheets for this category"
+                                                >
+                                                    {fmt(row.paidPayrollHours)}
+                                                </Link>
+                                            )}
                                         </TableCell>
                                         <TableCell className={cn('text-right tabular-nums text-xs font-medium border-r border-border', row.diffHours < 0 ? 'text-destructive' : row.diffHours > 0 ? 'text-emerald-600' : '')}>
                                             {isBlankHours && row.paidPayrollHours === 0 ? <span className="text-muted-foreground">(Blank)</span> : fmt(row.diffHours)}
@@ -942,7 +984,19 @@ export default function ProductionAnalysis({
                             <TableRow className="font-semibold">
                                 <TableCell className="text-xs border-r-2 border-foreground/15">Total</TableCell>
                                 <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidDpcHours)}</TableCell>
-                                <TableCell className="text-right tabular-nums text-xs">{fmt(totals.paidPayrollHours)}</TableCell>
+                                <TableCell className="text-right tabular-nums text-xs">
+                                    {totals.paidPayrollHours === 0 ? (
+                                        fmt(totals.paidPayrollHours)
+                                    ) : (
+                                        <Link
+                                            href={buildTimesheetUrl(allMappedWorktypes)}
+                                            className="text-foreground underline-offset-2 hover:underline hover:text-primary"
+                                            title="View all mapped timesheets"
+                                        >
+                                            {fmt(totals.paidPayrollHours)}
+                                        </Link>
+                                    )}
+                                </TableCell>
                                 <TableCell className={cn('text-right tabular-nums text-xs border-r-2 border-foreground/15', totals.diffHours < 0 ? 'text-destructive' : totals.diffHours > 0 ? 'text-emerald-600' : '')}>
                                     {fmt(totals.diffHours)}
                                 </TableCell>
