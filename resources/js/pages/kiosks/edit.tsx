@@ -80,6 +80,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
         processing: processingKiosk,
         isDirty: isKioskDirty,
     } = useForm({
+        kiosk_id: kiosk.id,
         start_time: kiosk.default_start_time || '06:30:00',
         end_time: kiosk.default_end_time || '14:30:00',
     });
@@ -113,7 +114,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
 
     const onSubmitSettings = (e: FormEvent) => {
         e.preventDefault();
-        putKiosk(route('kiosks.updateSettings', kiosk.id), { preserveScroll: true });
+        putKiosk(route('kiosks.updateSettings'), { preserveScroll: true });
     };
 
     const toggleActive = () => {
