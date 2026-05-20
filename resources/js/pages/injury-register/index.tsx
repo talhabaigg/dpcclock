@@ -14,6 +14,7 @@ import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, Download, EllipsisVertical, ListFilter, Loader2, Lock, Menu, Plus, Search, SlidersHorizontal, Trash2, Upload, X } from 'lucide-react';
@@ -160,7 +161,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
         router.get('/injury-register', {}, { preserveState: true });
     };
 
-    const totalActiveFilters = [filters.location_id, filters.incident, filters.report_type, filters.work_cover_claim, filters.status].filter(Boolean).length;
+    const totalActiveFilters = [filters.location_id, filters.incident, filters.report_type, filters.work_cover_claim, filters.status, filters.date_from, filters.date_to].filter(Boolean).length;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -341,6 +342,49 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* Occurred Date Range */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-medium">Occurred Date</Label>
+                                        {(filters.date_from || filters.date_to) && (
+                                            <button
+                                                onClick={() => {
+                                                    router.get(
+                                                        '/injury-register',
+                                                        { ...filters, date_from: undefined, date_to: undefined, page: undefined },
+                                                        { preserveState: true, preserveScroll: true },
+                                                    );
+                                                }}
+                                                className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-muted-foreground text-xs">From</Label>
+                                            <DatePicker
+                                                value={filters.date_from ?? ''}
+                                                onChange={(v) => setFilter('date_from', v || undefined)}
+                                                max={filters.date_to || undefined}
+                                                clearable
+                                                placeholder="From"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-muted-foreground text-xs">To</Label>
+                                            <DatePicker
+                                                value={filters.date_to ?? ''}
+                                                onChange={(v) => setFilter('date_to', v || undefined)}
+                                                min={filters.date_from || undefined}
+                                                clearable
+                                                placeholder="To"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </SheetContent>
                     </Sheet>
@@ -382,6 +426,20 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                     <span className="text-muted-foreground text-[10px] uppercase">Status:</span>
                                     <span className="text-xs">{filters.status === 'active' ? 'Active' : 'Locked'}</span>
                                     <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('status', 'all')}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.date_from && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">From:</span>
+                                    <span className="text-xs">{filters.date_from}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('date_from', undefined)}><X className="h-3 w-3" /></button>
+                                </Badge>
+                            )}
+                            {filters.date_to && (
+                                <Badge variant="secondary" className="gap-1 pr-1">
+                                    <span className="text-muted-foreground text-[10px] uppercase">To:</span>
+                                    <span className="text-xs">{filters.date_to}</span>
+                                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => setFilter('date_to', undefined)}><X className="h-3 w-3" /></button>
                                 </Badge>
                             )}
                         </div>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Comment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CommentController extends Controller
 {
@@ -86,5 +87,29 @@ class CommentController extends Controller
         $comment->delete();
 
         return back();
+    }
+
+    public function streamAttachment(Comment $comment, int $media): StreamedResponse
+    {
+        $mediaItem = $comment->getMedia('attachments')->firstWhere('id', $media);
+        abort_unless($mediaItem, 404);
+
+        try {
+            $stream = $mediaItem->stream();
+        } catch (\League\Flysystem\UnableToReadFile) {
+            abort(404, 'Attachment is missing from storage.');
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $mediaItem->mime_type ?? 'application/octet-stream',
+            'Content-Length' => $mediaItem->size,
+            'Content-Disposition' => 'inline; filename="'.$mediaItem->file_name.'"',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
     }
 }

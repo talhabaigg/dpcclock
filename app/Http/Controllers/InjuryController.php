@@ -110,12 +110,18 @@ class InjuryController extends Controller
                 $query->whereNull('locked_at');
             }
         }
+        if ($request->filled('date_from')) {
+            $query->whereDate('occurred_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('occurred_at', '<=', $request->date_to);
+        }
 
         $injuries = $query->latest('occurred_at')->paginate($perPage)->withQueryString();
 
         return Inertia::render('injury-register/index', [
             'injuries' => $injuries,
-            'filters' => $request->only(['search', 'location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'claim_type', 'claim_status', 'fy', 'fy_month', 'fy_year', 'entity', 'project', 'month', 'year', 'status']),
+            'filters' => $request->only(['search', 'location_id', 'employee_id', 'incident', 'report_type', 'work_cover_claim', 'claim_type', 'claim_status', 'fy', 'fy_month', 'fy_year', 'entity', 'project', 'month', 'year', 'status', 'date_from', 'date_to']),
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
             'employees' => Employee::orderBy('name')->get(['id', 'name', 'preferred_name']),
             'incidentOptions' => Injury::INCIDENT_OPTIONS,
@@ -204,7 +210,7 @@ class InjuryController extends Controller
                 'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'file_name' => $m->file_name,
-                    'url' => $this->mediaUrl($m),
+                    'url' => route('comments.attachment', ['comment' => $c->id, 'media' => $m->id]),
                     'mime_type' => $m->mime_type,
                 ]),
                 'replies' => $c->replies->map(fn ($r) => [
@@ -216,7 +222,7 @@ class InjuryController extends Controller
                     'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
                         'id' => $m->id,
                         'file_name' => $m->file_name,
-                        'url' => $this->mediaUrl($m),
+                        'url' => route('comments.attachment', ['comment' => $r->id, 'media' => $m->id]),
                         'mime_type' => $m->mime_type,
                     ]),
                 ]),

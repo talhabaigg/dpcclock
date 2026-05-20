@@ -16,8 +16,12 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, CalendarIcon, Download, FileText, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
+import { useEffect, useRef, useState } from 'react';
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface Attachment {
     id: number;
@@ -51,7 +55,166 @@ function UserAvatar({ name }: { name: string }) {
     );
 }
 
-function SystemComment({ comment }: { comment: CommentData }) {
+function attachmentKind(mime: string): 'pdf' | 'image' | 'other' {
+    if (mime === 'application/pdf') return 'pdf';
+    if (mime.startsWith('image/')) return 'image';
+    return 'other';
+}
+
+function PdfThumbnail({ url }: { url: string }) {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+    useEffect(() => {
+        let cancelled = false;
+        setState('loading');
+        const task = getDocument(url);
+
+        task.promise
+            .then(async (pdf) => {
+                if (cancelled) return;
+                const page = await pdf.getPage(1);
+                if (cancelled || !canvasRef.current) return;
+
+                const baseViewport = page.getViewport({ scale: 1 });
+                const targetWidth = 360;
+                const scale = targetWidth / baseViewport.width;
+                const viewport = page.getViewport({ scale });
+
+                const canvas = canvasRef.current;
+                const context = canvas.getContext('2d');
+                if (!context) return;
+
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                await page.render({ canvas, canvasContext: context, viewport }).promise;
+                if (!cancelled) setState('ready');
+            })
+            .catch(() => { if (!cancelled) setState('error'); });
+
+        return () => { cancelled = true; task.destroy(); };
+    }, [url]);
+
+    if (state === 'error') {
+        return <FileText className="text-muted-foreground h-10 w-10" />;
+    }
+    return (
+        <>
+            {state === 'loading' && <Loader2 className="text-muted-foreground absolute h-4 w-4 animate-spin" />}
+            <canvas
+                ref={canvasRef}
+                className={`h-full w-full object-cover object-top ${state === 'ready' ? 'opacity-100' : 'opacity-0'}`}
+            />
+        </>
+    );
+}
+
+function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onPreview: (a: Attachment) => void }) {
+    const kind = attachmentKind(attachment.mime_type);
+    const Icon = kind === 'pdf' ? FileText : kind === 'image' ? FileImage : FileIcon;
+    const iconColor = 'text-muted-foreground';
+    const typeLabel = kind === 'pdf' ? 'PDF' : kind === 'image' ? 'Image' : (attachment.mime_type.split('/')[1] ?? 'File').toUpperCase();
+
+    return (
+        <div className="hover:border-foreground/30 group flex w-44 flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-all hover:shadow-md">
+            <button
+                type="button"
+                onClick={() => onPreview(attachment)}
+                className="bg-muted/40 relative flex h-32 items-center justify-center overflow-hidden border-b"
+            >
+                {kind === 'pdf' && <PdfThumbnail url={attachment.url} />}
+                {kind === 'image' && (
+                    <img src={attachment.url} alt="" className="h-full w-full object-cover" />
+                )}
+                {kind === 'other' && <Icon className="text-muted-foreground h-12 w-12" />}
+                <div className="absolute inset-0 bg-foreground/0 transition-colors group-hover:bg-foreground/5" />
+            </button>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
+                <button
+                    type="button"
+                    onClick={() => onPreview(attachment)}
+                    className="min-w-0 flex-1 text-left"
+                >
+                    <div className="truncate text-xs font-medium leading-tight">{attachment.file_name}</div>
+                    <div className="text-muted-foreground text-[9px] uppercase tracking-wide">{typeLabel}</div>
+                </button>
+                <a
+                    href={attachment.url}
+                    download={attachment.file_name}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded p-1 transition-colors"
+                    aria-label={`Download ${attachment.file_name}`}
+                    title="Download"
+                >
+                    <Download className="h-3.5 w-3.5" />
+                </a>
+            </div>
+        </div>
+    );
+}
+
+function AttachmentList({ attachments, onPreview, compact = false }: { attachments: Attachment[]; onPreview: (a: Attachment) => void; compact?: boolean }) {
+    if (attachments.length === 0) return null;
+    return (
+        <div className={`flex flex-wrap gap-2 ${compact ? 'mt-1' : 'mt-2'}`}>
+            {attachments.map((att) => (
+                <AttachmentCard key={att.id} attachment={att} onPreview={onPreview} />
+            ))}
+        </div>
+    );
+}
+
+function AttachmentPreviewDialog({ attachment, onClose }: { attachment: Attachment | null; onClose: () => void }) {
+    const open = attachment !== null;
+    const kind = attachment ? attachmentKind(attachment.mime_type) : 'other';
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+            <DialogContent
+                className="flex h-[90vh] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+            >
+                <DialogHeader className="border-b px-4 py-3 pr-12 space-y-0">
+                    <DialogTitle className="truncate text-sm font-medium">{attachment?.file_name}</DialogTitle>
+                </DialogHeader>
+                <div className="bg-muted/30 flex-1 overflow-auto">
+                    {attachment && kind === 'pdf' && (
+                        <iframe src={attachment.url} title={attachment.file_name} className="h-full w-full bg-white" />
+                    )}
+                    {attachment && kind === 'image' && (
+                        <div className="flex h-full items-center justify-center p-4">
+                            <img src={attachment.url} alt={attachment.file_name} className="max-h-full max-w-full object-contain" />
+                        </div>
+                    )}
+                    {attachment && kind === 'other' && (
+                        <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">
+                            <FileIcon className="h-12 w-12 opacity-50" />
+                            <p>No preview available for this file type.</p>
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={attachment.url} target="_blank" rel="noopener noreferrer" download={attachment.file_name}>
+                                    <Download className="mr-1 h-3.5 w-3.5" /> Download
+                                </a>
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function AttachmentBadge({ count }: { count: number }) {
+    if (count === 0) return null;
+    return (
+        <span className="text-muted-foreground inline-flex items-center gap-0.5 text-[10px]">
+            <Paperclip className="h-2.5 w-2.5" />
+            {count}
+        </span>
+    );
+}
+
+function SystemComment({ comment, onPreviewAttachment }: { comment: CommentData; onPreviewAttachment: (a: Attachment) => void }) {
     const event = (comment.metadata as Record<string, unknown>)?.event as string | undefined;
 
     return (
@@ -69,37 +232,32 @@ function SystemComment({ comment }: { comment: CommentData }) {
                 <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-xs font-medium">{comment.user?.name ?? 'System'}</span>
                     <span className="text-muted-foreground text-xs">{new Date(comment.created_at).toLocaleString('en-AU')}</span>
+                    <AttachmentBadge count={comment.attachments.length} />
                 </div>
                 {comment.body && (
                     <p className="text-muted-foreground mt-0.5 text-xs whitespace-pre-wrap"
                        dangerouslySetInnerHTML={{ __html: comment.body.replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-medium">$1</strong>').replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>') }}
                     />
                 )}
-                {comment.attachments.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                        {comment.attachments.map((att) => (
-                            <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs">
-                                <FileText className="h-3 w-3" /> {att.file_name}
-                            </a>
-                        ))}
-                    </div>
-                )}
+                <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} compact />
             </div>
         </div>
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
+    onPreviewAttachment: (a: Attachment) => void;
 }) {
     if (comment.metadata) {
-        return <SystemComment comment={comment} />;
+        return <SystemComment comment={comment} onPreviewAttachment={onPreviewAttachment} />;
     }
 
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
+    const hasAttachments = comment.attachments.length > 0;
 
     return (
         <div className="flex gap-3">
@@ -108,10 +266,11 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete }: {
             ) : (
                 <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs">S</div>
             )}
-            <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 ${hasAttachments ? 'border-muted-foreground/30 border-l pl-3' : ''}`}>
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{comment.user?.name ?? 'System'}</span>
                     <span className="text-muted-foreground text-xs">{new Date(comment.created_at).toLocaleString('en-AU')}</span>
+                    <AttachmentBadge count={comment.attachments.length} />
                     {isOwner && (
                         <div className="ml-auto flex gap-1">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onEdit?.(comment)}>
@@ -124,19 +283,11 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete }: {
                     )}
                 </div>
                 {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
-                {comment.attachments.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                        {comment.attachments.map((att) => (
-                            <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs">
-                                <FileText className="h-3 w-3" /> {att.file_name}
-                            </a>
-                        ))}
-                    </div>
-                )}
+                <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} />
                 {comment.replies && comment.replies.length > 0 && (
                     <div className="mt-3 space-y-3 border-l-2 pl-4">
                         {comment.replies.map((reply) => (
-                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} />
+                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} />
                         ))}
                     </div>
                 )}
@@ -171,6 +322,25 @@ export default function InjuryShow({ injury, comments, options }: Props) {
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
     const [editBody, setEditBody] = useState('');
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+
+    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
+    const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
+    const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+
+    const filteredComments = (() => {
+        let result = comments;
+        if (commentFilter === 'messages') {
+            result = result.filter((c) => c.metadata === null && c.attachments.length === 0);
+        } else if (commentFilter === 'attachments') {
+            result = result.filter((c) => c.attachments.length > 0);
+        } else if (commentFilter === 'history') {
+            result = result.filter((c) => c.metadata !== null);
+        }
+        if (commentSort === 'newest') {
+            result = [...result].reverse();
+        }
+        return result;
+    })();
 
     const [classifyOpen, setClassifyOpen] = useState(false);
     const [classForm, setClassForm] = useState({
@@ -264,21 +434,54 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                         {/* Left Column — Activity / Comments */}
                         <div className="flex flex-col">
                             <div className="flex-1 space-y-4 p-5">
-                                <h3 className="text-sm font-semibold">Activity</h3>
+                                <div>
+                                    <h3 className="text-sm font-semibold">Activity</h3>
+                                    {comments.length > 0 && (
+                                        <div className="flex items-center justify-between pt-1">
+                                            <div className="flex items-center gap-1.5 text-xs">
+                                                <span className="text-muted-foreground">Show:</span>
+                                                <Select value={commentFilter} onValueChange={(v) => setCommentFilter(v as 'all' | 'messages' | 'attachments' | 'history')}>
+                                                    <SelectTrigger className="h-7 w-auto gap-1 border-0 px-2 text-xs shadow-none">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="all">All</SelectItem>
+                                                        <SelectItem value="messages">Messages</SelectItem>
+                                                        <SelectItem value="attachments">Attachments</SelectItem>
+                                                        <SelectItem value="history">History</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="text-primary flex items-center gap-1 text-xs font-medium"
+                                                onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
+                                            >
+                                                {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
+                                                <ArrowRight className={`h-3 w-3 transition-transform ${commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90'}`} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {comments.length === 0 ? (
                                     <p className="text-muted-foreground py-8 text-center text-sm italic">
                                         No activity yet. Post a comment to get started.
                                     </p>
+                                ) : filteredComments.length === 0 ? (
+                                    <p className="text-muted-foreground py-8 text-center text-sm italic">
+                                        No {commentFilter === 'attachments' ? 'attachments' : commentFilter === 'history' ? 'history' : 'messages'} found.
+                                    </p>
                                 ) : (
                                     <div className="space-y-4">
-                                        {comments.map((comment) => (
+                                        {filteredComments.map((comment) => (
                                             <CommentBubble
                                                 key={comment.id}
                                                 comment={comment}
                                                 currentUserId={currentUserId}
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
+                                                onPreviewAttachment={setPreviewAttachment}
                                             />
                                         ))}
                                     </div>
@@ -520,6 +723,9 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                     </div>
                 </Card>
             </div>
+
+            {/* Attachment Preview Dialog */}
+            <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
 
             {/* Edit Comment Dialog */}
             <Dialog open={editingComment !== null} onOpenChange={(open) => { if (!open) setEditingComment(null); }}>

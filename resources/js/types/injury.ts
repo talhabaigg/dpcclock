@@ -112,4 +112,6 @@ export interface InjuryFilters {
     report_type?: string;
     work_cover_claim?: string;
     status?: string;
+    date_from?: string;
+    date_to?: string;
 }
