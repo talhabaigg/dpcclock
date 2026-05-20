@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DualListAssign } from '@/components/dual-list-assign';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -150,6 +151,7 @@ export default function SdsIndex() {
     const [showDialog, setShowDialog] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editingMedia, setEditingMedia] = useState<MediaFile[]>([]);
+    const [editingSdsFile, setEditingSdsFile] = useState<MediaFile | null>(null);
     const [form, setForm] = useState<FormState>(EMPTY_FORM);
     const [submitting, setSubmitting] = useState(false);
 
@@ -326,6 +328,7 @@ export default function SdsIndex() {
     const openCreate = () => {
         setEditingId(null);
         setEditingMedia([]);
+        setEditingSdsFile(null);
         setForm(EMPTY_FORM);
         setShowDialog(true);
     };
@@ -333,6 +336,7 @@ export default function SdsIndex() {
     const openEdit = (record: SdsRecord) => {
         setEditingId(record.id);
         setEditingMedia(getOtherFiles(record.media));
+        setEditingSdsFile(record.media.find((m) => m.collection_name === 'sds_file') ?? null);
         setForm({
             product_name: record.product_name,
             manufacturer: record.manufacturer,
@@ -486,6 +490,7 @@ export default function SdsIndex() {
                                         onCheckedChange={() => toggleAllOnPage()}
                                     />
                                 </TableHead>
+                                <TableHead className="w-8 px-1 text-xs">ID</TableHead>
                                 <TableHead className="px-3 text-xs">Product & Manufacturer</TableHead>
                                 <TableHead className="px-3 text-xs">Expiry Date</TableHead>
                                 <TableHead className="px-3 text-xs">Description</TableHead>
@@ -497,7 +502,7 @@ export default function SdsIndex() {
                         <TableBody>
                             {sds.data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
                                         No SDS records found.
                                     </TableCell>
                                 </TableRow>
@@ -514,14 +519,22 @@ export default function SdsIndex() {
                                                 onCheckedChange={(c) => toggleRow(record.id, !!c)}
                                             />
                                         </TableCell>
+                                        <TableCell className="text-muted-foreground w-8 px-1 font-mono text-xs tabular-nums">
+                                            {record.id}
+                                        </TableCell>
                                         <TableCell className="px-3">
-                                            <div className="text-sm font-medium">{record.product_name}</div>
-                                            <div className="text-muted-foreground text-xs">{record.manufacturer}</div>
-                                            {record.locations.length > 0 && (
-                                                <div className="text-muted-foreground mt-0.5 text-xs">
-                                                    {record.locations.map((l) => l.name).join(', ')}
-                                                </div>
-                                            )}
+                                            <div className="flex w-[220px] flex-col">
+                                                <div className="truncate text-sm font-medium" title={record.product_name}>{record.product_name}</div>
+                                                <div className="text-muted-foreground truncate text-xs" title={record.manufacturer}>{record.manufacturer}</div>
+                                                {record.locations.length > 0 && (
+                                                    <div
+                                                        className="text-muted-foreground mt-0.5 truncate text-xs"
+                                                        title={record.locations.map((l) => l.name).join(', ')}
+                                                    >
+                                                        {record.locations.map((l) => l.name).join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell className={`px-3 text-xs font-medium ${expired ? 'text-red-600' : ''}`}>
                                             {formatDate(record.expires_at)}
@@ -543,15 +556,16 @@ export default function SdsIndex() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-3">
-                                            <div className="flex flex-col gap-0.5">
+                                            <div className="flex w-[180px] flex-col gap-0.5">
                                                 {otherFiles.map((f) => (
                                                     <a
                                                         key={f.id}
                                                         href={`/sds/${record.id}/files/${f.id}`}
-                                                        className="text-primary inline-flex items-center gap-1 text-xs hover:underline"
+                                                        title={f.file_name}
+                                                        className="text-primary flex items-center gap-1 text-xs hover:underline"
                                                     >
-                                                        <FileText size={10} />
-                                                        {f.file_name}
+                                                        <FileText size={10} className="shrink-0" />
+                                                        <span className="truncate">{f.file_name}</span>
                                                     </a>
                                                 ))}
                                                 {otherFiles.length === 0 && <span className="text-muted-foreground text-xs">—</span>}
@@ -696,7 +710,7 @@ export default function SdsIndex() {
 
             {/* Create / Edit Dialog */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="sm:max-w-lg p-0">
+                <DialogContent className="w-full p-0 sm:max-w-5xl">
                     <DialogHeader className="px-6 pt-6 pb-0">
                         <DialogTitle>{editingId ? 'Edit SDS' : 'Add SDS'}</DialogTitle>
                     </DialogHeader>
@@ -784,57 +798,32 @@ export default function SdsIndex() {
                                 <Label className="text-sm font-semibold">Projects / Locations</Label>
                                 <span className="text-muted-foreground text-xs">Optional</span>
                             </div>
-                            {form.location_ids.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
-                                    {form.location_ids.map((id) => {
-                                        const loc = locations.find((l) => l.id === id);
-                                        return loc ? (
-                                            <Badge key={id} variant="secondary" className="gap-1 text-xs">
-                                                {loc.name}
-                                                <button
-                                                    onClick={() => setForm((prev) => ({ ...prev, location_ids: prev.location_ids.filter((lid) => lid !== id) }))}
-                                                    className="hover:text-destructive ml-0.5"
-                                                >
-                                                    <X size={10} />
-                                                </button>
-                                            </Badge>
-                                        ) : null;
-                                    })}
-                                </div>
-                            )}
-                            <div className="rounded-md border">
-                                <div className="border-b px-3 py-2">
-                                    <span className="text-muted-foreground text-sm">Select locations to apply this SDS</span>
-                                </div>
-                                <div className="max-h-[140px] overflow-y-auto">
-                                    {locations.map((loc) => (
-                                        <label
-                                            key={loc.id}
-                                            className="hover:bg-accent flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={form.location_ids.includes(loc.id)}
-                                                onChange={() =>
-                                                    setForm((prev) => ({
-                                                        ...prev,
-                                                        location_ids: prev.location_ids.includes(loc.id)
-                                                            ? prev.location_ids.filter((lid) => lid !== loc.id)
-                                                            : [...prev.location_ids, loc.id],
-                                                    }))
-                                                }
-                                                className="rounded border-gray-300"
-                                            />
-                                            {loc.name}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+                            <DualListAssign
+                                items={locations.map((l) => ({ id: l.id, label: l.name }))}
+                                assignedIds={form.location_ids}
+                                onChange={(ids) => setForm((prev) => ({ ...prev, location_ids: ids }))}
+                                availableLabel="Available Projects"
+                                assignedLabel="Assigned Projects"
+                                emptyAvailableText="All projects assigned"
+                                emptyAssignedText="No projects assigned"
+                            />
                         </div>
 
                         {/* SDS File */}
                         <div className="flex flex-col gap-1.5">
                             <Label className="text-sm font-semibold">SDS file</Label>
+                            {editingId && editingSdsFile && !form.sds_file && (
+                                <a
+                                    href={`/sds/${editingId}/download`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="bg-muted/50 hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-2 transition-colors"
+                                >
+                                    <FileText size={16} className="text-muted-foreground shrink-0" />
+                                    <span className="flex-1 truncate text-sm" title={editingSdsFile.file_name}>{editingSdsFile.file_name}</span>
+                                    <span className="text-muted-foreground text-xs">Current</span>
+                                </a>
+                            )}
                             {form.sds_file ? (
                                 <div className="bg-muted/50 flex items-center gap-2 rounded-md border px-3 py-2">
                                     <FileText size={16} className="text-muted-foreground shrink-0" />
@@ -845,7 +834,7 @@ export default function SdsIndex() {
                                 </div>
                             ) : (
                                 <>
-                                    {editingId && <p className="text-muted-foreground text-xs">Current file will be kept. Drop a new file to replace.</p>}
+                                    {editingId && <p className="text-muted-foreground text-xs">Drop a new file below to replace the current SDS.</p>}
                                     <Dropzone onDrop={(files) => files.length > 0 && setForm({ ...form, sds_file: files[0] })} maxFiles={1} multiple={false} />
                                 </>
                             )}

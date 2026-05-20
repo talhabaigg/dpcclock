@@ -23,6 +23,9 @@ class SafetyDataSheetController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('product_name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%");
+                if (ctype_digit((string) $search)) {
+                    $q->orWhere('id', (int) $search);
+                }
             });
         }
 

@@ -19,13 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { DualListAssign } from '@/components/dual-list-assign';
 import { SearchSelect } from '@/components/search-select';
 import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, KeyRound, Loader2, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Ban, KeyRound, Loader2, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -113,29 +114,7 @@ export default function UserEdit() {
     // Dual-list kiosk staging
     const initialAssignedIds = useMemo(() => user.managed_kiosks.map((k) => k.id), [user.managed_kiosks]);
     const [assignedKioskIds, setAssignedKioskIds] = useState<number[]>(initialAssignedIds);
-    const [availableSearch, setAvailableSearch] = useState('');
-    const [assignedSearch, setAssignedSearch] = useState('');
     const [savingKiosks, setSavingKiosks] = useState(false);
-
-    const assignedKiosks = useMemo(
-        () => assignedKioskIds
-            .map((id) => kiosks.find((k) => k.id === id))
-            .filter((k): k is Kiosk => !!k),
-        [assignedKioskIds, kiosks],
-    );
-    const availableKiosks = useMemo(
-        () => kiosks.filter((k) => !assignedKioskIds.includes(k.id)),
-        [kiosks, assignedKioskIds],
-    );
-
-    const filteredAvailable = useMemo(() => {
-        const q = availableSearch.trim().toLowerCase();
-        return q ? availableKiosks.filter((k) => k.name.toLowerCase().includes(q)) : availableKiosks;
-    }, [availableKiosks, availableSearch]);
-    const filteredAssigned = useMemo(() => {
-        const q = assignedSearch.trim().toLowerCase();
-        return q ? assignedKiosks.filter((k) => k.name.toLowerCase().includes(q)) : assignedKiosks;
-    }, [assignedKiosks, assignedSearch]);
 
     const kiosksDirty = useMemo(() => {
         if (assignedKioskIds.length !== initialAssignedIds.length) return true;
@@ -143,14 +122,6 @@ export default function UserEdit() {
         const b = [...initialAssignedIds].sort();
         return a.some((id, i) => id !== b[i]);
     }, [assignedKioskIds, initialAssignedIds]);
-
-    const assignKiosk = (id: number) => setAssignedKioskIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    const unassignKiosk = (id: number) => setAssignedKioskIds((prev) => prev.filter((k) => k !== id));
-    const assignAll = () => setAssignedKioskIds((prev) => Array.from(new Set([...prev, ...filteredAvailable.map((k) => k.id)])));
-    const unassignAll = () => {
-        const idsToRemove = new Set(filteredAssigned.map((k) => k.id));
-        setAssignedKioskIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
-    };
 
     const handleSaveKiosks = () => {
         setSavingKiosks(true);
@@ -480,119 +451,13 @@ export default function UserEdit() {
                             <CardDescription>Click a kiosk to move it between lists, then Save</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 px-4 sm:px-6">
-                            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr]">
-                                {/* Available list */}
-                                <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
-                                    <div className="bg-muted/40 flex items-center justify-between border-b px-3 py-2">
-                                        <span className="text-xs font-medium">Available</span>
-                                        <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
-                                            {filteredAvailable.length}
-                                        </Badge>
-                                    </div>
-                                    <div className="border-b p-2">
-                                        <div className="relative">
-                                            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-                                            <Input
-                                                placeholder="Search..."
-                                                value={availableSearch}
-                                                onChange={(e) => setAvailableSearch(e.target.value)}
-                                                className="h-8 pl-8 text-sm"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="max-h-64 min-h-[160px] flex-1 overflow-y-auto">
-                                        {filteredAvailable.length === 0 ? (
-                                            <p className="text-muted-foreground px-3 py-6 text-center text-xs">
-                                                {availableKiosks.length === 0 ? 'All kiosks assigned' : 'No matches'}
-                                            </p>
-                                        ) : (
-                                            <ul className="divide-y">
-                                                {filteredAvailable.map((kiosk) => (
-                                                    <li key={kiosk.id}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => assignKiosk(kiosk.id)}
-                                                            className="hover:bg-muted flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors"
-                                                        >
-                                                            <span className="truncate">{kiosk.name}</span>
-                                                            <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Middle controls */}
-                                <div className="flex shrink-0 flex-row items-center justify-center gap-2 sm:flex-col">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-9 w-9"
-                                        onClick={assignAll}
-                                        disabled={filteredAvailable.length === 0}
-                                        aria-label="Add all"
-                                    >
-                                        <ChevronsRight className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-9 w-9"
-                                        onClick={unassignAll}
-                                        disabled={filteredAssigned.length === 0}
-                                        aria-label="Remove all"
-                                    >
-                                        <ChevronsLeft className="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                {/* Assigned list */}
-                                <div className="flex min-h-0 flex-col overflow-hidden rounded-md border">
-                                    <div className="bg-muted/40 flex items-center justify-between border-b px-3 py-2">
-                                        <span className="text-xs font-medium">Assigned</span>
-                                        <Badge variant="outline" className="font-mono text-[10px] tabular-nums">
-                                            {filteredAssigned.length}
-                                        </Badge>
-                                    </div>
-                                    <div className="border-b p-2">
-                                        <div className="relative">
-                                            <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-                                            <Input
-                                                placeholder="Search..."
-                                                value={assignedSearch}
-                                                onChange={(e) => setAssignedSearch(e.target.value)}
-                                                className="h-8 pl-8 text-sm"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="max-h-64 min-h-[160px] flex-1 overflow-y-auto">
-                                        {filteredAssigned.length === 0 ? (
-                                            <p className="text-muted-foreground px-3 py-6 text-center text-xs">
-                                                {assignedKiosks.length === 0 ? 'None assigned' : 'No matches'}
-                                            </p>
-                                        ) : (
-                                            <ul className="divide-y">
-                                                {filteredAssigned.map((kiosk) => (
-                                                    <li key={kiosk.id}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => unassignKiosk(kiosk.id)}
-                                                            className="hover:bg-muted flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors"
-                                                        >
-                                                            <ChevronLeft className="text-muted-foreground h-4 w-4 shrink-0" />
-                                                            <span className="flex-1 truncate text-left">{kiosk.name}</span>
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <DualListAssign
+                                items={kiosks.map((k) => ({ id: k.id, label: k.name }))}
+                                assignedIds={assignedKioskIds}
+                                onChange={setAssignedKioskIds}
+                                emptyAvailableText="All kiosks assigned"
+                                emptyAssignedText="None assigned"
+                            />
 
                             {kiosksDirty && (
                                 <div className="flex items-center justify-end gap-2 border-t pt-3">
