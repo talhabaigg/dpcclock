@@ -37,7 +37,7 @@ interface Mapping {
     status: string;
     form_template_id: number;
     form_template: { id: number; name: string };
-    assignee_strategy: 'role' | 'user';
+    assignee_strategy: 'permission' | 'user';
     assignee_value: string;
     is_required: boolean;
     sort_order: number;
@@ -49,7 +49,7 @@ interface PageProps {
     statuses: string[];
     modelTypes: { value: string; label: string }[];
     formTemplates: { id: number; name: string }[];
-    roles: { id: number; name: string }[];
+    permissions: { id: number; name: string }[];
     users: { id: number; name: string }[];
 }
 
@@ -74,7 +74,7 @@ interface FormState {
     model_type: string;
     status: string;
     form_template_id: number | '';
-    assignee_strategy: 'role' | 'user';
+    assignee_strategy: 'permission' | 'user';
     assignee_value: string;
     is_required: boolean;
     sort_order: number;
@@ -87,7 +87,7 @@ function emptyForm(modelTypes: PageProps['modelTypes']): FormState {
         model_type: modelTypes[0]?.value ?? '',
         status: 'whs_review',
         form_template_id: '',
-        assignee_strategy: 'role',
+        assignee_strategy: 'permission',
         assignee_value: '',
         is_required: true,
         sort_order: 0,
@@ -100,7 +100,7 @@ export default function ApplicationPhaseFormsIndex({
     statuses,
     modelTypes,
     formTemplates,
-    roles,
+    permissions,
     users,
 }: PageProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -173,11 +173,11 @@ export default function ApplicationPhaseFormsIndex({
     }
 
     function renderAssignee(m: Mapping) {
-        if (m.assignee_strategy === 'role') {
-            const role = roles.find((r) => r.name === m.assignee_value);
+        if (m.assignee_strategy === 'permission') {
+            const perm = permissions.find((p) => p.name === m.assignee_value);
             return (
                 <span className="text-muted-foreground">
-                    Role: {role ? role.name : `${m.assignee_value} (not found)`}
+                    Permission: {perm ? perm.name : `${m.assignee_value} (not found)`}
                 </span>
             );
         }
@@ -369,7 +369,7 @@ export default function ApplicationPhaseFormsIndex({
                                 <Label className="mb-1 text-xs text-muted-foreground">Assignee type</Label>
                                 <Select
                                     value={form.assignee_strategy}
-                                    onValueChange={(v: 'role' | 'user') =>
+                                    onValueChange={(v: 'permission' | 'user') =>
                                         setForm({ ...form, assignee_strategy: v, assignee_value: '' })
                                     }
                                 >
@@ -377,27 +377,27 @@ export default function ApplicationPhaseFormsIndex({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="role">By role</SelectItem>
+                                        <SelectItem value="permission">By permission</SelectItem>
                                         <SelectItem value="user">Specific user</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div>
                                 <Label className="mb-1 text-xs text-muted-foreground">
-                                    {form.assignee_strategy === 'role' ? 'Role' : 'User'}
+                                    {form.assignee_strategy === 'permission' ? 'Permission' : 'User'}
                                 </Label>
                                 <Select
                                     value={form.assignee_value}
                                     onValueChange={(v) => setForm({ ...form, assignee_value: v })}
                                 >
                                     <SelectTrigger className="h-9">
-                                        <SelectValue placeholder={form.assignee_strategy === 'role' ? 'Pick a role' : 'Pick a user'} />
+                                        <SelectValue placeholder={form.assignee_strategy === 'permission' ? 'Pick a permission' : 'Pick a user'} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {form.assignee_strategy === 'role'
-                                            ? roles.map((r) => (
-                                                  <SelectItem key={r.id} value={r.name}>
-                                                      {r.name}
+                                        {form.assignee_strategy === 'permission'
+                                            ? permissions.map((p) => (
+                                                  <SelectItem key={p.id} value={p.name}>
+                                                      {p.name}
                                                   </SelectItem>
                                               ))
                                             : users.map((u) => (

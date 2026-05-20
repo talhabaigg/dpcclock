@@ -395,6 +395,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
     Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
     Route::post('/form-requests/{formRequest}/submit-internal', [FormRequestController::class, 'submitInternal'])->name('form-requests.submit-internal');
+    Route::get('/form-requests/{formRequest}/signatures/{media}', [FormRequestController::class, 'showSignature'])
+        ->where('media', '[0-9]+')
+        ->name('form-requests.signature');
+
+    // Dynamic options for form fields. Available to any authenticated user so
+    // anyone filling a form internally can resolve a {source} into options.
+    // Both endpoints only return data from the allowlisted resolver registry.
+    Route::get('/form-templates/options-sources/list', [FormTemplateController::class, 'optionsSources'])->name('form-templates.options-sources');
+    Route::get('/form-templates/options-sources/{source}', [FormTemplateController::class, 'resolveOptionsSource'])
+        ->where('source', '[a-z_]+')
+        ->name('form-templates.options-sources.resolve');
 
     Route::middleware('permission:signing-requests.view')->group(function () {
         Route::get('/signing-requests', [SigningRequestController::class, 'index'])->name('signing-requests.index');

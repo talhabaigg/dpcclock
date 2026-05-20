@@ -1,3 +1,4 @@
+import { FormFieldDisplay } from '@/components/form-renderer/form-field-display';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -27,11 +28,16 @@ import {
     Copy,
     Eye,
     FileText,
+    Grid3x3,
     GripVertical,
     Hash,
     Heading,
+    LayoutGrid,
     List,
+    ListChecks,
     Mail,
+    Minus,
+    PenLine,
     Phone,
     Plus,
     Search,
@@ -57,10 +63,16 @@ interface FieldItem {
     type: string;
     is_required: boolean;
     options: string[];
+    options_source: string | null;
     placeholder: string;
     help_text: string;
     default_value: string;
     visible_if: VisibleIfRule | null;
+}
+
+interface OptionSource {
+    key: string;
+    label: string;
 }
 
 interface PlaceholderToken {
@@ -96,12 +108,17 @@ const FIELD_TYPES = [
     { value: 'select', label: 'Dropdown' },
     { value: 'radio', label: 'Radio Buttons' },
     { value: 'checkbox', label: 'Checkboxes' },
+    { value: 'multiselect', label: 'Multi-select Dropdown' },
+    { value: 'button_group', label: 'Button Group (single)' },
+    { value: 'button_group_multi', label: 'Button Group (multi)' },
+    { value: 'signature', label: 'Signature' },
     { value: 'heading', label: 'Section Heading' },
     { value: 'paragraph', label: 'Info Text' },
+    { value: 'page_break', label: 'Page Break' },
 ];
 
-const TYPES_WITH_OPTIONS = ['select', 'radio', 'checkbox'];
-const DISPLAY_ONLY_TYPES = ['heading', 'paragraph'];
+const TYPES_WITH_OPTIONS = ['select', 'radio', 'checkbox', 'multiselect', 'button_group', 'button_group_multi'];
+const DISPLAY_ONLY_TYPES = ['heading', 'paragraph', 'page_break'];
 
 const MODEL_OPTIONS = [{ value: 'employment_application', label: 'Employment Enquiry' }];
 
@@ -117,8 +134,13 @@ const FIELD_TYPE_ICONS: Record<string, React.ElementType> = {
     select: List,
     radio: CircleDot,
     checkbox: CheckSquare,
+    multiselect: ListChecks,
+    button_group: LayoutGrid,
+    button_group_multi: Grid3x3,
+    signature: PenLine,
     heading: Heading,
     paragraph: FileText,
+    page_break: Minus,
 };
 
 function getFieldIcon(type: string): React.ElementType {
@@ -128,7 +150,7 @@ function getFieldIcon(type: string): React.ElementType {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function emptyField(): FieldItem {
-    return { label: '', type: 'text', is_required: false, options: [], placeholder: '', help_text: '', default_value: '', visible_if: null };
+    return { label: '', type: 'text', is_required: false, options: [], options_source: null, placeholder: '', help_text: '', default_value: '', visible_if: null };
 }
 
 /**
@@ -279,6 +301,7 @@ interface SortableFieldCardProps {
     parentHeading: FieldItem | null;
     isOpen: boolean;
     tokens: PlaceholderToken[];
+    optionSources: OptionSource[];
     onToggle: (index: number) => void;
     onUpdate: (index: number, updates: Partial<FieldItem>) => void;
     onRemove: (index: number) => void;
@@ -296,6 +319,7 @@ function SortableFieldCard({
     parentHeading,
     isOpen,
     tokens,
+    optionSources,
     onToggle,
     onUpdate,
     onRemove,
@@ -333,13 +357,15 @@ function SortableFieldCard({
     const defaultPreview = useMemo(() => resolvePreview(field.default_value, tokens), [field.default_value, tokens]);
     const labelPreview = useMemo(() => resolvePreview(field.label, tokens), [field.label, tokens]);
 
-    // Eligible source fields: earlier fields that are radio / select / checkbox.
+    // Eligible source fields: earlier fields that are radio / select / checkbox
+    // with a known static option list. Dynamic-source fields are excluded because
+    // their option values aren't known at design time.
     const eligibleSources = useMemo(
         () =>
             allFields
                 .slice(0, index)
                 .map((f, i) => ({ field: f, index: i }))
-                .filter(({ field: f }) => TYPES_WITH_OPTIONS.includes(f.type)),
+                .filter(({ field: f }) => TYPES_WITH_OPTIONS.includes(f.type) && !f.options_source),
         [allFields, index],
     );
 
@@ -361,6 +387,7 @@ function SortableFieldCard({
     const isDisplay = DISPLAY_ONLY_TYPES.includes(field.type);
     const isHeading = field.type === 'heading';
     const hasOptions = TYPES_WITH_OPTIONS.includes(field.type);
+    const usesDynamicSource = hasOptions && !!field.options_source;
     const fieldTypeLabel = FIELD_TYPES.find((ft) => ft.value === field.type)?.label ?? field.type;
     const inConditionalSection = !!parentHeading?.visible_if;
 
@@ -613,8 +640,8 @@ function SortableFieldCard({
                                     </div>
                                 )}
 
-                                {/* Default option (select/radio/checkbox) */}
-                                {!isDisplay && hasOptions && (
+                                {/* Default option (select/radio/checkbox) — only for static option lists. */}
+                                {!isDisplay && hasOptions && !usesDynamicSource && (
                                     <div>
                                         <Label className="mb-1 text-xs text-muted-foreground">
                                             Default {field.type === 'checkbox' ? 'options (comma separated)' : 'option'}
@@ -633,10 +660,66 @@ function SortableFieldCard({
                                 )}
                             </div>
 
-                            {/* Options editor (for select/radio/checkbox) */}
-                            {hasOptions && (
+                            {/* Options source picker (select/radio/checkbox) — pulls live from the registry. */}
+                            {hasOptions && optionSources.length > 0 && (
                                 <div>
                                     <Label className="mb-1 block text-xs text-muted-foreground">Options</Label>
+                                    <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-border/60 bg-muted/30 px-2.5 py-2">
+                                        <label className="flex items-center gap-1.5 text-xs text-foreground">
+                                            <input
+                                                type="radio"
+                                                name={`opt-mode-${index}`}
+                                                checked={!usesDynamicSource}
+                                                onChange={() => onUpdate(index, { options_source: null })}
+                                            />
+                                            Static list
+                                        </label>
+                                        <label className="flex items-center gap-1.5 text-xs text-foreground">
+                                            <input
+                                                type="radio"
+                                                name={`opt-mode-${index}`}
+                                                checked={usesDynamicSource}
+                                                onChange={() =>
+                                                    onUpdate(index, {
+                                                        options_source: field.options_source ?? optionSources[0]?.key ?? null,
+                                                        options: [],
+                                                    })
+                                                }
+                                            />
+                                            From the system
+                                        </label>
+                                        {usesDynamicSource && (
+                                            <Select
+                                                value={field.options_source ?? ''}
+                                                onValueChange={(v) => onUpdate(index, { options_source: v })}
+                                            >
+                                                <SelectTrigger className="h-7 w-44 text-xs">
+                                                    <SelectValue placeholder="Pick a source" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {optionSources.map((s) => (
+                                                        <SelectItem key={s.key} value={s.key} className="text-xs">
+                                                            {s.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </div>
+                                    {usesDynamicSource && (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Options resolve live from {optionSources.find((s) => s.key === field.options_source)?.label ?? 'the system'}. Stored values are IDs; display names are captured at submission time.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Options editor (for select/radio/checkbox) — hidden when a dynamic source is active. */}
+                            {hasOptions && !usesDynamicSource && (
+                                <div>
+                                    {optionSources.length === 0 && (
+                                        <Label className="mb-1 block text-xs text-muted-foreground">Options</Label>
+                                    )}
                                     <div className="space-y-1">
                                         {field.options.map((opt, oi) => (
                                             <div key={oi} className="flex items-center gap-1.5">
@@ -888,139 +971,26 @@ interface FieldPreviewProps {
     onChange: (v: PreviewValue) => void;
 }
 
-function FieldPreview({ field, index, value, onChange }: FieldPreviewProps) {
-    const displayLabel = field.label || 'Untitled';
-    const required = field.is_required;
-    const stringValue = typeof value === 'string' ? value : '';
-    const arrayValue = Array.isArray(value) ? value : [];
-
-    if (field.type === 'heading') {
-        return (
-            <div className="border-b-2 border-slate-200 pb-1.5 text-[14px] font-semibold text-slate-900">
-                {displayLabel}
-            </div>
-        );
-    }
-    if (field.type === 'paragraph') {
-        return <p className="py-1 text-[12px] leading-relaxed text-slate-500">{displayLabel}</p>;
-    }
-
-    const label = (
-        <label className="mb-1.5 block text-[12px] font-medium text-slate-800">
-            {displayLabel}
-            {required && <span className="ml-0.5 text-red-600">*</span>}
-        </label>
-    );
-    const help = field.help_text ? (
-        <p className="mt-1 text-[10px] text-slate-500">{field.help_text}</p>
-    ) : null;
-    const inputClasses =
-        'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[12px] text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10';
-
-    if (field.type === 'textarea') {
-        return (
-            <div>
-                {label}
-                <textarea
-                    value={stringValue}
-                    onChange={(e) => onChange(e.target.value)}
-                    placeholder={field.placeholder || ''}
-                    className={`${inputClasses} min-h-[60px] resize-y`}
-                />
-                {help}
-            </div>
-        );
-    }
-    if (field.type === 'select') {
-        return (
-            <div>
-                {label}
-                <select
-                    value={stringValue}
-                    onChange={(e) => onChange(e.target.value)}
-                    className={inputClasses}
-                >
-                    <option value="">Select an option</option>
-                    {field.options.map((opt, i) => (
-                        <option key={i} value={opt}>
-                            {opt || `Option ${i + 1}`}
-                        </option>
-                    ))}
-                </select>
-                {help}
-            </div>
-        );
-    }
-    if (field.type === 'radio') {
-        const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
-        return (
-            <div>
-                {label}
-                <div className="flex flex-col gap-1.5">
-                    {opts.map((opt, i) => (
-                        <label key={i} className="flex cursor-pointer items-center gap-2 text-[12px] text-slate-700">
-                            <input
-                                type="radio"
-                                name={`preview-radio-${index}`}
-                                checked={stringValue === opt}
-                                onChange={() => onChange(opt)}
-                                className="h-3.5 w-3.5 shrink-0 accent-blue-600"
-                            />
-                            <span>{opt || `Option ${i + 1}`}</span>
-                        </label>
-                    ))}
-                </div>
-                {help}
-            </div>
-        );
-    }
-    if (field.type === 'checkbox') {
-        const opts = field.options.length > 0 ? field.options : ['Option 1', 'Option 2'];
-        return (
-            <div>
-                {label}
-                <div className="flex flex-col gap-1.5">
-                    {opts.map((opt, i) => (
-                        <label key={i} className="flex cursor-pointer items-center gap-2 text-[12px] text-slate-700">
-                            <input
-                                type="checkbox"
-                                checked={arrayValue.includes(opt)}
-                                onChange={(e) => {
-                                    const next = e.target.checked
-                                        ? [...arrayValue, opt]
-                                        : arrayValue.filter((v) => v !== opt);
-                                    onChange(next);
-                                }}
-                                className="h-3.5 w-3.5 shrink-0 accent-blue-600"
-                            />
-                            <span>{opt || `Option ${i + 1}`}</span>
-                        </label>
-                    ))}
-                </div>
-                {help}
-            </div>
-        );
-    }
-
-    // Default: text, number, email, phone, date
-    const inputType =
-        field.type === 'number' ? 'number'
-        : field.type === 'email' ? 'email'
-        : field.type === 'phone' ? 'tel'
-        : field.type === 'date' ? 'date'
-        : 'text';
+function FieldPreview({ field, value, onChange }: FieldPreviewProps) {
+    // Delegate to the shared FormFieldDisplay so the builder preview, the
+    // submitted-response viewer, and any future fill UI all render fields the
+    // same way. Pass `dynamicOptions` undefined → editable + options_source
+    // renders the "loaded live" placeholder.
     return (
-        <div>
-            {label}
-            <input
-                type={inputType}
-                value={stringValue}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={field.placeholder || ''}
-                className={inputClasses}
-            />
-            {help}
-        </div>
+        <FormFieldDisplay
+            field={{
+                label: field.label || 'Untitled',
+                type: field.type,
+                is_required: field.is_required,
+                options: field.options,
+                options_source: field.options_source,
+                placeholder: field.placeholder,
+                help_text: field.help_text,
+            }}
+            value={value as string | string[] | null | undefined}
+            mode="editable"
+            onChange={onChange as (v: string | string[] | null | undefined) => void}
+        />
     );
 }
 
@@ -1036,7 +1006,7 @@ export default function FormTemplateForm({ template }: PageProps) {
         template?.model_type === 'App\\Models\\EmploymentApplication' ? 'employment_application' : '',
     );
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
-    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '', visible_if: f.visible_if ?? null })) : [emptyField()]);
+    const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], options_source: f.options_source ?? null, placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '', visible_if: f.visible_if ?? null })) : [emptyField()]);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [openFields, setOpenFields] = useState<Record<number, boolean>>(() => {
@@ -1045,6 +1015,7 @@ export default function FormTemplateForm({ template }: PageProps) {
         return init;
     });
     const [tokens, setTokens] = useState<PlaceholderToken[]>([]);
+    const [optionSources, setOptionSources] = useState<OptionSource[]>([]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1061,6 +1032,21 @@ export default function FormTemplateForm({ template }: PageProps) {
             cancelled = true;
         };
     }, [modelType]);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch(route('form-templates.options-sources'), { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            .then((r) => (r.ok ? r.json() : { sources: [] }))
+            .then((data) => {
+                if (!cancelled) setOptionSources(data.sources ?? []);
+            })
+            .catch(() => {
+                if (!cancelled) setOptionSources([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     function toggleField(index: number) {
         setOpenFields((prev) => ({ ...prev, [index]: !prev[index] }));
@@ -1455,6 +1441,7 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                 parentHeading={parentHeadings[index]}
                                                 isOpen={openFields[index] ?? true}
                                                 tokens={tokens}
+                                                optionSources={optionSources}
                                                 onToggle={toggleField}
                                                 onUpdate={updateField}
                                                 onRemove={removeField}

@@ -8,7 +8,7 @@ use App\Models\FormTemplate;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 class ApplicationPhaseFormController extends Controller
 {
@@ -29,7 +29,7 @@ class ApplicationPhaseFormController extends Controller
                 ->where('model_type', EmploymentApplication::class)
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'roles' => Role::orderBy('name')->get(['id', 'name']),
+            'permissions' => Permission::orderBy('name')->get(['id', 'name']),
             'users' => User::orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -65,7 +65,7 @@ class ApplicationPhaseFormController extends Controller
             'model_type' => ['required', 'string', 'in:' . EmploymentApplication::class],
             'status' => ['required', 'string', 'in:' . implode(',', EmploymentApplication::STATUSES)],
             'form_template_id' => ['required', 'integer', 'exists:form_templates,id'],
-            'assignee_strategy' => ['required', 'in:role,user'],
+            'assignee_strategy' => ['required', 'in:permission,user'],
             'assignee_value' => ['required', 'string', 'max:255'],
             'is_required' => ['boolean'],
             'sort_order' => ['nullable', 'integer'],

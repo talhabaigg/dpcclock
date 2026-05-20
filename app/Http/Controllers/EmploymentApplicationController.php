@@ -273,43 +273,48 @@ class EmploymentApplicationController extends Controller
             ->get(['id', 'name']);
 
         // Load comments with user and media
-        $comments = $employmentApplication->comments()
+        $rawComments = $employmentApplication->comments()
             ->with(['user:id,name', 'media', 'replies' => fn ($q) => $q->with(['user:id,name', 'media'])->oldest()])
             ->whereNull('parent_id')
             ->oldest()
-            ->get()
-            ->map(function ($comment) {
-                return [
-                    'id' => $comment->id,
-                    'body' => $comment->body,
-                    'metadata' => $comment->metadata,
-                    'user' => $comment->user ? ['id' => $comment->user->id, 'name' => $comment->user->name] : null,
-                    'created_at' => $comment->created_at->toISOString(),
-                    'attachments' => $comment->getMedia('attachments')->map(fn ($m) => [
-                        'id' => $m->id,
-                        'name' => $m->file_name,
-                        'url' => $this->mediaUrl($m),
-                        'size' => $m->size,
-                        'mime_type' => $m->mime_type,
-                    ]),
-                    'replies' => $comment->replies->map(function ($reply) {
-                        return [
-                            'id' => $reply->id,
-                            'body' => $reply->body,
-                            'metadata' => $reply->metadata,
-                            'user' => $reply->user ? ['id' => $reply->user->id, 'name' => $reply->user->name] : null,
-                            'created_at' => $reply->created_at->toISOString(),
-                            'attachments' => $reply->getMedia('attachments')->map(fn ($m) => [
-                                'id' => $m->id,
-                                'name' => $m->file_name,
-                                'url' => $this->mediaUrl($m),
-                                'size' => $m->size,
-                                'mime_type' => $m->mime_type,
-                            ]),
-                        ];
-                    }),
-                ];
-            });
+            ->get();
+
+        // Pre-load FormRequests referenced by form_submitted comments so signature
+        // media IDs can be resolved to fresh URLs without N+1 queries.
+        $signatureUrlMap = $this->buildSignatureUrlMap($rawComments);
+
+        $comments = $rawComments->map(function ($comment) use ($signatureUrlMap) {
+            return [
+                'id' => $comment->id,
+                'body' => $comment->body,
+                'metadata' => $this->resolveSignatureUrls($comment->metadata, $signatureUrlMap),
+                'user' => $comment->user ? ['id' => $comment->user->id, 'name' => $comment->user->name] : null,
+                'created_at' => $comment->created_at->toISOString(),
+                'attachments' => $comment->getMedia('attachments')->map(fn ($m) => [
+                    'id' => $m->id,
+                    'name' => $m->file_name,
+                    'url' => $this->mediaUrl($m),
+                    'size' => $m->size,
+                    'mime_type' => $m->mime_type,
+                ]),
+                'replies' => $comment->replies->map(function ($reply) use ($signatureUrlMap) {
+                    return [
+                        'id' => $reply->id,
+                        'body' => $reply->body,
+                        'metadata' => $this->resolveSignatureUrls($reply->metadata, $signatureUrlMap),
+                        'user' => $reply->user ? ['id' => $reply->user->id, 'name' => $reply->user->name] : null,
+                        'created_at' => $reply->created_at->toISOString(),
+                        'attachments' => $reply->getMedia('attachments')->map(fn ($m) => [
+                            'id' => $m->id,
+                            'name' => $m->file_name,
+                            'url' => $this->mediaUrl($m),
+                            'size' => $m->size,
+                            'mime_type' => $m->mime_type,
+                        ]),
+                    ];
+                }),
+            ];
+        });
 
         // Check for duplicate applications
         $duplicates = EmploymentApplication::duplicatesOf(
@@ -342,10 +347,12 @@ class EmploymentApplicationController extends Controller
             ->get(['id', 'name', 'description']);
 
         // Load active (non-cancelled) form requests with their fields so the
-        // show page can render a fill-in-app dialog without a second round-trip.
+        // show page can render a fill-in-app dialog AND a submitted-response
+        // viewer pane without a second round-trip. Signature media is eager
+        // loaded so URL resolution stays N+1-free.
         $formRequests = $employmentApplication->formRequests()
             ->whereNotIn('status', ['cancelled'])
-            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name'])
+            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'media'])
             ->latest()
             ->get();
 
@@ -445,10 +452,13 @@ class EmploymentApplicationController extends Controller
                 'delivery_method' => $fr->delivery_method,
                 'recipient_name' => $fr->recipient_name,
                 'recipient_email' => $fr->recipient_email,
+                'assignee_strategy' => $fr->assignee_strategy,
+                'assignee_permission' => $fr->assignee_permission,
                 'submitted_at' => $fr->submitted_at?->toISOString(),
                 'opened_at' => $fr->opened_at?->toISOString(),
                 'expires_at' => $fr->expires_at?->toISOString(),
                 'responses' => $fr->responses,
+                'response_snapshot' => $this->resolveSnapshotSignatureUrls($fr),
                 'form_template' => $fr->formTemplate ? [
                     'id' => $fr->formTemplate->id,
                     'name' => $fr->formTemplate->name,
@@ -458,6 +468,7 @@ class EmploymentApplicationController extends Controller
                         'type' => $field->type,
                         'is_required' => (bool) $field->is_required,
                         'options' => $field->options,
+                        'options_source' => $field->options_source,
                         'placeholder' => $placeholderResolver->interpolate($field->placeholder, $employmentApplication),
                         'help_text' => $field->help_text,
                         'default_value' => $placeholderResolver->interpolate($field->default_value, $employmentApplication),
@@ -940,5 +951,122 @@ class EmploymentApplicationController extends Controller
         } catch (\RuntimeException) {
             return $media->getUrl();
         }
+    }
+
+    /**
+     * Batch-load every signature media referenced across the comment thread
+     * into a [media_id => presigned_url] map. Resolves through `mediaUrl()`
+     * so each disk gets the right URL kind (S3 → temporary, local → public).
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Comment>  $comments
+     * @return array<int, string>
+     */
+    private function buildSignatureUrlMap($comments): array
+    {
+        $ids = collect();
+        foreach ($comments as $comment) {
+            $ids = $ids->merge($this->extractSignatureMediaIds($comment->metadata));
+            foreach ($comment->replies as $reply) {
+                $ids = $ids->merge($this->extractSignatureMediaIds($reply->metadata));
+            }
+        }
+        $ids = $ids->unique()->values()->all();
+        if (empty($ids)) {
+            return [];
+        }
+
+        return \Spatie\MediaLibrary\MediaCollections\Models\Media::whereIn('id', $ids)
+            ->where('collection_name', 'signatures')
+            ->get()
+            ->mapWithKeys(fn ($m) => [$m->id => $this->mediaUrl($m)])
+            ->all();
+    }
+
+    /**
+     * @return array<int,int>
+     */
+    private function extractSignatureMediaIds(mixed $metadata): array
+    {
+        if (! is_array($metadata)) {
+            return [];
+        }
+        $responses = $metadata['responses'] ?? [];
+        if (! is_array($responses)) {
+            return [];
+        }
+
+        return collect($responses)
+            ->filter(fn ($r) => is_array($r) && ($r['type'] ?? null) === 'signature' && is_numeric($r['value'] ?? null))
+            ->map(fn ($r) => (int) $r['value'])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Same idea as resolveSignatureUrls but for a single FormRequest's
+     * `response_snapshot`. Walks each row; for signature rows whose value
+     * holds the media id, swaps in the presigned/public URL. The eager-loaded
+     * `media` relation means no extra queries.
+     *
+     * @return array<int, array<string,mixed>>|null
+     */
+    private function resolveSnapshotSignatureUrls(\App\Models\FormRequest $fr): ?array
+    {
+        $snapshot = $fr->response_snapshot;
+        if (! is_array($snapshot)) {
+            return $snapshot;
+        }
+        $mediaById = $fr->getMedia('signatures')->keyBy('id');
+        foreach ($snapshot as $i => $row) {
+            if (! is_array($row) || ($row['type'] ?? null) !== 'signature') {
+                continue;
+            }
+            $value = $row['value'] ?? null;
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $media = $mediaById->get((int) $value);
+            if ($media) {
+                $snapshot[$i]['value'] = $this->mediaUrl($media);
+            }
+        }
+        return $snapshot;
+    }
+
+    /**
+     * Walk a comment's metadata.responses, swap each signature row's value
+     * (which holds the media id as a string) for the presigned URL prepared
+     * by buildSignatureUrlMap.
+     *
+     * @param  array<int, string>  $urlMap
+     */
+    private function resolveSignatureUrls(mixed $metadata, array $urlMap): mixed
+    {
+        if (! is_array($metadata)) {
+            return $metadata;
+        }
+        $responses = $metadata['responses'] ?? null;
+        if (! is_array($responses)) {
+            return $metadata;
+        }
+
+        foreach ($responses as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (($row['type'] ?? null) !== 'signature') {
+                continue;
+            }
+            $value = $row['value'] ?? null;
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $url = $urlMap[(int) $value] ?? null;
+            if ($url !== null) {
+                $responses[$i]['value'] = $url;
+            }
+        }
+        $metadata['responses'] = $responses;
+        return $metadata;
     }
 }

@@ -15,6 +15,11 @@ use Illuminate\Support\Str;
 
 class FormService
 {
+    public function __construct(
+        private FormResolverRegistry $resolverRegistry,
+    ) {}
+
+
     public function createAndSend(
         FormTemplate $template,
         string $deliveryMethod,
@@ -22,6 +27,8 @@ class FormService
         string $recipientName,
         ?string $recipientEmail,
         ?Model $formable = null,
+        ?string $assigneeStrategy = null,
+        ?string $assigneePermission = null,
     ): FormRequest {
         // Cancel any existing pending requests for the same formable + template
         if ($formable) {
@@ -45,10 +52,13 @@ class FormService
             'sent_by' => $admin->id,
             'recipient_name' => $recipientName,
             'recipient_email' => $recipientEmail,
+            'assignee_strategy' => $assigneeStrategy,
+            'assignee_permission' => $assigneePermission,
             'expires_at' => now()->addDays(7),
         ]);
 
-        // Deliver based on method
+        // Deliver based on method. Email path notifies the recipient; in-person
+        // and in-app paths are completion-by-walk-up (no notification).
         if ($deliveryMethod === 'email' && $recipientEmail) {
             Notification::route('mail', $recipientEmail)
                 ->notify(new FormRequestNotification($formRequest));
@@ -59,9 +69,18 @@ class FormService
 
         // Add system comment on formable if it supports comments
         if ($formable && method_exists($formable, 'addSystemComment')) {
-            $methodLabel = $deliveryMethod === 'email' ? 'email' : 'in-person';
+            $body = match (true) {
+                $assigneeStrategy === 'permission' && $assigneePermission !== null
+                    => "Form \"{$template->name}\" available in-app for completion by anyone with permission \"{$assigneePermission}\"",
+                $deliveryMethod === 'email'
+                    => "Form \"{$template->name}\" sent via email by {$admin->name}",
+                $deliveryMethod === 'in_app'
+                    => "Form \"{$template->name}\" made available in-app by {$admin->name}",
+                default
+                    => "Form \"{$template->name}\" sent in person by {$admin->name}",
+            };
             $formable->addSystemComment(
-                "Form \"{$template->name}\" sent via {$methodLabel} by {$admin->name}",
+                $body,
                 ['type' => 'form_sent', 'form_request_id' => $formRequest->id],
                 $admin->id,
             );
@@ -97,12 +116,20 @@ class FormService
             throw new \RuntimeException('This form request has been cancelled.');
         }
 
+        // Persist signatures as media files and swap the base64 data URLs for
+        // public URLs before anything else is written. Keeps `responses` and
+        // every downstream consumer (snapshot, comment metadata) lean.
+        $responses = $this->extractSignaturesToMedia($formRequest, $responses);
+
+        $snapshot = $this->buildResponseSnapshot($formRequest, $responses);
+
         // Atomic update to prevent race-condition double-submits
         $affected = DB::table('form_requests')
             ->where('id', $formRequest->id)
             ->whereIn('status', ['pending', 'sent', 'opened'])
             ->update([
                 'responses' => json_encode($responses),
+                'response_snapshot' => json_encode($snapshot),
                 'submitted_at' => now(),
                 'status' => 'submitted',
                 'submitter_ip_address' => $request->ip(),
@@ -140,5 +167,80 @@ class FormService
             $formRequest->recipient_email,
             $formRequest->formable,
         );
+    }
+
+    /**
+     * Walk template fields. For each signature whose value is a base64 data
+     * URL, decode + persist to the `signatures` media collection and replace
+     * the value in $responses with the public URL. Leaves non-signature
+     * responses untouched.
+     *
+     * @param  array<int,mixed>  $responses keyed by field id
+     * @return array<int,mixed>
+     */
+    private function extractSignaturesToMedia(FormRequest $formRequest, array $responses): array
+    {
+        foreach ($formRequest->formTemplate->fields as $field) {
+            if ($field->type !== 'signature') {
+                continue;
+            }
+
+            $value = $responses[$field->id] ?? null;
+            if (! is_string($value) || ! str_starts_with($value, 'data:image/')) {
+                continue;
+            }
+
+            $media = $formRequest
+                ->addMediaFromBase64($value)
+                ->usingFileName("signature-field-{$field->id}-".Str::random(8).'.png')
+                ->withCustomProperties(['field_id' => $field->id])
+                ->toMediaCollection('signatures');
+
+            // Store the media id only. Controllers resolve to a fresh URL at
+            // payload-assembly time — same pattern as comment attachments —
+            // so the stored value survives domain/host/route changes.
+            $responses[$field->id] = (string) $media->id;
+        }
+
+        return $responses;
+    }
+
+    /**
+     * Freeze a write-once record of the form as it existed at submission time:
+     * labels, types, options, and values. The show page reads from this so the
+     * historical record is unaffected when the underlying template is later
+     * edited. Dynamic-source values are resolved to display names here too,
+     * since the resolver may return different rows later.
+     *
+     * @param  array<int,mixed>  $responses keyed by field id
+     * @return array<int, array<string,mixed>>
+     */
+    private function buildResponseSnapshot(FormRequest $formRequest, array $responses): array
+    {
+        $fields = $formRequest->formTemplate->fields->sortBy('sort_order')->values();
+        $snapshot = [];
+
+        foreach ($fields as $field) {
+            $value = $responses[$field->id] ?? null;
+            $displayValue = $value;
+
+            if ($field->hasDynamicOptions()) {
+                $names = $this->resolverRegistry->resolveDisplayValues($field->options_source, $value);
+                $displayValue = is_array($value) ? $names : ($names[0] ?? null);
+            }
+
+            $snapshot[] = [
+                'field_id' => $field->id,
+                'label' => $field->label,
+                'type' => $field->type,
+                'options' => $field->options,
+                'options_source' => $field->options_source,
+                'sort_order' => $field->sort_order,
+                'value' => $value,
+                'value_display' => $displayValue,
+            ];
+        }
+
+        return $snapshot;
     }
 }

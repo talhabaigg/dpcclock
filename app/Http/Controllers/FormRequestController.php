@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FormRequest;
 use App\Services\FormPlaceholderResolver;
+use App\Services\FormResolverRegistry;
 use App\Services\FormService;
 use App\Services\FormVisibilityEvaluator;
 use Illuminate\Http\Request;
@@ -15,7 +16,28 @@ class FormRequestController extends Controller
         private FormService $formService,
         private FormPlaceholderResolver $placeholderResolver,
         private FormVisibilityEvaluator $visibilityEvaluator,
+        private FormResolverRegistry $resolverRegistry,
     ) {}
+
+    /**
+     * Stream a signature image attached to a FormRequest. Redirects to a fresh
+     * temporary S3 URL when the media disk supports it, otherwise falls back
+     * to the public URL. Kept behind auth — anyone authenticated who can see
+     * the application can fetch its signatures, matching the rest of the app.
+     */
+    public function showSignature(FormRequest $formRequest, int $media)
+    {
+        $mediaItem = $formRequest->getMedia('signatures')->firstWhere('id', $media);
+        if (! $mediaItem) {
+            throw new NotFoundHttpException();
+        }
+
+        try {
+            return redirect()->away($mediaItem->getTemporaryUrl(now()->addMinutes(30)));
+        } catch (\RuntimeException) {
+            return redirect()->away($mediaItem->getUrl());
+        }
+    }
 
     // ─── Public actions (token-based, no auth) ───────────────
 
@@ -72,8 +94,9 @@ class FormRequestController extends Controller
 
     /**
      * Interpolate placeholder tokens in each field's display strings against
-     * the parent formable. Returns the same collection with `label`,
-     * `default_value`, and `placeholder` resolved.
+     * the parent formable, AND resolve any dynamic options_source field into
+     * its current option set. The Blade renderer downstream treats both static
+     * and dynamic options as a normalised list of {value, label} pairs.
      */
     private function resolveFieldPlaceholders($fields, ?\Illuminate\Database\Eloquent\Model $formable)
     {
@@ -81,6 +104,17 @@ class FormRequestController extends Controller
             $field->label = $this->placeholderResolver->interpolate($field->label, $formable);
             $field->placeholder = $this->placeholderResolver->interpolate($field->placeholder, $formable);
             $field->default_value = $this->placeholderResolver->interpolate($field->default_value, $formable);
+
+            if ($field->hasDynamicOptions()) {
+                $field->options = $this->resolverRegistry
+                    ->resolve($field->options_source)
+                    ->map(fn ($row) => ['value' => $row['id'], 'label' => $row['name']])
+                    ->all();
+            } else {
+                $field->options = collect($field->options ?? [])
+                    ->map(fn ($o) => ['value' => $o, 'label' => $o])
+                    ->all();
+            }
         });
     }
 
@@ -192,6 +226,14 @@ class FormRequestController extends Controller
             return back()->withErrors(['form' => 'This form has been cancelled.']);
         }
 
+        // Permission-assigned forms can only be submitted by users that hold
+        // the permission (directly or via any of their roles).
+        if ($formRequest->assignee_strategy === 'permission' && $formRequest->assignee_permission) {
+            if (! $request->user()->can($formRequest->assignee_permission)) {
+                return back()->withErrors(['form' => "You do not have permission \"{$formRequest->assignee_permission}\" required to complete this form."]);
+            }
+        }
+
         $visibility = $this->computeVisibility($formRequest, $request->all());
         $rules = $this->buildValidationRules($formRequest, $visibility);
         $validated = $request->validate($rules);
@@ -245,7 +287,7 @@ class FormRequestController extends Controller
                 'number' => $fieldRules[] = 'numeric',
                 'date' => $fieldRules[] = 'date',
                 'phone' => $fieldRules[] = 'regex:/^[\d\s\+\-\(\)\.]+$/',
-                'checkbox' => array_push($fieldRules, 'array', 'max:50') ? null : null,
+                'checkbox', 'multiselect', 'button_group_multi' => array_push($fieldRules, 'array', 'max:50') ? null : null,
                 default => null,
             };
 
@@ -254,13 +296,21 @@ class FormRequestController extends Controller
                 $fieldRules[] = $field->type === 'textarea' ? 'max:5000' : 'max:500';
             }
 
-            if (in_array($field->type, ['select', 'radio'])) {
+            if (in_array($field->type, ['select', 'radio', 'button_group'])) {
                 $fieldRules[] = 'string';
                 $fieldRules[] = 'max:500';
             }
 
-            if ($field->type === 'checkbox') {
+            if (in_array($field->type, ['checkbox', 'multiselect', 'button_group_multi'])) {
                 $rules["field_{$field->id}.*"] = ['string', 'max:500'];
+            }
+
+            // Signatures arrive as a base64 data URL. 1MB cap covers a typical
+            // signature_pad PNG with headroom; anything larger is suspicious.
+            if ($field->type === 'signature') {
+                $fieldRules[] = 'string';
+                $fieldRules[] = 'max:1048576';
+                $fieldRules[] = 'starts_with:data:image/';
             }
 
             $rules["field_{$field->id}"] = $fieldRules;

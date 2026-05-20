@@ -56,6 +56,7 @@ import {
     XIcon,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormFieldDisplay } from '@/components/form-renderer/form-field-display';
 
 import SubmissionContent from '@/components/employment-applications/submission-content';
 
@@ -248,10 +249,22 @@ interface FormFieldData {
     type: string;
     is_required: boolean;
     options: string[] | null;
+    options_source: string | null;
     placeholder: string | null;
     help_text: string | null;
     default_value: string | null;
     visible_if: { field_id: number; operator: 'equals' | 'not_equals' | 'empty' | 'not_empty'; value: string | null } | null;
+}
+
+interface FormResponseSnapshotRow {
+    field_id: number;
+    label: string;
+    type: string;
+    options: string[] | null;
+    options_source: string | null;
+    sort_order: number;
+    value: string | string[] | null;
+    value_display: string | string[] | null;
 }
 
 interface FormRequestData {
@@ -260,10 +273,13 @@ interface FormRequestData {
     delivery_method: string;
     recipient_name: string;
     recipient_email: string | null;
+    assignee_strategy: string | null;
+    assignee_permission: string | null;
     submitted_at: string | null;
     opened_at: string | null;
     expires_at: string | null;
     responses: Record<string, unknown> | null;
+    response_snapshot: FormResponseSnapshotRow[] | null;
     form_template: { id: number; name: string; fields: FormFieldData[] } | null;
     sent_by: { id: number; name: string } | null;
 }
@@ -397,12 +413,13 @@ function UserAvatar({ name, className }: { name: string; className?: string }) {
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onReply, isReply }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onOpenFormResponse, onReply, isReply }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
     onOpenRefCheck?: (referenceId: number) => void;
+    onOpenFormResponse?: (formRequestId: number) => void;
     onReply?: (commentId: number, userName: string) => void;
     isReply?: boolean;
 }) {
@@ -411,7 +428,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
     const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
     const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
-    const formSubmittedMeta = comment.metadata?.type === 'form_submitted' ? comment.metadata as { type: string; form_request_id: number; form_name: string; responses: Record<string, string> } : undefined;
+    const formSubmittedMeta = comment.metadata?.type === 'form_submitted' ? comment.metadata as { type: string; form_request_id: number; form_name: string } : undefined;
     const onboardedMeta = comment.metadata?.type === 'onboarded' ? comment.metadata as { type: string; eh_employee_id: number; location_name: string; company_code: string } : undefined;
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
 
@@ -460,8 +477,8 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     if (isSystem && formSubmittedMeta) {
         return (
             <div className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-100">
-                    <Clipboard className="h-4 w-4 text-purple-600" />
+                <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                    <Clipboard className="text-muted-foreground h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
                     <p className="text-sm">
@@ -469,27 +486,14 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                         <span className="text-muted-foreground"> {comment.body}</span>
                     </p>
                     <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
-                    {formSubmittedMeta.responses && (
-                        <div className="mt-2 rounded-md border bg-purple-50/50 p-3 dark:bg-purple-950/20">
-                            <p className="mb-1.5 text-xs font-medium text-purple-700 dark:text-purple-300">Responses</p>
-                            <div className="space-y-1">
-                                {(Array.isArray(formSubmittedMeta.responses)
-                                    ? formSubmittedMeta.responses.map((item: { label: string; value: string }, idx: number) => (
-                                          <div key={idx} className="text-xs">
-                                              <span className="font-medium text-muted-foreground">{item.label}:</span>{' '}
-                                              <span className="text-foreground break-words">{String(item.value || '—')}</span>
-                                          </div>
-                                      ))
-                                    : Object.entries(formSubmittedMeta.responses).map(([label, value]) => (
-                                          <div key={label} className="text-xs">
-                                              <span className="font-medium text-muted-foreground">{label}:</span>{' '}
-                                              <span className="text-foreground break-words">{Array.isArray(value) ? value.join(', ') : String(value || '—')}</span>
-                                          </div>
-                                      ))
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    <button
+                        type="button"
+                        onClick={() => onOpenFormResponse?.(formSubmittedMeta.form_request_id)}
+                        className="bg-background text-foreground hover:bg-muted mt-1.5 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
+                    >
+                        <Clipboard className="h-3.5 w-3.5" />
+                        View response
+                    </button>
                 </div>
             </div>
         );
@@ -498,8 +502,8 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     if (isSystem && refCheckMeta) {
         return (
             <div className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                    <ClipboardList className="h-4 w-4 text-emerald-600" />
+                <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                    <ClipboardList className="text-muted-foreground h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
                     <p className="text-sm">
@@ -511,7 +515,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                     <button
                         type="button"
                         onClick={() => onOpenRefCheck?.(refCheckMeta.reference_id)}
-                        className="mt-1.5 flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 transition-colors"
+                        className="bg-background text-foreground hover:bg-muted mt-1.5 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
                     >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         View Reference Check
@@ -1987,20 +1991,80 @@ function FormFillPane({
     const [values, setValues] = useState<Record<number, FormResponseValue>>({});
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
+    const [dynamicOptions, setDynamicOptions] = useState<Record<string, { value: string; label: string }[]>>({});
 
     const fields = useMemo(() => formRequest?.form_template?.fields ?? [], [formRequest]);
+
+    // Hydrate any dynamic options sources referenced by the form. The set of
+    // distinct sources is tiny (usually one or two) so we batch all fetches up
+    // front and key results by source name — fields sharing a source reuse.
+    useEffect(() => {
+        if (!formRequest) return;
+        const sources = Array.from(
+            new Set(fields.map((f) => f.options_source).filter((s): s is string => !!s)),
+        );
+        if (sources.length === 0) return;
+        let cancelled = false;
+        Promise.all(
+            sources.map((src) =>
+                fetch(route('form-templates.options-sources.resolve', { source: src }), {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                })
+                    .then((r) => (r.ok ? r.json() : { options: [] }))
+                    .then((data: { options: { id: string; name: string }[] }) => ({
+                        src,
+                        opts: (data.options ?? []).map((o) => ({ value: String(o.id), label: o.name })),
+                    }))
+                    .catch(() => ({ src, opts: [] as { value: string; label: string }[] })),
+            ),
+        ).then((results) => {
+            if (cancelled) return;
+            setDynamicOptions(Object.fromEntries(results.map(({ src, opts }) => [src, opts])));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [formRequest, fields]);
 
     // Visibility map: walks fields in order, evaluating each rule against the
     // values collected so far. Hidden fields are excluded from required-check
     // and stripped from the submission payload.
     const visibility = useMemo(() => evaluateVisibility(fields, values), [fields, values]);
 
+    // Pagination: split fields into pages at page_break markers. Single-page
+    // forms (no markers) get one page with everything.
+    const pages = useMemo(() => {
+        const result: FormFieldData[][] = [[]];
+        for (const f of fields) {
+            if (f.type === 'page_break') {
+                result.push([]);
+            } else {
+                result[result.length - 1].push(f);
+            }
+        }
+        return result.filter((p) => p.length > 0);
+    }, [fields]);
+    const pageCount = pages.length;
+    const isPaginated = pageCount > 1;
+    const [currentPage, setCurrentPage] = useState(0);
+
+    // Reset pagination when the form switches.
+    useEffect(() => {
+        setCurrentPage(0);
+    }, [formRequest?.id]);
+
+    const visibleFieldsOnCurrentPage = useMemo(
+        () => (pages[currentPage] ?? []).filter((f) => visibility[f.id]),
+        [pages, currentPage, visibility],
+    );
+
     useEffect(() => {
         if (!formRequest) return;
         const initial: Record<number, FormResponseValue> = {};
         for (const field of fields) {
             const def = field.default_value ?? '';
-            if (field.type === 'checkbox') {
+            if (field.type === 'checkbox' || field.type === 'multiselect' || field.type === 'button_group_multi') {
                 initial[field.id] = def
                     ? def.split(',').map((v) => v.trim()).filter(Boolean)
                     : [];
@@ -2016,14 +2080,6 @@ function FormFillPane({
         setValues((prev) => ({ ...prev, [fieldId]: v }));
     }
 
-    function toggleCheckbox(fieldId: number, option: string, checked: boolean) {
-        setValues((prev) => {
-            const current = Array.isArray(prev[fieldId]) ? (prev[fieldId] as string[]) : [];
-            const next = checked ? [...current, option] : current.filter((v) => v !== option);
-            return { ...prev, [fieldId]: next };
-        });
-    }
-
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!formRequest) return;
@@ -2031,7 +2087,7 @@ function FormFillPane({
         const localErrors: Record<string, string> = {};
         for (const field of fields) {
             if (!field.is_required) continue;
-            if (['heading', 'paragraph'].includes(field.type)) continue;
+            if (['heading', 'paragraph', 'page_break'].includes(field.type)) continue;
             if (!visibility[field.id]) continue;
             const v = values[field.id];
             const empty = Array.isArray(v) ? v.length === 0 : !v || !String(v).trim();
@@ -2041,12 +2097,18 @@ function FormFillPane({
         }
         if (Object.keys(localErrors).length > 0) {
             setFieldErrors(localErrors);
+            // If errors landed on a different page, jump there so the user sees them.
+            const firstErrorId = Number(Object.keys(localErrors)[0]?.replace('field_', ''));
+            if (firstErrorId) {
+                const idx = pages.findIndex((p) => p.some((f) => f.id === firstErrorId));
+                if (idx >= 0 && idx !== currentPage) setCurrentPage(idx);
+            }
             return;
         }
 
         const payload: Record<string, FormResponseValue> = {};
         for (const field of fields) {
-            if (['heading', 'paragraph'].includes(field.type)) continue;
+            if (['heading', 'paragraph', 'page_break'].includes(field.type)) continue;
             // Discard values from hidden fields — server will too, but this keeps the wire clean.
             payload[`field_${field.id}`] = visibility[field.id] ? (values[field.id] ?? '') : '';
         }
@@ -2091,136 +2153,158 @@ function FormFillPane({
             </div>
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                {isPaginated && (
+                    <div className="text-muted-foreground border-b px-4 py-1.5 text-right text-xs">
+                        Page {currentPage + 1} of {pageCount}
+                    </div>
+                )}
                 {/* Scrollable body */}
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
                     <div className="space-y-4">
-                        {fields.map((field) => {
+                        {pages[currentPage]?.map((field) => {
                             if (!visibility[field.id]) return null;
-                            if (field.type === 'heading') {
-                                return (
-                                    <h3 key={field.id} className="border-b pb-1 text-xs font-semibold uppercase tracking-wide">
-                                        {field.label}
-                                    </h3>
-                                );
-                            }
-                            if (field.type === 'paragraph') {
-                                return (
-                                    <p key={field.id} className="text-xs text-muted-foreground">
-                                        {field.label}
-                                    </p>
-                                );
-                            }
-
-                            const v = values[field.id];
-                            const stringValue = typeof v === 'string' ? v : '';
-                            const arrayValue = Array.isArray(v) ? v : [];
                             const err = fieldErrors[`field_${field.id}`];
-                            const fieldId = `fill-field-${field.id}`;
-
                             return (
-                                <div key={field.id}>
-                                    <Label htmlFor={fieldId} className="mb-1 block text-xs font-medium">
-                                        {field.label}
-                                        {field.is_required && <span className="ml-0.5 text-red-500">*</span>}
-                                    </Label>
-
-                                    {field.type === 'textarea' ? (
-                                        <Textarea
-                                            id={fieldId}
-                                            value={stringValue}
-                                            onChange={(e) => setValue(field.id, e.target.value)}
-                                            placeholder={field.placeholder ?? ''}
-                                            rows={3}
-                                            className="text-xs md:text-xs"
-                                        />
-                                    ) : field.type === 'select' ? (
-                                        <Select value={stringValue} onValueChange={(val) => setValue(field.id, val)}>
-                                            <SelectTrigger id={fieldId} className="h-7 text-xs md:text-xs">
-                                                <SelectValue placeholder="Select an option" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {(field.options ?? []).map((opt) => (
-                                                    <SelectItem key={opt} value={opt} className="text-xs">
-                                                        {opt}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : field.type === 'radio' ? (
-                                        <RadioGroup value={stringValue} onValueChange={(val) => setValue(field.id, val)} className="gap-1.5">
-                                            {(field.options ?? []).map((opt) => (
-                                                <div key={opt} className="flex items-center gap-2">
-                                                    <RadioGroupItem value={opt} id={`${fieldId}-${opt}`} className="h-3.5 w-3.5" />
-                                                    <Label htmlFor={`${fieldId}-${opt}`} className="cursor-pointer text-xs font-normal">
-                                                        {opt}
-                                                    </Label>
-                                                </div>
-                                            ))}
-                                        </RadioGroup>
-                                    ) : field.type === 'checkbox' ? (
-                                        <div className="space-y-1.5">
-                                            {(field.options ?? []).map((opt) => (
-                                                <div key={opt} className="flex items-center gap-2">
-                                                    <Checkbox
-                                                        id={`${fieldId}-${opt}`}
-                                                        checked={arrayValue.includes(opt)}
-                                                        onCheckedChange={(checked) => toggleCheckbox(field.id, opt, !!checked)}
-                                                        className="h-3.5 w-3.5"
-                                                    />
-                                                    <Label htmlFor={`${fieldId}-${opt}`} className="cursor-pointer text-xs font-normal">
-                                                        {opt}
-                                                    </Label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <Input
-                                            id={fieldId}
-                                            type={
-                                                field.type === 'number'
-                                                    ? 'number'
-                                                    : field.type === 'email'
-                                                      ? 'email'
-                                                      : field.type === 'phone'
-                                                        ? 'tel'
-                                                        : field.type === 'date'
-                                                          ? 'date'
-                                                          : 'text'
-                                            }
-                                            value={stringValue}
-                                            onChange={(e) => setValue(field.id, e.target.value)}
-                                            placeholder={field.placeholder ?? ''}
-                                            className="h-7 text-xs md:text-xs"
-                                        />
-                                    )}
-
-                                    {field.help_text && (
-                                        <p className="mt-1 text-xs text-muted-foreground">{field.help_text}</p>
-                                    )}
-                                    {err && <p className="mt-1 text-xs text-red-500">{err}</p>}
-                                </div>
+                                <FormFieldDisplay
+                                    key={field.id}
+                                    field={{
+                                        id: field.id,
+                                        label: field.label,
+                                        type: field.type,
+                                        is_required: field.is_required,
+                                        options: field.options,
+                                        options_source: field.options_source,
+                                        placeholder: field.placeholder,
+                                        help_text: field.help_text,
+                                    }}
+                                    value={values[field.id]}
+                                    mode="editable"
+                                    onChange={(v) => setValue(field.id, v ?? '')}
+                                    dynamicOptions={field.options_source ? dynamicOptions[field.options_source] : undefined}
+                                    error={err}
+                                />
                             );
                         })}
                     </div>
                 </div>
 
                 {/* Pinned footer */}
-                <div className="bg-background flex shrink-0 items-center justify-end gap-2 border-t px-4 py-3">
+                <div className="bg-background flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3">
                     <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={saving}>
-                        {saving ? (
-                            <>
-                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                Submitting...
-                            </>
-                        ) : (
-                            'Submit form'
+                    <div className="flex items-center gap-2">
+                        {isPaginated && currentPage > 0 && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                                disabled={saving}
+                            >
+                                Previous
+                            </Button>
                         )}
-                    </Button>
+                        {isPaginated && currentPage < pageCount - 1 ? (
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    // Per-page required check before advancing.
+                                    const errs: Record<string, string> = {};
+                                    for (const f of visibleFieldsOnCurrentPage) {
+                                        if (!f.is_required) continue;
+                                        if (['heading', 'paragraph', 'page_break'].includes(f.type)) continue;
+                                        const v = values[f.id];
+                                        const empty = Array.isArray(v) ? v.length === 0 : !v || !String(v).trim();
+                                        if (empty) errs[`field_${f.id}`] = `${f.label} is required.`;
+                                    }
+                                    if (Object.keys(errs).length > 0) {
+                                        setFieldErrors(errs);
+                                        return;
+                                    }
+                                    setFieldErrors({});
+                                    setCurrentPage((p) => Math.min(pageCount - 1, p + 1));
+                                }}
+                                disabled={saving}
+                            >
+                                Next
+                            </Button>
+                        ) : (
+                            <Button type="submit" disabled={saving}>
+                                {saving ? (
+                                    <>
+                                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    'Submit form'
+                                )}
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </form>
+        </aside>
+    );
+}
+
+function FormResponsePane({
+    formRequest,
+    onClose,
+}: {
+    formRequest: FormRequestData | null;
+    onClose: () => void;
+}) {
+    if (!formRequest) return null;
+
+    const snapshot = formRequest.response_snapshot ?? [];
+
+    return (
+        <aside
+            className="bg-background fixed inset-y-0 right-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
+            aria-label="View submitted form"
+        >
+            <div className="bg-background flex shrink-0 items-start justify-between gap-2 border-b px-4 py-3">
+                <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold">{formRequest.form_template?.name ?? 'Form'}</p>
+                    <p className="text-muted-foreground truncate text-xs">
+                        Submitted by <span className="text-foreground">{formRequest.recipient_name}</span>
+                        {formRequest.submitted_at && <> · {formatDateTime(formRequest.submitted_at)}</>}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors"
+                    title="Close"
+                    aria-label="Close response pane"
+                >
+                    <XIcon className="h-4 w-4" />
+                </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                {snapshot.length === 0 ? (
+                    <p className="text-muted-foreground py-8 text-center text-xs italic">No response snapshot available.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {snapshot.map((row) => (
+                            <FormFieldDisplay
+                                key={row.field_id}
+                                field={{
+                                    id: row.field_id,
+                                    label: row.label,
+                                    type: row.type,
+                                    options: row.options,
+                                    options_source: row.options_source,
+                                }}
+                                value={row.value}
+                                valueDisplay={row.value_display}
+                                mode="readonly"
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
         </aside>
     );
 }
@@ -2231,6 +2315,18 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
+
+    // Permission-assigned forms can be filled by anyone holding the permission
+    // (directly or through any of their roles). Senior roles cover juniors as
+    // long as their permission grants overlap.
+    function canFillFormRequest(fr: FormRequestData): boolean {
+        if (auth.isAdmin) return true;
+        if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
+            return permissions.includes(fr.assignee_permission);
+        }
+        // User-assigned / email-recipient forms — fall back to the standard screening permission.
+        return permissions.includes('employment-applications.screen');
+    }
     const canView = auth.isAdmin || permissions.includes('employment-applications.view');
     const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
     const canWhsReview = auth.isAdmin || permissions.includes('employment-applications.whs-review');
@@ -2242,6 +2338,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [showOnboardModal, setShowOnboardModal] = useState(false);
     const [showSubmissionPane, setShowSubmissionPane] = useState(false);
     const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
+    const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
 
     // Reference check dialog
     const [refCheckOpen, setRefCheckOpen] = useState(false);
@@ -2386,7 +2483,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Enquiry`} />
 
-            <div className={cn('transition-[padding] duration-200', (showSubmissionPane || fillingFormRequest) && 'xl:pr-[520px]')}>
+            <div className={cn('transition-[padding] duration-200', (showSubmissionPane || fillingFormRequest || viewingFormRequest) && 'xl:pr-[520px]')}>
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {alertMessage && (
                     <Alert variant="destructive">
@@ -2585,6 +2682,10 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
                                                 onOpenRefCheck={openRefCheckDialog}
+                                                onOpenFormResponse={(id) => {
+                                                    const fr = formRequests?.find((f) => f.id === id);
+                                                    if (fr) setViewingFormRequest(fr);
+                                                }}
                                                 onReply={(id, userName) => setReplyingTo({ id, userName })}
                                             />
                                         ))}
@@ -2816,17 +2917,26 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     <div className="mb-4 rounded-lg border bg-background p-3">
                                         <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Forms</span>
                                         <div className="space-y-2">
-                                            {formRequests.filter((fr) => fr.status !== 'submitted').map((fr) => (
+                                            {formRequests.filter((fr) => fr.status !== 'submitted').map((fr) => {
+                                                const isPermissionAssigned = fr.assignee_strategy === 'permission' && !!fr.assignee_permission;
+                                                const isInApp = fr.delivery_method === 'in_app';
+                                                const fillable = canFillFormRequest(fr);
+                                                // In-app forms have no send/open lifecycle — show a neutral
+                                                // "open" badge rather than the email-flow "sent" / "opened".
+                                                const statusLabel = isInApp && fr.status !== 'submitted' && fr.status !== 'cancelled' ? 'open' : fr.status;
+                                                return (
                                                 <div key={fr.id} className="rounded-md border p-2.5">
                                                     <div className="flex items-center justify-between gap-2">
                                                         <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
-                                                        <Badge variant="secondary" className="shrink-0 text-xs">{fr.status}</Badge>
+                                                        <Badge variant="secondary" className="shrink-0 text-xs">{statusLabel}</Badge>
                                                     </div>
                                                     <p className="mt-0.5 text-xs text-muted-foreground">
-                                                        {fr.delivery_method === 'email' ? 'Via email' : 'In-person'}
+                                                        {fr.delivery_method === 'email' ? 'Via email'
+                                                            : isInApp ? 'In-app'
+                                                            : 'In-person'}
                                                         {fr.sent_by && ` by ${fr.sent_by.name}`}
                                                     </p>
-                                                    {canScreen && (
+                                                    {fillable && (
                                                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                             <Button
                                                                 variant="default"
@@ -2838,16 +2948,26 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                                 <Pencil className="mr-1 h-3 w-3" />
                                                                 Fill out
                                                             </Button>
-                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
-                                                                Resend
-                                                            </Button>
-                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
-                                                                Cancel
-                                                            </Button>
+                                                            {!isPermissionAssigned && canScreen && (
+                                                                <>
+                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
+                                                                        Resend
+                                                                    </Button>
+                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
+                                                                        Cancel
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                            {isPermissionAssigned && canScreen && (
+                                                                <Button variant="outline" size="sm" className="h-7 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
+                                                                    Cancel
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -3143,6 +3263,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             <FormFillPane
                 formRequest={fillingFormRequest}
                 onClose={() => setFillingFormRequest(null)}
+            />
+
+            {/* View a submitted form response */}
+            <FormResponsePane
+                formRequest={viewingFormRequest}
+                onClose={() => setViewingFormRequest(null)}
             />
 
         </AppLayout>

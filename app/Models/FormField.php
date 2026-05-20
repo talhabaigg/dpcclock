@@ -14,6 +14,7 @@ class FormField extends Model
         'sort_order',
         'is_required',
         'options',
+        'options_source',
         'placeholder',
         'help_text',
         'default_value',
@@ -36,11 +37,16 @@ class FormField extends Model
 
     public function isDisplayOnly(): bool
     {
-        return in_array($this->type, ['heading', 'paragraph']);
+        return in_array($this->type, ['heading', 'paragraph', 'page_break']);
     }
 
     public function hasOptions(): bool
     {
-        return in_array($this->type, ['select', 'radio', 'checkbox']);
+        return in_array($this->type, ['select', 'radio', 'checkbox', 'multiselect', 'button_group', 'button_group_multi']);
+    }
+
+    public function hasDynamicOptions(): bool
+    {
+        return $this->hasOptions() && ! empty($this->options_source);
     }
 }

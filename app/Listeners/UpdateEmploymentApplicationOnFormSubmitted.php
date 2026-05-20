@@ -21,25 +21,11 @@ class UpdateEmploymentApplicationOnFormSubmitted
             return;
         }
 
-        // Build a readable response summary for the comment
+        // The comment is now just a marker. Full responses live on the
+        // FormRequest's `response_snapshot` column; the frontend opens a pane
+        // keyed by form_request_id to read them. No denormalised duplicate.
         $formName = $formRequest->formTemplate?->name ?? 'Form';
-        $fields = $formRequest->formTemplate?->fields ?? collect();
-        $responses = $formRequest->responses ?? [];
 
-        $responseSummary = [];
-        foreach ($fields as $field) {
-            if ($field->isDisplayOnly()) {
-                continue;
-            }
-            $value = $responses[$field->id] ?? null;
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-            $displayValue = is_array($value) ? implode(', ', $value) : $value;
-            $responseSummary[] = ['label' => $field->label, 'value' => $displayValue];
-        }
-
-        // Prevent duplicate comments
         $alreadyCommented = $application->comments()
             ->where('metadata->type', 'form_submitted')
             ->where('metadata->form_request_id', $formRequest->id)
@@ -52,7 +38,6 @@ class UpdateEmploymentApplicationOnFormSubmitted
                     'type' => 'form_submitted',
                     'form_request_id' => $formRequest->id,
                     'form_name' => $formName,
-                    'responses' => $responseSummary,
                 ],
                 $formRequest->sent_by,
             );

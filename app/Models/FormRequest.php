@@ -5,9 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class FormRequest extends Model
+class FormRequest extends Model implements HasMedia
 {
+    use InteractsWithMedia;
+
     protected $fillable = [
         'form_template_id',
         'formable_type',
@@ -17,7 +21,10 @@ class FormRequest extends Model
         'delivery_method',
         'recipient_name',
         'recipient_email',
+        'assignee_strategy',
+        'assignee_permission',
         'responses',
+        'response_snapshot',
         'sent_by',
         'submitted_at',
         'opened_at',
@@ -32,6 +39,7 @@ class FormRequest extends Model
     {
         return [
             'responses' => 'array',
+            'response_snapshot' => 'array',
             'submitted_at' => 'datetime',
             'opened_at' => 'datetime',
             'expires_at' => 'datetime',
@@ -82,5 +90,10 @@ class FormRequest extends Model
     public function getFormUrl(): string
     {
         return url("/form/{$this->token}");
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('signatures');
     }
 }

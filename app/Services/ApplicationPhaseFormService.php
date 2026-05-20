@@ -71,6 +71,25 @@ class ApplicationPhaseFormService
                 continue;
             }
 
+            // Permission-based mapping = in-app, visible to anyone with the
+            // permission. Doesn't pick a specific user, doesn't send email.
+            // Senior roles that include the permission automatically qualify.
+            if ($mapping->assignee_strategy === 'permission') {
+                $formRequest = $this->formService->createAndSend(
+                    template: $mapping->formTemplate,
+                    deliveryMethod: 'in_app',
+                    admin: $admin,
+                    recipientName: "Anyone with permission: {$mapping->assignee_value}",
+                    recipientEmail: null,
+                    formable: $formable,
+                    assigneeStrategy: 'permission',
+                    assigneePermission: $mapping->assignee_value,
+                );
+                $created->push($formRequest);
+                continue;
+            }
+
+            // User-based mapping: resolve to the specific user and email them.
             $assignee = $mapping->resolveAssignee();
 
             if (! $assignee) {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FormTemplate;
 use App\Services\FormPlaceholderResolver;
+use App\Services\FormResolverRegistry;
 use App\Services\FormVisibilityEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -70,12 +71,34 @@ class FormTemplateController extends Controller
         };
     }
 
+    /**
+     * List the available dynamic options sources (Users, Employees, ...).
+     */
+    public function optionsSources(FormResolverRegistry $registry): JsonResponse
+    {
+        return response()->json(['sources' => $registry->list()]);
+    }
+
+    /**
+     * Resolve a single source key into its current {id, name} options. Used by
+     * both the builder (for preview) and the public form renderer.
+     */
+    public function resolveOptionsSource(string $source, FormResolverRegistry $registry): JsonResponse
+    {
+        if (! $registry->has($source)) {
+            return response()->json(['options' => []], 404);
+        }
+
+        return response()->json(['options' => $registry->resolve($source)]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate($this->fieldValidationRules());
 
         $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
         $this->validateVisibilityRules($validated);
+        $this->validateOptionsSources($validated, app(FormResolverRegistry::class));
 
         $template = FormTemplate::create([
             'name' => $validated['name'],
@@ -94,7 +117,8 @@ class FormTemplateController extends Controller
                 'type' => $field['type'],
                 'sort_order' => $index,
                 'is_required' => $field['is_required'] ?? false,
-                'options' => $field['options'] ?? null,
+                'options' => $this->normaliseOptions($field),
+                'options_source' => $field['options_source'] ?? null,
                 'placeholder' => $field['placeholder'] ?? null,
                 'help_text' => $field['help_text'] ?? null,
                 'default_value' => $field['default_value'] ?? null,
@@ -123,6 +147,7 @@ class FormTemplateController extends Controller
 
         $this->validatePlaceholderTokens($validated, app(FormPlaceholderResolver::class));
         $this->validateVisibilityRules($validated);
+        $this->validateOptionsSources($validated, app(FormResolverRegistry::class));
 
         $formTemplate->update([
             'name' => $validated['name'],
@@ -145,7 +170,8 @@ class FormTemplateController extends Controller
                 'type' => $field['type'],
                 'sort_order' => $index,
                 'is_required' => $field['is_required'] ?? false,
-                'options' => $field['options'] ?? null,
+                'options' => $this->normaliseOptions($field),
+                'options_source' => $field['options_source'] ?? null,
                 'placeholder' => $field['placeholder'] ?? null,
                 'help_text' => $field['help_text'] ?? null,
                 'default_value' => $field['default_value'] ?? null,
@@ -192,6 +218,7 @@ class FormTemplateController extends Controller
                 'sort_order' => $f->sort_order,
                 'is_required' => $f->is_required,
                 'options' => $f->options,
+                'options_source' => $f->options_source,
                 'placeholder' => $f->placeholder,
                 'help_text' => $f->help_text,
                 'default_value' => $f->default_value,
@@ -227,15 +254,18 @@ class FormTemplateController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        $registry = app(FormResolverRegistry::class);
         $createdIds = [];
         $importedFields = array_values($data['fields']);
         foreach ($importedFields as $index => $field) {
+            $source = $field['options_source'] ?? null;
             $created = $template->fields()->create([
                 'label' => $field['label'] ?? 'Untitled',
                 'type' => $field['type'] ?? 'text',
                 'sort_order' => $index,
                 'is_required' => $field['is_required'] ?? false,
-                'options' => $field['options'] ?? null,
+                'options' => $source ? null : ($field['options'] ?? null),
+                'options_source' => $source && $registry->has($source) ? $source : null,
                 'placeholder' => $field['placeholder'] ?? null,
                 'help_text' => $field['help_text'] ?? null,
                 'default_value' => $field['default_value'] ?? null,
@@ -297,9 +327,10 @@ class FormTemplateController extends Controller
             'is_active' => 'boolean',
             'fields' => 'required|array|min:1',
             'fields.*.label' => 'required|string|max:1000',
-            'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,heading,paragraph',
+            'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,multiselect,button_group,button_group_multi,heading,paragraph,signature,page_break',
             'fields.*.is_required' => 'boolean',
             'fields.*.options' => 'nullable|array',
+            'fields.*.options_source' => 'nullable|string|max:64',
             'fields.*.placeholder' => 'nullable|string|max:255',
             'fields.*.help_text' => 'nullable|string|max:500',
             'fields.*.default_value' => 'nullable|string|max:1000',
@@ -347,8 +378,8 @@ class FormTemplateController extends Controller
             }
 
             $sourceField = $fields[$sourceIndex];
-            if (! in_array($sourceField['type'] ?? null, ['radio', 'select', 'checkbox'], true)) {
-                $errors["{$key}.source_index"] = 'Source field must be a radio, select, or checkbox question.';
+            if (! in_array($sourceField['type'] ?? null, ['radio', 'select', 'checkbox', 'multiselect', 'button_group', 'button_group_multi'], true)) {
+                $errors["{$key}.source_index"] = 'Source field must be a choice-style question.';
                 continue;
             }
 
@@ -450,11 +481,52 @@ class FormTemplateController extends Controller
                 'sort_order' => $f->sort_order,
                 'is_required' => $f->is_required,
                 'options' => $f->options,
+                'options_source' => $f->options_source,
                 'placeholder' => $f->placeholder,
                 'help_text' => $f->help_text,
                 'default_value' => $f->default_value,
                 'visible_if' => $this->visibleIfToWire($f->visible_if, $idToIndex),
             ])->all(),
         ];
+    }
+
+    /**
+     * A field with options_source set has its options resolved at render time;
+     * inline options are ignored. Persisting NULL keeps the data clean.
+     */
+    private function normaliseOptions(array $field): ?array
+    {
+        if (! empty($field['options_source'])) {
+            return null;
+        }
+
+        return $field['options'] ?? null;
+    }
+
+    /**
+     * Reject any options_source that isn't in the allowlist registry. Without
+     * this guard an admin could persist an arbitrary string that the renderer
+     * later tries to fetch.
+     */
+    private function validateOptionsSources(array $validated, FormResolverRegistry $registry): void
+    {
+        $errors = [];
+        foreach ($validated['fields'] ?? [] as $i => $field) {
+            $source = $field['options_source'] ?? null;
+            if ($source === null || $source === '') {
+                continue;
+            }
+            if (! in_array($field['type'] ?? '', ['select', 'radio', 'checkbox', 'multiselect', 'button_group', 'button_group_multi'], true)) {
+                $errors["fields.{$i}.options_source"] = 'Dynamic options only apply to choice-style questions.';
+                continue;
+            }
+            if (! $registry->has($source)) {
+                $errors["fields.{$i}.options_source"] = "Unknown options source: {$source}";
+            }
+        }
+
+        if (! empty($errors)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
     }
 }

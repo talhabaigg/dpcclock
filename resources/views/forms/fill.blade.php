@@ -67,6 +67,35 @@
         .section-heading { font-size: 17px; font-weight: 600; color: #0f172a; padding: 8px 0 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 4px; }
         .info-text { font-size: 14px; color: #64748b; line-height: 1.6; padding: 4px 0; }
 
+        /* Multi-select (native — falls back gracefully on iOS) */
+        .multiselect-native { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; font-family: inherit; background: #fff; }
+
+        /* Button group (iPad-friendly) */
+        .button-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn-option { flex: 1 1 auto; min-width: 90px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+            padding: 10px 16px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1e293b;
+            font-size: 15px; font-weight: 500; cursor: pointer; user-select: none; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+        .btn-option:hover { background: #f8fafc; }
+        .btn-option input { position: absolute; opacity: 0; pointer-events: none; }
+        .btn-option:has(input:checked) { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+        /* Pagination */
+        .page-indicator { font-size: 12px; color: #64748b; text-align: right; padding: 0 20px 8px; }
+        .nav-buttons { display: flex; gap: 10px; }
+        .nav-buttons .submit-btn { flex: 1; }
+        .nav-btn { flex: 1; padding: 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; font-family: inherit; }
+        .nav-btn.nav-back { background: #fff; color: #334155; }
+        .nav-btn.nav-back:hover { background: #f8fafc; }
+        .nav-btn.nav-next { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .nav-btn.nav-next:hover { background: #1d4ed8; }
+
+        /* Signature */
+        .signature-block { display: flex; flex-direction: column; gap: 6px; }
+        .signature-canvas { width: 100%; height: 180px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; touch-action: none; cursor: crosshair; }
+        .signature-canvas.has-error { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1); }
+        .signature-clear { align-self: flex-start; padding: 4px 10px; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #64748b; cursor: pointer; font-family: inherit; }
+        .signature-clear:hover { background: #f8fafc; color: #1e293b; }
+
         /* Submit area */
         .submit-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
         .submit-btn { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
@@ -111,7 +140,27 @@
                     <h2>{{ $formRequest->formTemplate->name }}</h2>
                 </div>
                 <div class="form-body">
-                    @foreach($fields as $field)
+                    @php
+                        // Split fields into pages on page_break markers. Markers don't
+                        // render themselves — they're just separators. Single-page forms
+                        // (no markers) get one page containing everything.
+                        $pages = [[]];
+                        foreach ($fields as $f) {
+                            if ($f->type === 'page_break') {
+                                $pages[] = [];
+                            } else {
+                                $pages[count($pages) - 1][] = $f;
+                            }
+                        }
+                        $pages = array_values(array_filter($pages, fn ($p) => ! empty($p)));
+                        $pageCount = count($pages);
+                    @endphp
+                    @if($pageCount > 1)
+                        <div class="page-indicator" id="page-indicator">Page <span id="page-current">1</span> of {{ $pageCount }}</div>
+                    @endif
+                    @foreach($pages as $pageIndex => $pageFields)
+                    <div class="form-page" data-page="{{ $pageIndex }}" @if($pageIndex > 0) style="display:none" @endif>
+                    @foreach($pageFields as $field)
                         @php $visibleIfAttr = $field->visible_if ? json_encode($field->visible_if) : null; @endphp
                         @if($field->type === 'heading')
                             <div class="field-group" data-field-id="{{ $field->id }}" data-field-type="heading" @if($visibleIfAttr) data-visible-if='{{ $visibleIfAttr }}' @endif>
@@ -168,17 +217,17 @@
                                         {{ $field->is_required ? 'required' : '' }}>
                                         <option value="">Select an option</option>
                                         @foreach($field->options ?? [] as $option)
-                                            <option value="{{ $option }}" {{ $option === $defaultValue ? 'selected' : '' }}>{{ $option }}</option>
+                                            <option value="{{ $option['value'] }}" {{ (string) $option['value'] === (string) $defaultValue ? 'selected' : '' }}>{{ $option['label'] }}</option>
                                         @endforeach
                                     </select>
                                 @elseif($field->type === 'radio')
                                     <div class="option-list">
                                         @foreach($field->options ?? [] as $option)
                                             <label class="option-item">
-                                                <input type="radio" name="field_{{ $field->id }}" value="{{ $option }}"
-                                                    {{ $option === $defaultValue ? 'checked' : '' }}
+                                                <input type="radio" name="field_{{ $field->id }}" value="{{ $option['value'] }}"
+                                                    {{ (string) $option['value'] === (string) $defaultValue ? 'checked' : '' }}
                                                     {{ $field->is_required ? 'required' : '' }}>
-                                                {{ $option }}
+                                                {{ $option['label'] }}
                                             </label>
                                         @endforeach
                                     </div>
@@ -186,11 +235,47 @@
                                     <div class="option-list">
                                         @foreach($field->options ?? [] as $option)
                                             <label class="option-item">
-                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option }}"
-                                                    {{ in_array($option, $defaultArray, true) ? 'checked' : '' }}>
-                                                {{ $option }}
+                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option['value'] }}"
+                                                    {{ in_array((string) $option['value'], array_map('strval', $defaultArray), true) ? 'checked' : '' }}>
+                                                {{ $option['label'] }}
                                             </label>
                                         @endforeach
+                                    </div>
+                                @elseif($field->type === 'multiselect')
+                                    <select name="field_{{ $field->id }}[]" multiple size="6"
+                                        class="multiselect-native"
+                                        {{ $field->is_required ? 'required' : '' }}>
+                                        @foreach($field->options ?? [] as $option)
+                                            <option value="{{ $option['value'] }}"
+                                                {{ in_array((string) $option['value'], array_map('strval', $defaultArray), true) ? 'selected' : '' }}>{{ $option['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif($field->type === 'button_group')
+                                    <div class="button-group">
+                                        @foreach($field->options ?? [] as $option)
+                                            <label class="btn-option">
+                                                <input type="radio" name="field_{{ $field->id }}" value="{{ $option['value'] }}"
+                                                    {{ (string) $option['value'] === (string) $defaultValue ? 'checked' : '' }}
+                                                    {{ $field->is_required ? 'required' : '' }}>
+                                                <span>{{ $option['label'] }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                @elseif($field->type === 'button_group_multi')
+                                    <div class="button-group option-list">
+                                        @foreach($field->options ?? [] as $option)
+                                            <label class="btn-option">
+                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option['value'] }}"
+                                                    {{ in_array((string) $option['value'], array_map('strval', $defaultArray), true) ? 'checked' : '' }}>
+                                                <span>{{ $option['label'] }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                @elseif($field->type === 'signature')
+                                    <div class="signature-block" data-signature-field="{{ $field->id }}">
+                                        <canvas class="signature-canvas" data-signature-canvas-for="{{ $field->id }}" width="600" height="180"></canvas>
+                                        <input type="hidden" name="field_{{ $field->id }}" id="field_{{ $field->id }}" data-signature-hidden-for="{{ $field->id }}" value="">
+                                        <button type="button" class="signature-clear" data-signature-clear-for="{{ $field->id }}">Clear</button>
                                     </div>
                                 @endif
 
@@ -201,12 +286,22 @@
                             </div>
                         @endif
                     @endforeach
+                    </div>
+                    @endforeach
                 </div>
             </div>
 
             <div class="submit-section">
                 <p class="submit-error" id="submit-error"></p>
-                <button type="submit" class="submit-btn" id="submit-btn">Submit Form</button>
+                @if($pageCount > 1)
+                    <div class="nav-buttons" data-page-count="{{ $pageCount }}">
+                        <button type="button" class="nav-btn nav-back" id="nav-prev" style="display:none">Previous</button>
+                        <button type="button" class="nav-btn nav-next" id="nav-next">Next</button>
+                        <button type="submit" class="submit-btn" id="submit-btn" style="display:none">Submit Form</button>
+                    </div>
+                @else
+                    <button type="submit" class="submit-btn" id="submit-btn">Submit Form</button>
+                @endif
             </div>
         </form>
 
