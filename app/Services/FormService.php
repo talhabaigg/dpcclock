@@ -17,6 +17,7 @@ class FormService
 {
     public function __construct(
         private FormResolverRegistry $resolverRegistry,
+        private FormPlaceholderResolver $placeholderResolver,
     ) {}
 
 
@@ -218,6 +219,7 @@ class FormService
     private function buildResponseSnapshot(FormRequest $formRequest, array $responses): array
     {
         $fields = $formRequest->formTemplate->fields->sortBy('sort_order')->values();
+        $formable = $formRequest->formable;
         $snapshot = [];
 
         foreach ($fields as $field) {
@@ -231,7 +233,7 @@ class FormService
 
             $snapshot[] = [
                 'field_id' => $field->id,
-                'label' => $field->label,
+                'label' => $this->placeholderResolver->interpolate($field->label, $formable),
                 'type' => $field->type,
                 'options' => $field->options,
                 'options_source' => $field->options_source,

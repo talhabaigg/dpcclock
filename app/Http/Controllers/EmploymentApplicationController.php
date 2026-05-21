@@ -458,7 +458,7 @@ class EmploymentApplicationController extends Controller
                 'opened_at' => $fr->opened_at?->toISOString(),
                 'expires_at' => $fr->expires_at?->toISOString(),
                 'responses' => $fr->responses,
-                'response_snapshot' => $this->resolveSnapshotSignatureUrls($fr),
+                'response_snapshot' => $this->resolveSnapshotSignatureUrls($fr, $employmentApplication, $placeholderResolver),
                 'form_template' => $fr->formTemplate ? [
                     'id' => $fr->formTemplate->id,
                     'name' => $fr->formTemplate->name,
@@ -1010,15 +1010,27 @@ class EmploymentApplicationController extends Controller
      *
      * @return array<int, array<string,mixed>>|null
      */
-    private function resolveSnapshotSignatureUrls(\App\Models\FormRequest $fr): ?array
-    {
+    private function resolveSnapshotSignatureUrls(
+        \App\Models\FormRequest $fr,
+        EmploymentApplication $employmentApplication,
+        FormPlaceholderResolver $placeholderResolver,
+    ): ?array {
         $snapshot = $fr->response_snapshot;
         if (! is_array($snapshot)) {
             return $snapshot;
         }
         $mediaById = $fr->getMedia('signatures')->keyBy('id');
         foreach ($snapshot as $i => $row) {
-            if (! is_array($row) || ($row['type'] ?? null) !== 'signature') {
+            if (! is_array($row)) {
+                continue;
+            }
+            // Re-interpolate the label so snapshots taken before the snapshot
+            // builder learned to resolve placeholders still render with real
+            // values. No-op for already-resolved labels.
+            if (isset($row['label'])) {
+                $snapshot[$i]['label'] = $placeholderResolver->interpolate($row['label'], $employmentApplication);
+            }
+            if (($row['type'] ?? null) !== 'signature') {
                 continue;
             }
             $value = $row['value'] ?? null;

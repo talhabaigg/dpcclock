@@ -1,11 +1,13 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { format, isValid, parse } from 'date-fns';
 import { Check, ChevronDown, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
@@ -243,13 +245,16 @@ export function FormFieldDisplay({
         );
     }
     if (field.type === 'multiselect') {
+        const defaultPlaceholder = field.label
+            ? `Select ${field.label.replace(/[?:]+$/, '').toLowerCase()}...`
+            : 'Select options...';
         return (
             <div>
                 {labelEl}
                 <MultiSelectField
                     value={asArray(value)}
                     options={effectiveOptions}
-                    placeholder={field.placeholder ?? 'Select options'}
+                    placeholder={field.placeholder || defaultPlaceholder}
                     onChange={(next) => onChange?.(next)}
                 />
                 {helpEl}
@@ -262,7 +267,7 @@ export function FormFieldDisplay({
         return (
             <div>
                 {labelEl}
-                <div className="flex flex-wrap gap-2">
+                <div className="grid auto-rows-fr grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
                     {effectiveOptions.map((opt) => {
                         const selected = current === opt.value;
                         return (
@@ -271,7 +276,7 @@ export function FormFieldDisplay({
                                 key={opt.value}
                                 onClick={() => onChange?.(selected ? '' : opt.value)}
                                 className={
-                                    'min-h-[44px] flex-1 min-w-[80px] rounded-md border px-4 py-2 text-sm font-medium transition-colors ' +
+                                    'min-h-[40px] rounded-md border px-2 py-1.5 text-center text-xs font-medium leading-tight break-words hyphens-auto transition-colors ' +
                                     (selected
                                         ? 'bg-primary text-primary-foreground border-primary'
                                         : 'bg-background text-foreground hover:bg-muted border-input')
@@ -292,7 +297,7 @@ export function FormFieldDisplay({
         return (
             <div>
                 {labelEl}
-                <div className="flex flex-wrap gap-2">
+                <div className="grid auto-rows-fr grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
                     {effectiveOptions.map((opt) => {
                         const selected = current.includes(opt.value);
                         return (
@@ -306,7 +311,7 @@ export function FormFieldDisplay({
                                     onChange?.(next);
                                 }}
                                 className={
-                                    'min-h-[44px] flex-1 min-w-[80px] rounded-md border px-4 py-2 text-sm font-medium transition-colors ' +
+                                    'min-h-[40px] rounded-md border px-2 py-1.5 text-center text-xs font-medium leading-tight break-words hyphens-auto transition-colors ' +
                                     (selected
                                         ? 'bg-primary text-primary-foreground border-primary'
                                         : 'bg-background text-foreground hover:bg-muted border-input')
@@ -323,12 +328,29 @@ export function FormFieldDisplay({
         );
     }
 
-    // Default: text, number, email, phone, date
+    if (field.type === 'date') {
+        return (
+            <div>
+                {labelEl}
+                <DatePicker
+                    id={fieldId}
+                    value={asString(value)}
+                    onChange={(v) => onChange?.(v)}
+                    placeholder={field.placeholder || 'Select date'}
+                    size="sm"
+                    clearable
+                />
+                {helpEl}
+                {errorEl}
+            </div>
+        );
+    }
+
+    // Default: text, number, email, phone
     const inputType =
         field.type === 'number' ? 'number'
         : field.type === 'email' ? 'email'
         : field.type === 'phone' ? 'tel'
-        : field.type === 'date' ? 'date'
         : 'text';
     return (
         <div>
@@ -383,11 +405,26 @@ function ReadonlyValue({
 
     if (Array.isArray(effective)) {
         return (
-            <ul className="text-foreground space-y-0.5 text-xs">
+            <div className="flex flex-wrap gap-1">
                 {effective.map((v, i) => (
-                    <li key={i}>• {v}</li>
+                    <span
+                        key={i}
+                        className="bg-secondary text-secondary-foreground inline-flex items-center rounded px-1.5 py-0.5 text-xs"
+                    >
+                        {v}
+                    </span>
                 ))}
-            </ul>
+            </div>
+        );
+    }
+
+    // Dates: stored as ISO yyyy-MM-dd; format to match the editable DatePicker.
+    if (field.type === 'date' && typeof effective === 'string') {
+        const parsed = parse(effective, 'yyyy-MM-dd', new Date());
+        return (
+            <p className="text-foreground break-words text-xs">
+                {isValid(parsed) ? format(parsed, 'dd MMM yyyy') : effective}
+            </p>
         );
     }
 
