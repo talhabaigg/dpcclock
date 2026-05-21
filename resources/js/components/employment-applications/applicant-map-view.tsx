@@ -2,12 +2,15 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/leaflet.markercluster.js';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
-import { ChevronDown, ChevronUp, MapPin, Navigation, Plane, X } from 'lucide-react';
+import { Building2, ChevronDown, ChevronUp, MapPin, Navigation, Plane, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Link } from '@inertiajs/react';
 import { haversineDistance, formatDistance } from '@/lib/haversine';
 
@@ -36,20 +39,11 @@ interface DrivingInfo {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-    new: '#94a3b8',
-    reviewing: '#a855f7',
-    phone_interview: '#3b82f6',
-    reference_check: '#f97316',
-    face_to_face: '#eab308',
-    whs_review: '#f59e0b',
-    final_review: '#84cc16',
-    approved: '#22c55e',
-    contract_sent: '#14b8a6',
-    contract_signed: '#10b981',
-    onboarded: '#16a34a',
-    declined: '#ef4444',
-};
+function getStatusColor(status: string): string {
+    if (status === 'onboarded') return '#16a34a';
+    if (status === 'new') return 'var(--primary)';
+    return '#f59e0b';
+}
 
 const STATUS_LABELS: Record<string, string> = {
     new: 'New',
@@ -72,7 +66,7 @@ const iconCache = new Map<string, L.DivIcon>();
 function getIcon(status: string, name: string, occupation: string): L.DivIcon {
     const key = `${status}:${name}:${occupation}`;
     if (iconCache.has(key)) return iconCache.get(key)!;
-    const dot = STATUS_COLORS[status] ?? '#94a3b8';
+    const dot = getStatusColor(status);
     const nameLabel = esc(name.length > 20 ? name.slice(0, 20) + '...' : name);
     const occLabel = esc(occupation === 'other' ? 'Other' : occupation.charAt(0).toUpperCase() + occupation.slice(1));
     const icon = L.divIcon({
@@ -162,7 +156,7 @@ function getZone(km: number): { label: string; color: string } {
 }
 
 function popupHtml(app: EmploymentApplication): string {
-    const color = STATUS_COLORS[app.status] ?? '#94a3b8';
+    const color = getStatusColor(app.status);
     return `<div style="min-width:180px;font-family:system-ui,sans-serif">
         <p style="margin:0 0 2px;font-size:13px;font-weight:600">${esc(app.first_name)} ${esc(app.surname)}</p>
         <p style="margin:0;font-size:11px;color:#888">${esc(occupationLabel(app))}</p>
@@ -225,6 +219,26 @@ async function geocodePlace(placeId: string): Promise<{ lat: number; lng: number
         return { lat: data.latitude, lng: data.longitude, formatted: data.formatted_address };
     } catch {
         return null;
+    }
+}
+
+interface Site {
+    id: number;
+    name: string;
+    fully_qualified_name: string | null;
+    address: string;
+    latitude: number;
+    longitude: number;
+}
+
+async function fetchSites(): Promise<Site[]> {
+    try {
+        const res = await fetch('/locations/geocoded', { headers: apiHeaders });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.sites ?? [];
+    } catch {
+        return [];
     }
 }
 
@@ -556,9 +570,10 @@ function MapRefCapture({ mapRef }: { mapRef: React.RefObject<L.Map | null> }) {
 
 interface Props {
     applications: EmploymentApplication[];
+    toolbarSlot?: HTMLElement | null;
 }
 
-export default function ApplicantMapView({ applications }: Props) {
+export default function ApplicantMapView({ applications, toolbarSlot }: Props) {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
     const [targetAddress, setTargetAddress] = useState<string>('');
@@ -578,6 +593,31 @@ export default function ApplicantMapView({ applications }: Props) {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [addressInput, setAddressInput] = useState('');
     const suggestTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+    const [sites, setSites] = useState<Site[] | null>(null);
+    const [sitesLoading, setSitesLoading] = useState(false);
+    const [sitesOpen, setSitesOpen] = useState(false);
+
+    const loadSites = useCallback(async () => {
+        if (sites !== null || sitesLoading) return;
+        setSitesLoading(true);
+        const result = await fetchSites();
+        setSites(result);
+        setSitesLoading(false);
+    }, [sites, sitesLoading]);
+
+    const handleSelectSite = useCallback((site: Site) => {
+        setSitesOpen(false);
+        setShowSuggestions(false);
+        setSuggestions([]);
+        const label = site.fully_qualified_name || site.name;
+        setAddressInput(label);
+        setTargetPosition([site.latitude, site.longitude]);
+        setTargetAddress(label);
+        setFlyTarget([site.latitude, site.longitude]);
+        setActiveLineId(null);
+        setDrivingInfo(null);
+    }, []);
 
     const handleAddressChange = useCallback((value: string) => {
         setAddressInput(value);
@@ -783,54 +823,104 @@ export default function ApplicantMapView({ applications }: Props) {
         if (mapRef.current) (mapRef.current as any).fire('clearline');
     }, []);
 
+    const hasClear = targetPosition || addressInput;
+    const addressSearch = (
+        <div className="relative">
+            <MapPin className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
+            <Input
+                ref={addressInputRef}
+                type="text"
+                placeholder="Search address or pick a site..."
+                className={`pl-8 text-sm ${hasClear ? 'pr-16' : 'pr-9'}`}
+                value={addressInput}
+                disabled={geocoding}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
+            />
+            <Popover open={sitesOpen} onOpenChange={(o) => { setSitesOpen(o); if (o) loadSites(); }}>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label="Pick a project site"
+                        title="Pick a project site"
+                        className={`text-muted-foreground hover:text-foreground absolute top-1/2 -translate-y-1/2 ${hasClear ? 'right-8' : 'right-2'}`}
+                    >
+                        <Building2 className="h-4 w-4" />
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-0">
+                    <Command>
+                        <CommandInput placeholder="Search sites..." />
+                        <CommandList>
+                            {sitesLoading ? (
+                                <div className="text-muted-foreground py-4 text-center text-xs">Loading sites...</div>
+                            ) : (
+                                <>
+                                    <CommandEmpty>No sites with coordinates found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {(sites ?? []).map((site) => (
+                                            <CommandItem
+                                                key={site.id}
+                                                value={`${site.name} ${site.fully_qualified_name ?? ''} ${site.address}`}
+                                                onSelect={() => handleSelectSite(site)}
+                                            >
+                                                <div className="flex min-w-0 flex-col">
+                                                    <span className="truncate text-sm">{site.name}</span>
+                                                    {site.address && (
+                                                        <span className="text-muted-foreground truncate text-xs">{site.address}</span>
+                                                    )}
+                                                </div>
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </>
+                            )}
+                        </CommandList>
+                    </Command>
+                </PopoverContent>
+            </Popover>
+            {hasClear && (
+                <button
+                    onClick={() => { clearTarget(); setAddressInput(''); setSuggestions([]); }}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+                    aria-label="Clear address"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+            )}
+            {geocoding && (
+                <div className="text-muted-foreground absolute top-1/2 right-14 -translate-y-1/2 text-xs animate-pulse">...</div>
+            )}
+            {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-white shadow-lg dark:bg-neutral-900">
+                    {suggestions.map((p) => (
+                        <button
+                            key={p.place_id}
+                            className="hover:bg-muted w-full px-3 py-2 text-left text-sm transition-colors first:rounded-t-md last:rounded-b-md"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectSuggestion(p)}
+                        >
+                            {p.description}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border md:flex-row">
+            {toolbarSlot && createPortal(addressSearch, toolbarSlot)}
+
             {/* Left panel */}
             <div className={`flex shrink-0 flex-col overflow-hidden border-b md:border-b-0 md:border-r md:w-[320px] lg:w-[360px] ${
                 listCollapsed ? 'h-auto' : 'h-[45vh] md:h-auto'
             }`}>
-                {/* Address input */}
-                <div className="border-b px-3 py-2.5">
-                    <div className="relative">
-                        <MapPin className="text-muted-foreground absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
-                        <Input
-                            ref={addressInputRef}
-                            type="text"
-                            placeholder="Search address to measure distances..."
-                            className="pl-8 pr-8 text-sm"
-                            value={addressInput}
-                            disabled={geocoding}
-                            onChange={(e) => handleAddressChange(e.target.value)}
-                            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                            onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
-                        />
-                        {(targetPosition || addressInput) && (
-                            <button
-                                onClick={() => { clearTarget(); setAddressInput(''); setSuggestions([]); }}
-                                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        )}
-                        {geocoding && (
-                            <div className="text-muted-foreground absolute top-1/2 right-8 -translate-y-1/2 text-xs animate-pulse">...</div>
-                        )}
-                        {showSuggestions && suggestions.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-white shadow-lg dark:bg-neutral-900">
-                                {suggestions.map((p) => (
-                                    <button
-                                        key={p.place_id}
-                                        className="hover:bg-muted w-full px-3 py-2 text-left text-sm transition-colors first:rounded-t-md last:rounded-b-md"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => handleSelectSuggestion(p)}
-                                    >
-                                        {p.description}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                {/* Address input — only when no toolbar slot provided (fallback) */}
+                {!toolbarSlot && (
+                    <div className="border-b px-3 py-2.5">{addressSearch}</div>
+                )}
 
                 {/* Count + collapse toggle */}
                 <div className="flex items-center justify-between border-b px-3 py-1.5">
@@ -988,7 +1078,7 @@ const ApplicantCard = memo(function ApplicantCard({
                     <Badge
                         variant="outline"
                         className="text-xs"
-                        style={{ borderColor: STATUS_COLORS[app.status] ?? '#94a3b8', color: STATUS_COLORS[app.status] ?? '#94a3b8' }}
+                        style={{ borderColor: getStatusColor(app.status), color: getStatusColor(app.status) }}
                     >
                         {STATUS_LABELS[app.status] ?? app.status}
                     </Badge>

@@ -878,3 +878,9 @@
         background-color: transparent;
     }
 }
+
+/* Contain Leaflet's internal z-index stack (panes up to 700, controls to 1000)
+   so shadcn dialogs, sheets, dropdowns, and tooltips always render above the map. */
+.leaflet-container {
+    isolation: isolate;
+}

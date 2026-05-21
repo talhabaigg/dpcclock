@@ -295,6 +295,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('geocode');
 
+    // Geocoded project sites for map view — pre-existing coordinates, no Google call
+    Route::get('/locations/geocoded', function () {
+        $sites = \App\Models\Location::open()
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->select('id', 'name', 'fully_qualified_name', 'address_line1', 'city', 'state_code', 'latitude', 'longitude')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'fully_qualified_name' => $s->fully_qualified_name,
+                'address' => trim(implode(', ', array_filter([$s->address_line1, $s->city, $s->state_code]))),
+                'latitude' => (float) $s->latitude,
+                'longitude' => (float) $s->longitude,
+            ]);
+
+        return response()->json(['sites' => $sites]);
+    })->name('locations.geocoded');
+
     }); // end geocoding routes
 
     Route::middleware('permission:employment-applications.view')->group(function () {

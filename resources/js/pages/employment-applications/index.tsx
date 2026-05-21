@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -280,6 +281,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
     const [showOnboardedDialog, setShowOnboardedDialog] = useState(false);
     const [onboardedMatches, setOnboardedMatches] = useState<{ application_id: number; applicant_name: string; status: string; employee_id: number; employee_name: string; already_linked: boolean }[]>([]);
     const [loadingOnboarded, setLoadingOnboarded] = useState(false);
+    const [mapSearchSlot, setMapSearchSlot] = useState<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
     const suburbTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -607,18 +609,24 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-muted-foreground text-xs font-medium">Date range</label>
                                     <div className="flex items-center gap-2">
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={filters.date_from ?? ''}
-                                            onChange={(e) => applyFilters({ date_from: e.target.value })}
+                                            onChange={(v) => applyFilters({ date_from: v })}
+                                            placeholder="From"
+                                            max={filters.date_to}
+                                            clearable
                                             className="flex-1"
+                                            aria-label="Date from"
                                         />
                                         <span className="text-muted-foreground text-xs">to</span>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={filters.date_to ?? ''}
-                                            onChange={(e) => applyFilters({ date_to: e.target.value })}
+                                            onChange={(v) => applyFilters({ date_to: v })}
+                                            placeholder="To"
+                                            min={filters.date_from}
+                                            clearable
                                             className="flex-1"
+                                            aria-label="Date to"
                                         />
                                     </div>
                                 </div>
@@ -646,6 +654,14 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                             <X size={14} />
                             Clear all
                         </Button>
+                    )}
+
+                    {/* Map address search — portaled in by ApplicantMapView, centered */}
+                    {view === 'map' && (
+                        <div
+                            ref={setMapSearchSlot}
+                            className="order-last w-full md:order-none md:mx-auto md:flex-1 md:max-w-md"
+                        />
                     )}
 
                     {/* View toggle + Burger Menu pinned right */}
@@ -701,7 +717,7 @@ export default function EmploymentApplicationsIndex({ applications, filters, occ
                 {view === 'map' && (
                     <div className="min-h-0 flex-1">
                         <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-                            <ApplicantMapView applications={localApplications} />
+                            <ApplicantMapView applications={localApplications} toolbarSlot={mapSearchSlot} />
                         </Suspense>
                     </div>
                 )}
