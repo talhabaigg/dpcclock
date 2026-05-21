@@ -58,20 +58,33 @@
         .field-group select { appearance: auto; }
 
         /* Radio & checkbox groups */
-        .option-list { display: flex; flex-direction: column; gap: 8px; }
-        .option-item { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; cursor: pointer; }
+        .option-list { display: flex; flex-direction: column; gap: 4px; }
+        .option-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; font-size: 15px; color: #334155; cursor: pointer; border-radius: 8px; }
+        .option-item:hover { background: #f8fafc; }
         .option-item input[type="radio"],
-        .option-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: #2563eb; flex-shrink: 0; }
+        .option-item input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; flex-shrink: 0; }
+
+        /* Multi-select list — bordered, scrollable box of tap-to-toggle rows.
+           Looks like <select multiple> but each row is a 44px tap target with
+           an inline checkbox so iPad/touch users can pick items with a single
+           tap (no ⌘-click). */
+        .multiselect-list { gap: 0; max-height: 280px; overflow-y: auto; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; -webkit-overflow-scrolling: touch; }
+        .multiselect-row { display: block; padding: 12px; min-height: 44px; font-size: 15px; line-height: 20px; color: #334155; cursor: pointer; border-bottom: 1px solid #f1f5f9; user-select: none; }
+        .multiselect-row:last-child { border-bottom: none; }
+        .multiselect-row:hover { background: #f8fafc; }
+        .multiselect-row:has(input:checked) { background: #eff6ff; color: #1e3a8a; }
+        .multiselect-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2563eb; margin: 0 10px 0 0; vertical-align: middle; }
+        .multiselect-row span { vertical-align: middle; }
 
         /* Display-only types */
         .section-heading { font-size: 17px; font-weight: 600; color: #0f172a; padding: 8px 0 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 4px; }
         .info-text { font-size: 14px; color: #64748b; line-height: 1.6; padding: 4px 0; }
 
-        /* Multi-select (native — falls back gracefully on iOS) */
-        .multiselect-native { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; font-family: inherit; background: #fff; }
-
-        /* Button group (iPad-friendly) */
-        .button-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        /* Button group (iPad-friendly).
+           flex-direction is explicit because button_group_multi also carries the
+           .option-list class (needed by form-fill.ts to detect checkbox-group
+           required validation), and that class would otherwise force column. */
+        .button-group { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }
         .btn-option { flex: 1 1 auto; min-width: 90px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
             padding: 10px 16px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #1e293b;
             font-size: 15px; font-weight: 500; cursor: pointer; user-select: none; transition: background 0.12s, border-color 0.12s, color 0.12s; }
@@ -242,14 +255,18 @@
                                         @endforeach
                                     </div>
                                 @elseif($field->type === 'multiselect')
-                                    <select name="field_{{ $field->id }}[]" multiple size="6"
-                                        class="multiselect-native"
-                                        {{ $field->is_required ? 'required' : '' }}>
+                                    {{-- A scrollable, bordered list (looks like <select multiple>)
+                                         but each row is a tap-to-toggle label — no ⌘-click needed,
+                                         and the 44px row height works on iPad. Same field_X[] payload. --}}
+                                    <div class="multiselect-list option-list">
                                         @foreach($field->options ?? [] as $option)
-                                            <option value="{{ $option['value'] }}"
-                                                {{ in_array((string) $option['value'], array_map('strval', $defaultArray), true) ? 'selected' : '' }}>{{ $option['label'] }}</option>
+                                            <label class="multiselect-row">
+                                                <input type="checkbox" name="field_{{ $field->id }}[]" value="{{ $option['value'] }}"
+                                                    {{ in_array((string) $option['value'], array_map('strval', $defaultArray), true) ? 'checked' : '' }}>
+                                                <span>{{ $option['label'] }}</span>
+                                            </label>
                                         @endforeach
-                                    </select>
+                                    </div>
                                 @elseif($field->type === 'button_group')
                                     <div class="button-group">
                                         @foreach($field->options ?? [] as $option)

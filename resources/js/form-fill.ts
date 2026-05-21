@@ -11,19 +11,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Signature pads ───────────────────────────────────────────────────────
     // Each signature canvas pairs with a hidden input that holds the data URL.
-    // We resize the canvas to its CSS width so the drawing is crisp on HiDPI.
+    // The drawing buffer must be re-sized to the canvas's CSS box every time
+    // that box actually gets a measurable size — paginated forms hide later
+    // pages with display:none at first paint, so the canvas reports
+    // offsetWidth === 0 and a one-shot resize would leave a 0×0 buffer that
+    // silently swallows every stroke. ResizeObserver fires when the box first
+    // appears (page nav, conditional reveal) and on viewport/orientation
+    // changes; we preserve any drawing across resizes via toDataURL/fromDataURL.
     const signaturePads = new Map<number, SignaturePad>();
     form.querySelectorAll<HTMLCanvasElement>('canvas[data-signature-canvas-for]').forEach((canvas) => {
         const fieldId = Number(canvas.dataset.signatureCanvasFor);
         const hidden = form.querySelector<HTMLInputElement>(`input[data-signature-hidden-for="${fieldId}"]`);
         if (!hidden) return;
 
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = canvas.offsetWidth * ratio;
-        canvas.height = canvas.offsetHeight * ratio;
-        canvas.getContext('2d')?.scale(ratio, ratio);
-
         const pad = new SignaturePad(canvas, { backgroundColor: 'rgb(255, 255, 255)' });
+
+        const resize = () => {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const cssW = canvas.offsetWidth;
+            const cssH = canvas.offsetHeight;
+            if (cssW === 0 || cssH === 0) return; // not laid out yet
+            const targetW = Math.round(cssW * ratio);
+            const targetH = Math.round(cssH * ratio);
+            if (canvas.width === targetW && canvas.height === targetH) return;
+            const restore = pad.isEmpty() ? null : pad.toDataURL('image/png');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            canvas.getContext('2d')?.scale(ratio, ratio);
+            pad.clear();
+            if (restore) pad.fromDataURL(restore);
+        };
+
+        resize();
+        new ResizeObserver(resize).observe(canvas);
+
         pad.addEventListener('endStroke', () => {
             hidden.value = pad.isEmpty() ? '' : pad.toDataURL('image/png');
             // Strokes change effective values → re-evaluate visibility downstream.
