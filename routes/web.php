@@ -308,10 +308,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications/{employmentApplication}/submission', [EmploymentApplicationController::class, 'submission'])->name('employment-applications.submission');
         Route::get('/employment-applications/{employmentApplication}/submission/pdf', [EmploymentApplicationController::class, 'submissionPdf'])->name('employment-applications.submission.pdf');
     });
-    Route::middleware('permission:employment-applications.screen')->group(function () {
-        Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
+    // Declining and reopening are final-decision actions — scoped to the
+    // approve permission, not screen. No dedicated decline permission exists;
+    // anyone who can approve can also decline/reopen.
+    Route::middleware('permission:employment-applications.approve')->group(function () {
         Route::post('/employment-applications/{employmentApplication}/decline', [EmploymentApplicationController::class, 'decline'])->name('employment-applications.decline');
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
+    });
+
+    Route::middleware('permission:employment-applications.screen')->group(function () {
+        Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
         Route::post('/employment-applications/{employmentApplication}/onboard', [EmploymentApplicationController::class, 'onboard'])->name('employment-applications.onboard');
         Route::post('/employment-applications/{employmentApplication}/link-employee', [EmploymentApplicationController::class, 'linkToEmployee'])->name('employment-applications.link-employee');
         Route::delete('/employment-applications/{employmentApplication}/unlink-employee', [EmploymentApplicationController::class, 'unlinkEmployee'])->name('employment-applications.unlink-employee');
@@ -353,6 +359,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/worker-screening', [WorkerScreeningController::class, 'store'])->name('worker-screening.store');
         Route::put('/worker-screening/{workerScreening}', [WorkerScreeningController::class, 'update'])->name('worker-screening.update');
         Route::post('/worker-screening/{workerScreening}/remove', [WorkerScreeningController::class, 'remove'])->name('worker-screening.remove');
+        Route::post('/worker-screening/bulk-remove', [WorkerScreeningController::class, 'bulkRemove'])->name('worker-screening.bulk-remove');
     });
 
     // ============================================

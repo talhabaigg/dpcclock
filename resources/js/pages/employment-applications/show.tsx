@@ -32,6 +32,7 @@ import {
     ChevronRight,
     Clipboard,
     ClipboardList,
+    Download,
     ExternalLink,
     FileIcon,
     History,
@@ -807,11 +808,11 @@ function ChecklistSection({
     return (
         <div>
             <div className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                     <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold">Checklists</h3>
                         {totalItems > 0 && (
-                            <span className="text-muted-foreground text-xs">
+                            <span className="text-muted-foreground text-xs whitespace-nowrap">
                                 {completedItems}/{totalItems}
                                 {requiredIncomplete > 0 && (
                                     <span className="ml-1 text-amber-600">({requiredIncomplete} required remaining)</span>
@@ -819,12 +820,12 @@ function ChecklistSection({
                             </span>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                         {checklists.length > 1 && (
                             <>
                                 <button
                                     type="button"
-                                    className="text-muted-foreground hover:text-foreground"
+                                    className="text-muted-foreground hover:text-foreground whitespace-nowrap"
                                     onClick={() => setCollapsedChecklists(new Set())}
                                 >
                                     Expand all
@@ -832,7 +833,7 @@ function ChecklistSection({
                                 <span className="text-muted-foreground/50">|</span>
                                 <button
                                     type="button"
-                                    className="text-muted-foreground hover:text-foreground"
+                                    className="text-muted-foreground hover:text-foreground whitespace-nowrap"
                                     onClick={() => setCollapsedChecklists(new Set(checklists.map((c) => c.id)))}
                                 >
                                     Collapse all
@@ -842,7 +843,7 @@ function ChecklistSection({
                         {canScreen && (
                             <button
                                 type="button"
-                                className="text-primary flex items-center gap-1 text-xs hover:underline"
+                                className="text-primary flex items-center gap-1 whitespace-nowrap text-xs hover:underline"
                                 onClick={() => { setShowQuickAddItem(true); setQuickItemChecklistId(checklists[0]?.id ?? null); }}
                             >
                                 <Plus className="h-3 w-3" />
@@ -857,34 +858,34 @@ function ChecklistSection({
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         type="button"
-                                        className="text-primary flex items-center gap-1 text-xs hover:underline"
+                                        className="text-primary flex items-center gap-1 whitespace-nowrap text-xs hover:underline"
                                     >
                                         <Plus className="h-3 w-3" />
                                         Add checklist
                                         <ChevronDown className="h-3 w-3" />
                                     </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => setShowAddChecklist(true)}>
+                                <DropdownMenuContent align="end" className="w-auto">
+                                    <DropdownMenuItem onClick={() => setShowAddChecklist(true)} className="whitespace-nowrap">
                                         <ListChecks className="mr-2 h-3.5 w-3.5" />
                                         Create new checklist
                                     </DropdownMenuItem>
                                     {availableTemplates.length > 0 ? (
                                         <DropdownMenuSub>
-                                            <DropdownMenuSubTrigger>
+                                            <DropdownMenuSubTrigger className="whitespace-nowrap">
                                                 <Plus className="mr-2 h-3.5 w-3.5" />
                                                 Add existing checklist
                                             </DropdownMenuSubTrigger>
-                                            <DropdownMenuSubContent>
+                                            <DropdownMenuSubContent className="w-auto">
                                                 {availableTemplates.map((t) => (
-                                                    <DropdownMenuItem key={t.id} onClick={() => handleAttachTemplate(String(t.id))}>
+                                                    <DropdownMenuItem key={t.id} onClick={() => handleAttachTemplate(String(t.id))} className="whitespace-nowrap">
                                                         {t.name}
                                                     </DropdownMenuItem>
                                                 ))}
                                             </DropdownMenuSubContent>
                                         </DropdownMenuSub>
                                     ) : (
-                                        <DropdownMenuItem disabled>
+                                        <DropdownMenuItem disabled className="whitespace-nowrap">
                                             <Plus className="mr-2 h-3.5 w-3.5" />
                                             Add existing checklist
                                         </DropdownMenuItem>
@@ -2751,20 +2752,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         Reference check
                                                     </button>
                                                 )}
-                                                <Link
-                                                    href={
-                                                        app.screening_interview
-                                                            ? `/employment-applications/screening-interviews/${app.screening_interview.id}`
-                                                            : `/employment-applications/${app.id}/screening-interview/create`
-                                                    }
-                                                    className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm"
-                                                >
-                                                    <UserCheck className="h-3.5 w-3.5" />
-                                                    Face-to-Face Screening
-                                                    {app.screening_interview && (
-                                                        <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-600" />
-                                                    )}
-                                                </Link>
+                                                {/* Face-to-Face Screening hidden — superseded by the form template
+                                                    flow (sendable as a Form Request). Restore from git if the
+                                                    standalone screening-interview page is brought back. */}
                                             </PopoverContent>
                                         </Popover>
                                         <Textarea
@@ -3064,7 +3054,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     <ChevronRight className="ml-auto h-3.5 w-3.5" />
                                 </button>
 
-                                {canScreen && app.status !== 'declined' && app.status !== 'onboarded' && (
+                                {canApprove && app.status !== 'declined' && app.status !== 'onboarded' && (
                                     <button
                                         type="button"
                                         onClick={() => setShowDeclineDialog(true)}
@@ -3087,14 +3077,19 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                             <MapPin className="h-3 w-3" />
                                             {app.address || app.suburb}
                                         </p>
-                                        <Suspense fallback={<div className="bg-muted h-[180px] w-full animate-pulse rounded-lg" />}>
-                                            <ApplicantMiniMap
-                                                latitude={Number(app.latitude)}
-                                                longitude={Number(app.longitude)}
-                                                name={`${app.first_name} ${app.surname}`}
-                                                suburb={app.suburb}
-                                            />
-                                        </Suspense>
+                                        {/* `isolate` creates a local stacking context so Leaflet's
+                                            high internal z-indexes (controls hit 1000) can't outrank
+                                            app-level dialogs/sheets, which sit at z-50. */}
+                                        <div className="isolate relative z-0">
+                                            <Suspense fallback={<div className="bg-muted h-[180px] w-full animate-pulse rounded-lg" />}>
+                                                <ApplicantMiniMap
+                                                    latitude={Number(app.latitude)}
+                                                    longitude={Number(app.longitude)}
+                                                    name={`${app.first_name} ${app.surname}`}
+                                                    suburb={app.suburb}
+                                                />
+                                            </Suspense>
+                                        </div>
                                     </a>
                                 )}
                         </div>
@@ -3126,8 +3121,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-8 items-center gap-1.5 rounded-md px-2 text-xs transition-colors"
                                 title="Download PDF"
                             >
-                                <FileIcon className="h-3.5 w-3.5" />
-                                PDF
+                                <Download className="h-3.5 w-3.5" />
+                                Download
                             </a>
                             <button
                                 type="button"

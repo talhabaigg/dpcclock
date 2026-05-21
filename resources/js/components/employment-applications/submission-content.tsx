@@ -69,7 +69,7 @@ const SECTIONS = [
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="grid gap-5 px-6 py-6">
+        <div className="grid gap-5 py-5">
             <h2 className="text-sm font-semibold">{title}</h2>
             {children}
         </div>
@@ -146,7 +146,7 @@ export default function SubmissionContent({
                 </div>
             )}
 
-            <div className="overflow-hidden rounded-xl border">
+            <div className="divide-y">
                 <Section title="Personal Details">
                     <div className={fieldGridClassName}>
                         <Field label="Surname" value={app.surname} />
@@ -163,8 +163,6 @@ export default function SubmissionContent({
                         <p className="text-sm whitespace-pre-wrap">{app.why_should_we_employ_you || '—'}</p>
                     </div>
                 </Section>
-
-                <Separator />
 
                 <Section title="Occupation & Skills">
                     <div className={fieldGridClassName}>
@@ -206,8 +204,6 @@ export default function SubmissionContent({
                     )}
                     {app.skills.length === 0 && <p className="text-muted-foreground text-sm">No skills listed.</p>}
                 </Section>
-
-                <Separator />
 
                 <Section title="Licences & Tickets">
                     <div className={fieldGridClassName}>
@@ -253,8 +249,6 @@ export default function SubmissionContent({
                     </div>
                 </Section>
 
-                <Separator />
-
                 <Section title="Employment References">
                     {app.references.length === 0 && (
                         <p className="text-muted-foreground text-sm">No references provided.</p>
@@ -275,8 +269,6 @@ export default function SubmissionContent({
                         </div>
                     ))}
                 </Section>
-
-                <Separator />
 
                 <Section title="Medical & Declaration">
                     <div className={fieldGridClassName}>

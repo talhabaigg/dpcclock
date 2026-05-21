@@ -51,12 +51,33 @@ class WorkerScreeningController extends Controller
         ]);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $screenings = WorkerScreening::with(['addedByUser:id,name', 'removedByUser:id,name'])
+        $validated = $request->validate([
+            'search'   => 'nullable|string|max:255',
+            'status'   => 'nullable|in:active,removed,all',
+            'page'     => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+
+        $perPage = $validated['per_page'] ?? 25;
+        $status = $validated['status'] ?? 'active';
+
+        $screenings = WorkerScreening::query()
+            ->with(['addedByUser:id,name', 'removedByUser:id,name'])
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($validated['search'] ?? null, function ($q, $search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('surname', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
             ->orderByDesc('created_at')
-            ->get()
-            ->map(fn (WorkerScreening $s) => [
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(fn (WorkerScreening $s) => [
                 'id' => $s->id,
                 'first_name' => $s->first_name,
                 'surname' => $s->surname,
@@ -73,6 +94,10 @@ class WorkerScreeningController extends Controller
 
         return Inertia::render('worker-screening/index', [
             'screenings' => $screenings,
+            'filters' => [
+                'search' => $validated['search'] ?? '',
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -148,5 +173,24 @@ class WorkerScreeningController extends Controller
         ]);
 
         return back()->with('success', 'Screening entry removed.');
+    }
+
+    public function bulkRemove(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer|exists:worker_screenings,id',
+        ]);
+
+        $count = WorkerScreening::query()
+            ->whereIn('id', $validated['ids'])
+            ->where('status', 'active')
+            ->update([
+                'status' => 'removed',
+                'removed_by' => auth()->id(),
+                'removed_at' => now(),
+            ]);
+
+        return back()->with('success', "{$count} screening " . ($count === 1 ? 'entry' : 'entries') . ' removed.');
     }
 }
