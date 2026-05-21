@@ -19,10 +19,16 @@ class ToolboxTalkController extends Controller
     {
         $request->validate([
             'per_page' => 'nullable|integer|in:10,25,50,100',
+            'trashed' => 'nullable|in:0,1',
         ]);
         $perPage = (int) $request->input('per_page', 25);
+        $showTrashed = $request->boolean('trashed');
 
         $query = ToolboxTalk::with(['location', 'calledBy', 'attendees.employee']);
+
+        if ($showTrashed) {
+            $query->onlyTrashed();
+        }
 
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->location_id);
@@ -74,10 +80,14 @@ class ToolboxTalkController extends Controller
 
         return Inertia::render('toolbox-talks/index', [
             'talks' => $talks,
-            'filters' => $request->only(['location_id', 'meeting_date']),
+            'filters' => array_merge(
+                $request->only(['location_id', 'meeting_date']),
+                ['trashed' => $showTrashed],
+            ),
             'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
             'meetingDates' => $meetingDates,
             'subjectOptions' => ToolboxTalk::SUBJECT_OPTIONS,
+            'trashedCount' => ToolboxTalk::onlyTrashed()->count(),
         ]);
     }
 
@@ -121,10 +131,77 @@ class ToolboxTalkController extends Controller
 
     public function show(ToolboxTalk $toolboxTalk)
     {
-        $toolboxTalk->load(['location', 'calledBy', 'createdBy', 'media']);
+        $toolboxTalk->load(['location', 'calledBy', 'createdBy', 'media', 'attendees.employee']);
+
+        $signatureMediaByAttendee = $toolboxTalk
+            ->getMedia('attendee_signatures')
+            ->keyBy(fn ($m) => $m->getCustomProperty('attendee_id'));
+
+        $signatures = $toolboxTalk->attendees
+            ->filter(fn ($a) => $a->signed_at !== null)
+            ->sortBy('signed_at')
+            ->map(function (ToolboxTalkAttendee $a) use ($signatureMediaByAttendee) {
+                $signatureDataUri = null;
+
+                $media = $signatureMediaByAttendee->get($a->employee_id);
+                if ($media) {
+                    try {
+                        $signatureDataUri = 'data:image/png;base64,'
+                            .base64_encode(Storage::disk($media->disk)->get($media->getPathRelativeToRoot()));
+                    } catch (\Throwable $e) {
+                        // fall through to legacy path lookup
+                    }
+                }
+
+                if (! $signatureDataUri && $a->signature_path && ! ctype_digit($a->signature_path)) {
+                    foreach (['s3', 'public'] as $disk) {
+                        if (Storage::disk($disk)->exists($a->signature_path)) {
+                            $signatureDataUri = 'data:image/png;base64,'
+                                .base64_encode(Storage::disk($disk)->get($a->signature_path));
+                            break;
+                        }
+                    }
+                }
+
+                return [
+                    'id' => $a->id,
+                    'employee' => $a->employee ? [
+                        'id' => $a->employee->id,
+                        'name' => $a->employee->name,
+                        'preferred_name' => $a->employee->preferred_name,
+                    ] : null,
+                    'signed_at' => $a->signed_at?->toIso8601String(),
+                    'source' => $a->source,
+                    'signature' => $signatureDataUri,
+                ];
+            })
+            ->values();
+
+        $signedPdf = $toolboxTalk->getFirstMedia('signed_pdf');
+        $signedPdfData = null;
+        if ($signedPdf) {
+            $url = null;
+            if ($signedPdf->disk === 's3') {
+                try {
+                    $url = $signedPdf->getTemporaryUrl(now()->addMinutes(30));
+                } catch (\Throwable $e) {
+                    $url = $signedPdf->getUrl();
+                }
+            } else {
+                $url = $signedPdf->getUrl();
+            }
+
+            $signedPdfData = [
+                'id' => $signedPdf->id,
+                'file_name' => $signedPdf->file_name,
+                'url' => $url,
+            ];
+        }
 
         return Inertia::render('toolbox-talks/show', [
             'talk' => $toolboxTalk,
+            'signatures' => $signatures,
+            'signedPdf' => $signedPdfData,
             'subjectOptions' => ToolboxTalk::SUBJECT_OPTIONS,
             'generalItems' => ToolboxTalk::GENERAL_ITEMS,
             'signInUrl' => url('/t/'.$toolboxTalk->public_token),
@@ -228,6 +305,15 @@ class ToolboxTalkController extends Controller
 
         return redirect()->route('toolbox-talks.index')
             ->with('success', 'Toolbox talk deleted successfully.');
+    }
+
+    public function restore(string $toolboxTalk)
+    {
+        $talk = ToolboxTalk::onlyTrashed()->findOrFail($toolboxTalk);
+        $talk->restore();
+
+        return redirect()->back()
+            ->with('success', 'Toolbox talk restored successfully.');
     }
 
     public function duplicate(ToolboxTalk $toolboxTalk)

@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useInitials } from '@/hooks/use-initials';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface EmployeeSummary {
@@ -115,13 +115,14 @@ function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
 
 interface Props {
     talks: PaginatedTalks;
-    filters: { location_id?: string; meeting_date?: string };
+    filters: { location_id?: string; meeting_date?: string; trashed?: boolean };
     locations: Location[];
     meetingDates: { value: string; label: string }[];
     subjectOptions: Record<string, string>;
+    trashedCount: number;
 }
 
-export default function ToolboxTalksIndex({ talks, filters, locations, meetingDates, subjectOptions }: Props) {
+export default function ToolboxTalksIndex({ talks, filters, locations, meetingDates, subjectOptions, trashedCount }: Props) {
     const { flash, auth } = usePage<{ flash: { success?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string };
         auth: { permissions?: string[] };
@@ -132,18 +133,25 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
     const [locationOpen, setLocationOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Talk | null>(null);
 
+    const showTrashed = !!filters.trashed;
+    const queryFilters = {
+        location_id: filters.location_id,
+        meeting_date: filters.meeting_date,
+        trashed: showTrashed ? 1 : undefined,
+    };
+
     const applyFilter = (key: string, value: string) => {
-        router.get('/toolbox-talks', { ...filters, [key]: value || undefined }, { preserveState: true, replace: true });
+        router.get('/toolbox-talks', { ...queryFilters, [key]: value || undefined }, { preserveState: true, replace: true });
     };
 
     const clearFilters = () => {
-        router.get('/toolbox-talks', {}, { preserveState: true, replace: true });
+        router.get('/toolbox-talks', { trashed: showTrashed ? 1 : undefined }, { preserveState: true, replace: true });
     };
 
     const navigate = (overrides: { page?: number; per_page?: number }) => {
         router.get(
             '/toolbox-talks',
-            { ...filters, page: overrides.page, per_page: overrides.per_page ?? talks.per_page },
+            { ...queryFilters, page: overrides.page, per_page: overrides.per_page ?? talks.per_page },
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
@@ -154,6 +162,10 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
             preserveScroll: true,
             onFinish: () => setDeleteTarget(null),
         });
+    };
+
+    const restoreTalk = (talk: Talk) => {
+        router.post(`/toolbox-talks/${talk.id}/restore`, {}, { preserveScroll: true });
     };
 
     const selectedLocation = locations.find((l) => String(l.id) === String(filters.location_id));
@@ -220,14 +232,33 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                             Clear
                         </Button>
                     )}
-                    {can('prestarts.create') && (
-                        <Button asChild className="ml-auto">
-                            <Link href="/toolbox-talks/create">
-                                <Plus className="mr-2 h-4 w-4" />
-                                New Toolbox Talk
-                            </Link>
-                        </Button>
-                    )}
+                    <div className="ml-auto flex items-center gap-2">
+                        {showTrashed ? (
+                            <Button variant="outline" asChild>
+                                <Link href="/toolbox-talks">
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Back to active
+                                </Link>
+                            </Button>
+                        ) : (
+                            can('prestarts.delete') && trashedCount > 0 && (
+                                <Button variant="outline" asChild>
+                                    <Link href="/toolbox-talks?trashed=1">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Deleted ({trashedCount})
+                                    </Link>
+                                </Button>
+                            )
+                        )}
+                        {!showTrashed && can('prestarts.create') && (
+                            <Button asChild>
+                                <Link href="/toolbox-talks/create">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    New Toolbox Talk
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Table */}
@@ -248,7 +279,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                             {talks.data.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                                        No toolbox talks found.
+                                        {showTrashed ? 'No deleted toolbox talks.' : 'No toolbox talks found.'}
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -277,45 +308,55 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
-                                                <DropdownMenuItem asChild>
-                                                    <Link href={`/toolbox-talks/${t.id}`}>View</Link>
-                                                </DropdownMenuItem>
-                                                {can('prestarts.edit') && !t.is_locked && (
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/toolbox-talks/${t.id}/edit`}>Edit</Link>
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can('prestarts.create') && (
-                                                    <DropdownMenuItem
-                                                        onClick={() => router.post(`/toolbox-talks/${t.id}/duplicate`, {}, { preserveScroll: true })}
-                                                    >
-                                                        Duplicate
-                                                    </DropdownMenuItem>
-                                                )}
-                                                <DropdownMenuItem asChild>
-                                                    <a href={`/toolbox-talks/${t.id}/pdf`} target="_blank" rel="noreferrer">
-                                                        Download PDF
-                                                    </a>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem asChild>
-                                                    <a href={`/toolbox-talks/${t.id}/sign-sheet`} target="_blank" rel="noreferrer">
-                                                        Download Sign Sheet
-                                                    </a>
-                                                </DropdownMenuItem>
-                                                {can('prestarts.edit') && (
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/toolbox-talks/${t.id}/upload-signatures`}>Upload Signatures</Link>
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can('prestarts.edit') && (
-                                                    <DropdownMenuItem
-                                                        onClick={() => router.post(`/toolbox-talks/${t.id}/${t.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
-                                                    >
-                                                        {t.is_locked ? 'Unlock' : 'Lock'}
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can('prestarts.delete') && !t.is_locked && (
-                                                    <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(t)}>Delete</DropdownMenuItem>
+                                                {showTrashed ? (
+                                                    can('prestarts.delete') && (
+                                                        <DropdownMenuItem onClick={() => restoreTalk(t)}>
+                                                            Restore
+                                                        </DropdownMenuItem>
+                                                    )
+                                                ) : (
+                                                    <>
+                                                        <DropdownMenuItem asChild>
+                                                            <Link href={`/toolbox-talks/${t.id}`}>View</Link>
+                                                        </DropdownMenuItem>
+                                                        {can('prestarts.edit') && !t.is_locked && (
+                                                            <DropdownMenuItem asChild>
+                                                                <Link href={`/toolbox-talks/${t.id}/edit`}>Edit</Link>
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {can('prestarts.create') && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => router.post(`/toolbox-talks/${t.id}/duplicate`, {}, { preserveScroll: true })}
+                                                            >
+                                                                Duplicate
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        <DropdownMenuItem asChild>
+                                                            <a href={`/toolbox-talks/${t.id}/pdf`} target="_blank" rel="noreferrer">
+                                                                Download PDF
+                                                            </a>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem asChild>
+                                                            <a href={`/toolbox-talks/${t.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                                                                Download Sign Sheet
+                                                            </a>
+                                                        </DropdownMenuItem>
+                                                        {can('prestarts.edit') && (
+                                                            <DropdownMenuItem asChild>
+                                                                <Link href={`/toolbox-talks/${t.id}/upload-signatures`}>Upload Signatures</Link>
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {can('prestarts.edit') && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => router.post(`/toolbox-talks/${t.id}/${t.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
+                                                            >
+                                                                {t.is_locked ? 'Unlock' : 'Lock'}
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {can('prestarts.delete') && !t.is_locked && (
+                                                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(t)}>Delete</DropdownMenuItem>
+                                                        )}
+                                                    </>
                                                 )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>

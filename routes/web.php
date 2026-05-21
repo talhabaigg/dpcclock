@@ -1453,6 +1453,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:prestarts.edit');
         Route::delete('/toolbox-talks/{toolboxTalk}', [ToolboxTalkController::class, 'destroy'])->name('toolbox-talks.destroy')
             ->middleware('permission:prestarts.delete');
+        Route::post('/toolbox-talks/{toolboxTalk}/restore', [ToolboxTalkController::class, 'restore'])->name('toolbox-talks.restore')
+            ->middleware('permission:prestarts.delete');
         Route::post('/toolbox-talks/{toolboxTalk}/duplicate', [ToolboxTalkController::class, 'duplicate'])->name('toolbox-talks.duplicate')
             ->middleware('permission:prestarts.create');
         Route::post('/toolbox-talks/{toolboxTalk}/lock', [ToolboxTalkController::class, 'lock'])->name('toolbox-talks.lock')

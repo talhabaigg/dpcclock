@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
@@ -47,8 +48,24 @@ interface Talk {
     media: MediaItem[];
 }
 
+interface SignatureRow {
+    id: number;
+    employee: { id: number; name: string; preferred_name: string | null } | null;
+    signed_at: string | null;
+    source: string | null;
+    signature: string | null;
+}
+
+interface SignedPdf {
+    id: number;
+    file_name: string;
+    url: string;
+}
+
 interface Props {
     talk: Talk;
+    signatures: SignatureRow[];
+    signedPdf: SignedPdf | null;
     subjectOptions: Record<string, string>;
     generalItems: string[];
     signInUrl: string;
@@ -102,7 +119,7 @@ function highlightMust(text: string) {
     );
 }
 
-export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, signInUrl, ipadUrl }: Props) {
+export default function ToolboxTalkShow({ talk, signatures, signedPdf, subjectOptions, generalItems, signInUrl, ipadUrl }: Props) {
     const { flash, auth } = usePage<{ flash: { success?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string };
         auth: { permissions?: string[] };
@@ -110,7 +127,6 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
 
-    const signedPdf = talk.media.find((m) => m.collection_name === 'signed_pdf');
     const topicFiles = talk.media.filter((m) => m.collection_name === 'topic_files');
     const actionPointFiles = talk.media.filter((m) => m.collection_name === 'action_point_files');
     const injuryFiles = talk.media.filter((m) => m.collection_name === 'injury_files');
@@ -292,10 +308,10 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
                 {renderList('Near Misses from Previous Week', talk.near_misses, nearMissFiles)}
                 {renderList('Comments from the Floor', talk.floor_comments, floorCommentFiles)}
 
-                {/* Signatures */}
+                {/* Worker Signatures (signed in app) */}
                 <Card>
                     <CardHeader className="border-b">
-                        <CardTitle className="text-sm">Signatures</CardTitle>
+                        <CardTitle className="text-sm">Worker Signatures ({signatures.length})</CardTitle>
                         {can('prestarts.edit') && (
                             <CardAction>
                                 <Button variant="outline" size="sm" asChild>
@@ -308,6 +324,49 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
                         )}
                     </CardHeader>
                     <CardContent className="pt-2">
+                        {signatures.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No worker signatures yet.</p>
+                        ) : (
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Employee</TableHead>
+                                            <TableHead>Signed At</TableHead>
+                                            <TableHead>Signature</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {signatures.map((sig) => (
+                                            <TableRow key={sig.id}>
+                                                <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
+                                                <TableCell>{sig.signed_at ? new Date(sig.signed_at).toLocaleString('en-AU') : '-'}</TableCell>
+                                                <TableCell>
+                                                    {sig.signature ? (
+                                                        <img
+                                                            src={sig.signature}
+                                                            alt="Signature"
+                                                            className="h-10 max-w-[200px] object-contain dark:invert"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">Not available</span>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Uploaded Signed PDF */}
+                <Card>
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-sm">Signed PDF</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
                         {signedPdf ? (
                             <div className="flex items-center gap-3 rounded-[10px] border border-border bg-muted p-3">
                                 <div className="grid size-9 place-items-center rounded-lg border border-border bg-background text-muted-foreground">
@@ -317,7 +376,7 @@ export default function ToolboxTalkShow({ talk, subjectOptions, generalItems, si
                                     <div className="truncate text-[13.5px] font-medium">{signedPdf.file_name}</div>
                                 </div>
                                 <Button size="sm" variant="outline" asChild>
-                                    <a href={signedPdf.original_url} target="_blank" rel="noreferrer">
+                                    <a href={signedPdf.url} target="_blank" rel="noreferrer">
                                         <Download className="size-3.5" />
                                         Download
                                     </a>
