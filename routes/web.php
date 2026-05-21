@@ -1356,6 +1356,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:injury-register.view');
         Route::get('/injury-register/{injury}/files/{media}', [InjuryController::class, 'downloadFile'])->name('injury-register.download-file');
         Route::post('/injury-register/{injury}/test-notification', [InjuryController::class, 'testNotification'])->name('injury-register.test-notification');
+        Route::post('/injury-register/{injury}/send-notification', [InjuryController::class, 'sendNotification'])->name('injury-register.send-notification');
     });
 
     // ============================================

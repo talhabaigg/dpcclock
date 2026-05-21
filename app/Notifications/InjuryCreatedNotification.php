@@ -14,17 +14,41 @@ class InjuryCreatedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** Restrict channels to a subset (values: 'mail', 'sms'). Null = all available. */
+    public ?array $onlyChannels = null;
+
     public function __construct(
         private Injury $injury,
     ) {}
 
+    public function only(array $channels): self
+    {
+        $this->onlyChannels = $channels;
+
+        return $this;
+    }
+
     public function via(object $notifiable): array
     {
-        $channels = ['mail'];
+        $want = $this->onlyChannels ?? ['mail', 'sms'];
+        $channels = [];
 
-        if (method_exists($notifiable, 'routeNotificationForClicksend')
-            && $notifiable->routeNotificationForClicksend()) {
-            $channels[] = ClickSendChannel::class;
+        if (in_array('mail', $want, true)) {
+            $mailRoute = method_exists($notifiable, 'routeNotificationForMail')
+                ? $notifiable->routeNotificationForMail($this)
+                : $notifiable->routeNotificationFor('mail', $this);
+            if (! empty($mailRoute)) {
+                $channels[] = 'mail';
+            }
+        }
+
+        if (in_array('sms', $want, true)) {
+            $smsRoute = method_exists($notifiable, 'routeNotificationForClicksend')
+                ? $notifiable->routeNotificationForClicksend()
+                : $notifiable->routeNotificationFor('clicksend', $this);
+            if (! empty($smsRoute)) {
+                $channels[] = ClickSendChannel::class;
+            }
         }
 
         return $channels;

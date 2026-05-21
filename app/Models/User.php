@@ -142,7 +142,12 @@ class User extends Authenticatable implements HasMedia, HasPasskeys
 
     public function routeNotificationForClicksend(): ?string
     {
-        $digits = preg_replace('/\D+/', '', (string) $this->phone);
+        return self::normaliseAuMobile($this->phone);
+    }
+
+    public static function normaliseAuMobile(?string $raw): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $raw);
         if ($digits === '' || $digits === null) {
             return null;
         }

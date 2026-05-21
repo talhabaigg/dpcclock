@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
 import { useEffect, useRef, useState } from 'react';
@@ -40,10 +41,18 @@ interface CommentData {
     replies?: CommentData[];
 }
 
+interface NotifyUser {
+    id: number;
+    name: string;
+    email: string | null;
+    has_sms: boolean;
+}
+
 interface Props {
     injury: Injury;
     comments: CommentData[];
     options: InjuryFormOptions;
+    notifyUsers: NotifyUser[];
 }
 
 function UserAvatar({ name }: { name: string }) {
@@ -305,7 +314,7 @@ function SidebarField({ label, value }: { label: string; value?: string | number
     );
 }
 
-export default function InjuryShow({ injury, comments, options }: Props) {
+export default function InjuryShow({ injury, comments, options, notifyUsers }: Props) {
     const pageProps = usePage().props;
     const auth = pageProps.auth as { user?: { id: number }; permissions?: string[] };
     const flash = pageProps.flash as { success?: string } | undefined;
@@ -314,6 +323,35 @@ export default function InjuryShow({ injury, comments, options }: Props) {
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
     const [sendingTestNotification, setSendingTestNotification] = useState(false);
+    const [testPopoverOpen, setTestPopoverOpen] = useState(false);
+    const [testPhone, setTestPhone] = useState('');
+
+    const [sendOpen, setSendOpen] = useState(false);
+    const [sendChannels, setSendChannels] = useState<{ mail: boolean; sms: boolean }>({ mail: true, sms: false });
+    const [sendUserIds, setSendUserIds] = useState<number[]>([]);
+    const [sendUserFilter, setSendUserFilter] = useState('');
+    const [sending, setSending] = useState(false);
+
+    const filteredNotifyUsers = notifyUsers.filter((u) => {
+        const q = sendUserFilter.trim().toLowerCase();
+        if (!q) return true;
+        return u.name.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q);
+    });
+
+    const toggleUser = (id: number) => {
+        setSendUserIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    };
+
+    const submitSendNotification = () => {
+        const channels = Object.entries(sendChannels).filter(([, v]) => v).map(([k]) => k);
+        if (channels.length === 0 || sendUserIds.length === 0) return;
+        setSending(true);
+        router.post(`/injury-register/${injury.id}/send-notification`, { user_ids: sendUserIds, channels }, {
+            preserveScroll: true,
+            onSuccess: () => { setSendOpen(false); setSendUserIds([]); setSendUserFilter(''); },
+            onFinish: () => setSending(false),
+        });
+    };
     const [commentBody, setCommentBody] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -380,6 +418,13 @@ export default function InjuryShow({ injury, comments, options }: Props) {
     const fmtDate = (d: string | null) => {
         if (!d) return '—';
         return new Date(d).toLocaleString('en-AU');
+    };
+
+    const toDateOnly = (d: string | null | undefined) => (d ? d.slice(0, 10) : '');
+    const fmtDateOnly = (d: string | null | undefined) => {
+        const iso = toDateOnly(d);
+        if (!iso) return '';
+        return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
     };
 
     function handlePostComment() {
@@ -557,22 +602,64 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                         </Button>
                                     )
                                 )}
+                                <Button variant="outline" size="sm" className="flex-1" onClick={() => setSendOpen(true)}>
+                                    <Send className="mr-1 h-3 w-3" /> Notify
+                                </Button>
                                 {appEnv !== 'production' && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1"
-                                        disabled={sendingTestNotification}
-                                        onClick={() => {
-                                            setSendingTestNotification(true);
-                                            router.post(`/injury-register/${injury.id}/test-notification`, {}, {
-                                                preserveScroll: true,
-                                                onFinish: () => setSendingTestNotification(false),
-                                            });
-                                        }}
-                                    >
-                                        <Mail className="mr-1 h-3 w-3" /> {sendingTestNotification ? 'Sending...' : 'Test Email'}
-                                    </Button>
+                                    <Popover open={testPopoverOpen} onOpenChange={setTestPopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="ghost" size="sm" disabled={sendingTestNotification} title="Send a test (dev only)">
+                                                <MessageSquare className="h-3 w-3" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" className="w-72 space-y-3">
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-medium">Test SMS to phone</Label>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        type="tel"
+                                                        placeholder="0412 345 678"
+                                                        value={testPhone}
+                                                        onChange={(e) => setTestPhone(e.target.value)}
+                                                        className="h-8 flex-1 text-sm"
+                                                        disabled={sendingTestNotification}
+                                                    />
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8"
+                                                        disabled={sendingTestNotification || !testPhone.trim()}
+                                                        onClick={() => {
+                                                            setSendingTestNotification(true);
+                                                            router.post(`/injury-register/${injury.id}/test-notification`, { phone: testPhone }, {
+                                                                preserveScroll: true,
+                                                                onSuccess: () => { setTestPhone(''); setTestPopoverOpen(false); },
+                                                                onFinish: () => setSendingTestNotification(false),
+                                                            });
+                                                        }}
+                                                    >
+                                                        Send
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <Separator />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                disabled={sendingTestNotification}
+                                                onClick={() => {
+                                                    setSendingTestNotification(true);
+                                                    router.post(`/injury-register/${injury.id}/test-notification`, {}, {
+                                                        preserveScroll: true,
+                                                        onSuccess: () => setTestPopoverOpen(false),
+                                                        onFinish: () => setSendingTestNotification(false),
+                                                    });
+                                                }}
+                                            >
+                                                <Mail className="mr-1 h-3 w-3" /> Send to my email
+                                            </Button>
+                                        </PopoverContent>
+                                    </Popover>
                                 )}
                             </div>
 
@@ -616,7 +703,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                 <SidebarField label="Days Suitable Duties" value={injury.computed_suitable_duties_days} />
                                 {injury.suitable_duties_from && (
                                     <div className="text-xs text-muted-foreground">
-                                        {injury.suitable_duties_from} → {injury.suitable_duties_to ?? 'ongoing'}
+                                        {fmtDateOnly(injury.suitable_duties_from)} → {injury.suitable_duties_to ? fmtDateOnly(injury.suitable_duties_to) : 'ongoing'}
                                     </div>
                                 )}
                                 {injury.work_cover_claim && (
@@ -709,7 +796,7 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                             {/* Download PDF */}
                             <Button variant="outline" size="sm" className="w-full" asChild>
                                 <a href={`/injury-register/${injury.id}/pdf`}>
-                                    <Download className="mr-1 h-4 w-4" /> Download PDF
+                                    <Download className="mr-1 h-4 w-4" /> Download Injury Report PDF
                                 </a>
                             </Button>
 
@@ -726,6 +813,87 @@ export default function InjuryShow({ injury, comments, options }: Props) {
 
             {/* Attachment Preview Dialog */}
             <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+
+            {/* Send Notification Dialog */}
+            <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
+                    <DialogHeader>
+                        <DialogTitle>Send Notification — {injury.id_formal}</DialogTitle>
+                        <DialogDescription>Pick channels and recipients.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Channels</Label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={sendChannels.mail} onCheckedChange={(v) => setSendChannels((p) => ({ ...p, mail: v === true }))} />
+                                    <Mail className="h-3.5 w-3.5" /> Email
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox checked={sendChannels.sms} onCheckedChange={(v) => setSendChannels((p) => ({ ...p, sms: v === true }))} />
+                                    <MessageSquare className="h-3.5 w-3.5" /> SMS
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    Recipients {sendUserIds.length > 0 && `(${sendUserIds.length})`}
+                                </Label>
+                                <button
+                                    type="button"
+                                    onClick={() => setSendUserIds(sendUserIds.length === filteredNotifyUsers.length ? [] : filteredNotifyUsers.map((u) => u.id))}
+                                    className="text-primary text-xs hover:underline"
+                                >
+                                    {sendUserIds.length === filteredNotifyUsers.length && filteredNotifyUsers.length > 0 ? 'Clear all' : 'Select all'}
+                                </button>
+                            </div>
+                            <Input
+                                placeholder="Search by name or email…"
+                                value={sendUserFilter}
+                                onChange={(e) => setSendUserFilter(e.target.value)}
+                                className="h-8 text-sm"
+                            />
+                            <div className="max-h-64 overflow-y-auto rounded-md border">
+                                {filteredNotifyUsers.length === 0 ? (
+                                    <p className="text-muted-foreground p-3 text-center text-xs">No users match.</p>
+                                ) : (
+                                    filteredNotifyUsers.map((u) => {
+                                        const checked = sendUserIds.includes(u.id);
+                                        const smsRequested = sendChannels.sms;
+                                        const willGetSms = smsRequested && u.has_sms;
+                                        const willGetEmail = sendChannels.mail && !!u.email;
+                                        const unreachable = checked && !willGetSms && !willGetEmail;
+                                        return (
+                                            <label key={u.id} className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0">
+                                                <Checkbox checked={checked} onCheckedChange={() => toggleUser(u.id)} />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate font-medium">{u.name}</div>
+                                                    <div className="text-muted-foreground truncate text-xs">
+                                                        {u.email ?? 'no email'}
+                                                        {smsRequested && (u.has_sms ? ' · SMS ✓' : ' · no mobile')}
+                                                    </div>
+                                                </div>
+                                                {unreachable && <span className="text-amber-600 text-[10px]">unreachable</span>}
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSendOpen(false)}>Cancel</Button>
+                        <Button
+                            onClick={submitSendNotification}
+                            disabled={sending || sendUserIds.length === 0 || (!sendChannels.mail && !sendChannels.sms)}
+                        >
+                            {sending ? 'Sending…' : `Send to ${sendUserIds.length || 0}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Edit Comment Dialog */}
             <Dialog open={editingComment !== null} onOpenChange={(open) => { if (!open) setEditingComment(null); }}>
@@ -791,15 +959,13 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" className={`w-full justify-start text-left font-normal ${!classForm.suitable_duties_from ? 'text-muted-foreground' : ''}`}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {classForm.suitable_duties_from
-                                                    ? new Date(classForm.suitable_duties_from + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                    : 'Pick a date'}
+                                                {classForm.suitable_duties_from ? fmtDateOnly(classForm.suitable_duties_from) : 'Pick a date'}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0">
                                             <Calendar
                                                 mode="single"
-                                                selected={classForm.suitable_duties_from ? new Date(classForm.suitable_duties_from + 'T00:00:00') : undefined}
+                                                selected={toDateOnly(classForm.suitable_duties_from) ? new Date(toDateOnly(classForm.suitable_duties_from) + 'T00:00:00') : undefined}
                                                 onSelect={(date) => setClassForm({ ...classForm, suitable_duties_from: date ? date.toLocaleDateString('en-CA') : '' })}
                                             />
                                         </PopoverContent>
@@ -811,15 +977,13 @@ export default function InjuryShow({ injury, comments, options }: Props) {
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" className={`w-full justify-start text-left font-normal ${!classForm.suitable_duties_to ? 'text-muted-foreground' : ''}`}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {classForm.suitable_duties_to
-                                                    ? new Date(classForm.suitable_duties_to + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                    : 'Pick a date'}
+                                                {classForm.suitable_duties_to ? fmtDateOnly(classForm.suitable_duties_to) : 'Pick a date'}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0">
                                             <Calendar
                                                 mode="single"
-                                                selected={classForm.suitable_duties_to ? new Date(classForm.suitable_duties_to + 'T00:00:00') : undefined}
+                                                selected={toDateOnly(classForm.suitable_duties_to) ? new Date(toDateOnly(classForm.suitable_duties_to) + 'T00:00:00') : undefined}
                                                 onSelect={(date) => setClassForm({ ...classForm, suitable_duties_to: date ? date.toLocaleDateString('en-CA') : '' })}
                                             />
                                         </PopoverContent>

@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\User;
 use App\Notifications\InjuryCreatedNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Browsershot\Browsershot;
 use Inertia\Inertia;
@@ -228,10 +229,21 @@ class InjuryController extends Controller
                 ]),
             ]);
 
+        $notifyUsers = User::orderBy('name')
+            ->get(['id', 'name', 'email', 'phone'])
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'has_sms' => User::normaliseAuMobile($u->phone) !== null,
+            ])
+            ->values();
+
         return Inertia::render('injury-register/show', [
             'injury' => $injury,
             'comments' => $comments,
             'options' => $this->getFormOptions(),
+            'notifyUsers' => $notifyUsers,
         ]);
     }
 
@@ -335,16 +347,66 @@ class InjuryController extends Controller
         return back()->with('success', 'Record unlocked.');
     }
 
-    public function testNotification(Injury $injury)
+    public function testNotification(Request $request, Injury $injury)
     {
+        $request->validate([
+            'phone' => 'nullable|string|max:30',
+        ]);
+
         $injury->load(['employee', 'location', 'creator']);
 
         $notification = new InjuryCreatedNotification($injury);
         $notification->afterCommit = false;
 
+        if ($request->filled('phone')) {
+            $phone = User::normaliseAuMobile($request->input('phone'));
+            if (! $phone) {
+                return back()->withErrors(['phone' => 'Enter a valid Australian mobile number (e.g. 0412 345 678).']);
+            }
+            Notification::route('clicksend', $phone)->notifyNow($notification);
+
+            return back()->with('success', 'Test SMS sent to ' . $phone);
+        }
+
         auth()->user()->notifyNow($notification);
 
         return back()->with('success', 'Test notification sent to ' . auth()->user()->email);
+    }
+
+    public function sendNotification(Request $request, Injury $injury)
+    {
+        $request->validate([
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'integer|exists:users,id',
+            'channels' => 'required|array|min:1',
+            'channels.*' => 'string|in:mail,sms',
+        ]);
+
+        $injury->load(['employee', 'location', 'creator']);
+        $users = User::whereIn('id', $request->input('user_ids'))->get();
+
+        $sent = 0;
+        $skipped = [];
+
+        foreach ($users as $user) {
+            $notification = (new InjuryCreatedNotification($injury))->only($request->input('channels'));
+            $resolvedChannels = $notification->via($user);
+
+            if (empty($resolvedChannels)) {
+                $skipped[] = $user->name;
+                continue;
+            }
+
+            $user->notify($notification);
+            $sent++;
+        }
+
+        $message = "Notification sent to {$sent} user" . ($sent === 1 ? '' : 's') . '.';
+        if (! empty($skipped)) {
+            $message .= ' Skipped (no matching channel): ' . implode(', ', $skipped) . '.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function downloadPdf(Injury $injury)
