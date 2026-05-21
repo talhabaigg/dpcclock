@@ -27,7 +27,7 @@ class ToolboxTalkController extends Controller
         $query = ToolboxTalk::with(['location', 'calledBy', 'attendees.employee']);
 
         if ($showTrashed) {
-            $query->onlyTrashed();
+            $query->withTrashed();
         }
 
         if ($request->filled('location_id')) {
@@ -334,14 +334,20 @@ class ToolboxTalkController extends Controller
 
     public function lock(ToolboxTalk $toolboxTalk)
     {
-        $toolboxTalk->update(['locked_at' => now()]);
+        $toolboxTalk->update([
+            'locked_at' => now(),
+            'manually_unlocked_at' => null,
+        ]);
 
         return redirect()->back()->with('success', 'Toolbox talk locked.');
     }
 
     public function unlock(ToolboxTalk $toolboxTalk)
     {
-        $toolboxTalk->update(['locked_at' => null]);
+        $toolboxTalk->update([
+            'locked_at' => null,
+            'manually_unlocked_at' => now(),
+        ]);
 
         return redirect()->back()->with('success', 'Toolbox talk unlocked.');
     }

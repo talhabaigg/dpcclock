@@ -1,7 +1,9 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
 import AppLayout from '@/layouts/app-layout';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useInitials } from '@/hooks/use-initials';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 interface EmployeeSummary {
@@ -60,7 +62,7 @@ function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; var
                                 </AvatarFallback>
                             </Avatar>
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-48 text-xs">
+                        <TooltipContent className="flex max-w-48 flex-col items-start gap-0.5 text-xs">
                             {employees.slice(maxShow).map((e) => (
                                 <div key={e.id}>{e.name}</div>
                             ))}
@@ -85,6 +87,7 @@ interface Talk {
     meeting_date_formatted: string;
     meeting_subject: string;
     is_locked: boolean;
+    deleted_at: string | null;
     location: Location | null;
     called_by: { id: number; name: string } | null;
     signed_employees?: EmployeeSummary[];
@@ -232,25 +235,17 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                             Clear
                         </Button>
                     )}
-                    <div className="ml-auto flex items-center gap-2">
-                        {showTrashed ? (
-                            <Button variant="outline" asChild>
-                                <Link href="/toolbox-talks">
-                                    <ArrowLeft className="mr-2 h-4 w-4" />
-                                    Back to active
-                                </Link>
-                            </Button>
-                        ) : (
-                            can('prestarts.delete') && trashedCount > 0 && (
-                                <Button variant="outline" asChild>
-                                    <Link href="/toolbox-talks?trashed=1">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Deleted ({trashedCount})
-                                    </Link>
-                                </Button>
-                            )
+                    <div className="ml-auto flex items-center gap-3">
+                        {can('prestarts.delete') && (
+                            <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                <Checkbox
+                                    checked={showTrashed}
+                                    onCheckedChange={(checked) => applyFilter('trashed', checked ? '1' : '')}
+                                />
+                                <span>Show deleted{trashedCount > 0 ? ` (${trashedCount})` : ''}</span>
+                            </label>
                         )}
-                        {!showTrashed && can('prestarts.create') && (
+                        {can('prestarts.create') && (
                             <Button asChild>
                                 <Link href="/toolbox-talks/create">
                                     <Plus className="mr-2 h-4 w-4" />
@@ -279,16 +274,26 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                             {talks.data.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                                        {showTrashed ? 'No deleted toolbox talks.' : 'No toolbox talks found.'}
+                                        No toolbox talks found.
                                     </TableCell>
                                 </TableRow>
                             )}
-                            {talks.data.map((t) => (
-                                <TableRow key={t.id}>
+                            {talks.data.map((t) => {
+                                const isDeleted = !!t.deleted_at;
+                                return (
+                                <TableRow
+                                    key={t.id}
+                                    className={isDeleted ? 'bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-950/40' : undefined}
+                                >
                                     <TableCell>
                                         <span className="flex items-center gap-1.5">
                                             {t.is_locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
                                             {t.meeting_date_formatted}
+                                            {isDeleted && (
+                                                <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                                    Deleted
+                                                </Badge>
+                                            )}
                                         </span>
                                     </TableCell>
                                     <TableCell>{t.location?.name ?? '-'}</TableCell>
@@ -308,7 +313,7 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
-                                                {showTrashed ? (
+                                                {isDeleted ? (
                                                     can('prestarts.delete') && (
                                                         <DropdownMenuItem onClick={() => restoreTalk(t)}>
                                                             Restore
@@ -362,7 +367,8 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                         </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>

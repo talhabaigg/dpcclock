@@ -29,6 +29,7 @@ class ToolboxTalk extends Model implements HasMedia
         'floor_comments',
         'created_by',
         'locked_at',
+        'manually_unlocked_at',
         'public_token',
     ];
 
@@ -48,6 +49,7 @@ class ToolboxTalk extends Model implements HasMedia
         'near_misses' => 'array',
         'floor_comments' => 'array',
         'locked_at' => 'datetime',
+        'manually_unlocked_at' => 'datetime',
     ];
 
     protected $appends = ['meeting_date_formatted', 'is_locked'];
@@ -84,6 +86,11 @@ class ToolboxTalk extends Model implements HasMedia
     {
         if ($this->locked_at) {
             return true;
+        }
+
+        // Explicit unlock overrides the past-date auto-lock below
+        if ($this->manually_unlocked_at) {
+            return false;
         }
 
         if (! $this->meeting_date) {
