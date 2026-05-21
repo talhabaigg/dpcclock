@@ -29,6 +29,7 @@ class SigningRequestController extends Controller
             'delivery_method' => 'nullable|in:email,in_person',
             'signable_type' => 'nullable|string',
             'sent_by' => 'nullable|integer',
+            'recipient' => 'nullable|string|max:255',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date',
             'q' => 'nullable|string|max:255',
@@ -54,6 +55,9 @@ class SigningRequestController extends Controller
         if (! empty($filters['sent_by'])) {
             $query->where('sent_by', $filters['sent_by']);
         }
+        if (! empty($filters['recipient'])) {
+            $query->where('recipient_name', $filters['recipient']);
+        }
         if (! empty($filters['date_from'])) {
             $query->whereDate('created_at', '>=', $filters['date_from']);
         }
@@ -76,6 +80,15 @@ class SigningRequestController extends Controller
             ->whereIn('id', SigningRequest::query()->whereNotNull('sent_by')->distinct()->pluck('sent_by'))
             ->orderBy('name')
             ->get(['id', 'name']);
+
+        $recipients = SigningRequest::query()
+            ->whereNotNull('recipient_name')
+            ->where('recipient_name', '!=', '')
+            ->distinct()
+            ->orderBy('recipient_name')
+            ->pluck('recipient_name')
+            ->map(fn ($name) => ['value' => $name, 'label' => $name])
+            ->values();
 
         return \Inertia\Inertia::render('signing-requests/index', [
             'signingRequests' => $signingRequests->through(fn ($sr) => [
@@ -101,6 +114,7 @@ class SigningRequestController extends Controller
             ]),
             'filters' => $filters,
             'senders' => $senders,
+            'recipients' => $recipients,
             'signableTypes' => [
                 ['value' => \App\Models\Employee::class, 'label' => 'Employee'],
                 ['value' => \App\Models\EmploymentApplication::class, 'label' => 'Employment Application'],

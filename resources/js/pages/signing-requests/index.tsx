@@ -1,6 +1,7 @@
 import { DatePickerDemo } from '@/components/date-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@/components/ui/combobox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,7 @@ interface Filters {
     delivery_method?: string;
     signable_type?: string;
     sent_by?: string;
+    recipient?: string;
     date_from?: string;
     date_to?: string;
     q?: string;
@@ -61,6 +63,7 @@ interface IndexPageProps {
     signingRequests: PaginatedResponse<SigningRequestRow>;
     filters: Filters;
     senders: { id: number; name: string }[];
+    recipients: { value: string; label: string }[];
     signableTypes: { value: string; label: string }[];
     statuses: string[];
     [key: string]: unknown;
@@ -80,6 +83,9 @@ function formatDateTime(dateStr: string | null): string {
     });
 }
 
+const RESENDABLE_STATUSES = ['sent', 'opened', 'viewed'];
+const isResendable = (status: string) => RESENDABLE_STATUSES.includes(status);
+
 function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
     if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
     const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
@@ -92,22 +98,25 @@ function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
 }
 
 export default function SigningRequestsIndex() {
-    const { signingRequests, filters, senders, signableTypes, statuses } = usePage<IndexPageProps>().props;
+    const { signingRequests, filters, senders, recipients, signableTypes, statuses } = usePage<IndexPageProps>().props;
 
     const [q, setQ] = useState(filters.q ?? '');
     const [status, setStatus] = useState(filters.status ?? 'all');
     const [deliveryMethod, setDeliveryMethod] = useState(filters.delivery_method ?? 'all');
     const [signableType, setSignableType] = useState(filters.signable_type ?? 'all');
     const [sentBy, setSentBy] = useState<string>(filters.sent_by ?? 'all');
+    const [recipient, setRecipient] = useState<string>(filters.recipient ?? 'all');
     const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
     const [dateTo, setDateTo] = useState(filters.date_to ?? '');
     const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [bulkResending, setBulkResending] = useState(false);
 
     const buildParams = (overrides: Partial<Filters> = {}) => {
         const params: Record<string, string> = {};
         const effective = {
             q, status, delivery_method: deliveryMethod, signable_type: signableType,
-            sent_by: sentBy, date_from: dateFrom, date_to: dateTo,
+            sent_by: sentBy, recipient, date_from: dateFrom, date_to: dateTo,
             per_page: filters.per_page ?? String(signingRequests.per_page),
             ...overrides,
         };
@@ -116,6 +125,7 @@ export default function SigningRequestsIndex() {
         if (effective.delivery_method && effective.delivery_method !== 'all') params.delivery_method = effective.delivery_method;
         if (effective.signable_type && effective.signable_type !== 'all') params.signable_type = effective.signable_type;
         if (effective.sent_by && effective.sent_by !== 'all') params.sent_by = effective.sent_by;
+        if (effective.recipient && effective.recipient !== 'all') params.recipient = effective.recipient;
         if (effective.date_from) params.date_from = effective.date_from;
         if (effective.date_to) params.date_to = effective.date_to;
         if (effective.per_page) params.per_page = effective.per_page;
@@ -135,7 +145,7 @@ export default function SigningRequestsIndex() {
     };
 
     const resetFilters = () => {
-        setQ(''); setStatus('all'); setDeliveryMethod('all'); setSignableType('all'); setSentBy('all'); setDateFrom(''); setDateTo('');
+        setQ(''); setStatus('all'); setDeliveryMethod('all'); setSignableType('all'); setSentBy('all'); setRecipient('all'); setDateFrom(''); setDateTo('');
         router.get(route('signing-requests.index'), {}, { preserveState: true, preserveScroll: true });
     };
 
@@ -147,6 +157,57 @@ export default function SigningRequestsIndex() {
 
     }, [q]);
 
+    // Drop stale selections whenever the visible rows change (filter/page/resend reload).
+    useEffect(() => {
+        setSelectedIds((prev) => {
+            if (prev.size === 0) return prev;
+            const visible = new Set(signingRequests.data.map((r) => r.id));
+            const next = new Set<number>();
+            prev.forEach((id) => { if (visible.has(id)) next.add(id); });
+            return next.size === prev.size ? prev : next;
+        });
+    }, [signingRequests.data]);
+
+    const toggleSelected = (id: number) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const resendableRows = signingRequests.data.filter((r) => isResendable(r.status));
+    const allResendableSelected = resendableRows.length > 0 && resendableRows.every((r) => selectedIds.has(r.id));
+    const someResendableSelected = resendableRows.some((r) => selectedIds.has(r.id));
+
+    const toggleSelectAll = () => {
+        setSelectedIds((prev) => {
+            if (allResendableSelected) {
+                const next = new Set(prev);
+                resendableRows.forEach((r) => next.delete(r.id));
+                return next;
+            }
+            const next = new Set(prev);
+            resendableRows.forEach((r) => next.add(r.id));
+            return next;
+        });
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const bulkResend = () => {
+        if (selectedIds.size === 0) return;
+        router.post(
+            route('signing-requests.bulk-resend'),
+            { ids: Array.from(selectedIds) },
+            {
+                preserveScroll: true,
+                onBefore: () => setBulkResending(true),
+                onFinish: () => { setBulkResending(false); setSelectedIds(new Set()); },
+            },
+        );
+    };
+
     const signableTypeLabel = useMemo(() => {
         const map = new Map(signableTypes.map((t) => [t.value, t.label]));
         return (type: string | null) => (type ? map.get(type) ?? type.split('\\').pop() ?? type : '—');
@@ -157,11 +218,13 @@ export default function SigningRequestsIndex() {
         deliveryMethod !== 'all',
         signableType !== 'all',
         sentBy !== 'all',
+        recipient !== 'all',
         !!dateFrom,
         !!dateTo,
     ].filter(Boolean).length;
 
     const selectedSender = senders.find((s) => String(s.id) === sentBy);
+    const selectedRecipient = recipients.find((r) => r.value === recipient) ?? null;
 
     const fromRow = signingRequests.total === 0 ? 0 : (signingRequests.current_page - 1) * signingRequests.per_page + 1;
     const toRow = Math.min(signingRequests.current_page * signingRequests.per_page, signingRequests.total);
@@ -184,6 +247,17 @@ export default function SigningRequestsIndex() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {selectedIds.size > 0 && (
+                            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1">
+                                <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+                                <Button size="sm" onClick={bulkResend} disabled={bulkResending}>
+                                    {bulkResending ? 'Resending…' : 'Resend selected'}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={clearSelection} disabled={bulkResending}>
+                                    Clear
+                                </Button>
+                            </div>
+                        )}
                         <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
                             <SheetTrigger asChild>
                                 <Button variant="outline" size="sm" className="gap-2">
@@ -277,6 +351,49 @@ export default function SigningRequestsIndex() {
                                     </div>
 
                                     <div className="flex flex-col gap-1.5">
+                                        <Label>Recipient</Label>
+                                        <Combobox
+                                            items={recipients}
+                                            value={selectedRecipient}
+                                            onValueChange={(r: { value: string; label: string } | null) => {
+                                                const v = r ? r.value : 'all';
+                                                setRecipient(v);
+                                                applyFilters({ recipient: v });
+                                            }}
+                                        >
+                                            <ComboboxTrigger
+                                                render={<Button variant="outline" className="w-full justify-between font-normal" />}
+                                                aria-label="Filter by recipient"
+                                            >
+                                                <span className={selectedRecipient ? '' : 'text-muted-foreground'}>
+                                                    {selectedRecipient?.label ?? 'All recipients'}
+                                                </span>
+                                            </ComboboxTrigger>
+                                            <ComboboxContent className="w-(--anchor-width) min-w-(--anchor-width) p-0">
+                                                <ComboboxInput placeholder="Search recipients…" className="h-9" showTrigger={false} />
+                                                <ComboboxEmpty>No recipients found.</ComboboxEmpty>
+                                                <ComboboxList>
+                                                    {(r: { value: string; label: string }) => (
+                                                        <ComboboxItem key={r.value} value={r}>
+                                                            {r.label}
+                                                        </ComboboxItem>
+                                                    )}
+                                                </ComboboxList>
+                                            </ComboboxContent>
+                                        </Combobox>
+                                        {recipient !== 'all' && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="self-start text-xs"
+                                                onClick={() => { setRecipient('all'); applyFilters({ recipient: 'all' }); }}
+                                            >
+                                                Clear recipient
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
                                         <Label>From date</Label>
                                         <DatePickerDemo
                                             value={dateFrom ? parse(dateFrom, 'yyyy-MM-dd', new Date()) : undefined}
@@ -310,6 +427,15 @@ export default function SigningRequestsIndex() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-10 px-3">
+                                    <Checkbox
+                                        checked={allResendableSelected}
+                                        indeterminate={!allResendableSelected && someResendableSelected}
+                                        onCheckedChange={toggleSelectAll}
+                                        disabled={resendableRows.length === 0}
+                                        aria-label="Select all resendable"
+                                    />
+                                </TableHead>
                                 <TableHead className="px-3 text-xs">Document</TableHead>
                                 <TableHead className="px-3 text-xs">Recipient</TableHead>
                                 <TableHead className="px-3 text-xs">Signable</TableHead>
@@ -321,7 +447,7 @@ export default function SigningRequestsIndex() {
                         <TableBody>
                             {signingRequests.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-sm text-muted-foreground">
+                                    <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
                                         No signing requests match your filters.
                                     </TableCell>
                                 </TableRow>
@@ -329,13 +455,22 @@ export default function SigningRequestsIndex() {
                                 signingRequests.data.map((sr) => {
                                     const isSigned = sr.status === 'signed';
                                     const isPending = ['pending', 'sent', 'opened', 'viewed'].includes(sr.status);
+                                    const rowResendable = isResendable(sr.status);
                                     const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
                                     const statusLabel = isSigned ? 'signed' : sr.status;
                                     const statusTimestamp = isSigned
                                         ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
                                         : (sr.created_at ? formatDateTime(sr.created_at) : '');
                                     return (
-                                        <TableRow key={sr.id}>
+                                        <TableRow key={sr.id} data-selected={selectedIds.has(sr.id) ? 'true' : undefined}>
+                                            <TableCell className="px-3">
+                                                <Checkbox
+                                                    checked={selectedIds.has(sr.id)}
+                                                    onCheckedChange={() => toggleSelected(sr.id)}
+                                                    disabled={!rowResendable}
+                                                    aria-label={rowResendable ? `Select request ${sr.id}` : `Request ${sr.id} cannot be resent`}
+                                                />
+                                            </TableCell>
                                             <TableCell className="px-3 text-xs">
                                                 <p className="font-medium leading-tight">{docTitle}</p>
                                                 <p className="text-[10px] text-muted-foreground">
