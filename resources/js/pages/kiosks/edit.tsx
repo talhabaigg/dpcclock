@@ -18,6 +18,7 @@ import AddEmployeesToKiosk from './edit-partials/add-employees-kiosk-dialog';
 import AddManagerKioskDialog from './edit-partials/add-manager-kiosk-dialog';
 import GenerateTimesheetsAvailableEventsCard from './edit-partials/generate-timesheets-available-events-card';
 import RegisteredDevicesCard from './edit-partials/registered-devices-card';
+import RemoveEmployeeButton from './edit-partials/remove-employee-button';
 
 interface Employee {
     id: number;
@@ -239,6 +240,12 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                                                                 </HoverCardContent>
                                                             </HoverCard>
                                                         </div>
+
+                                                        <RemoveEmployeeButton
+                                                            kioskId={kiosk.id}
+                                                            employeeId={emp.id}
+                                                            employeeName={emp.name}
+                                                        />
                                                     </div>
                                                 </div>
                                             ))}

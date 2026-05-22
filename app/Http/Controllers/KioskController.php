@@ -173,6 +173,13 @@ class KioskController extends Controller
         return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Employees added to kiosk successfully.');
     }
 
+    public function removeEmployeeFromKiosk(Kiosk $kiosk, Employee $employee)
+    {
+        $kiosk->employees()->detach($employee->eh_employee_id);
+
+        return redirect()->back()->with('success', "{$employee->name} removed from kiosk. They will reappear if synced from Employment Hero.");
+    }
+
     public function updateZones(Request $request, Kiosk $kiosk)
     {
         $data = $request->validate([
