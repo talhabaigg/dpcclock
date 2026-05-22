@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,6 +35,7 @@ interface SigningRequestRow {
     signable_url: string | null;
     document_template: { id: number; name: string } | null;
     sent_by: { id: number; name: string } | null;
+    internal_signer: { id: number; name: string } | null;
 }
 
 interface PaginatedResponse<T> {
@@ -48,7 +50,7 @@ interface PaginatedResponse<T> {
 }
 
 interface Filters {
-    status?: string;
+    status?: string[];
     delivery_method?: string;
     signable_type?: string;
     sent_by?: string;
@@ -83,7 +85,10 @@ function formatDateTime(dateStr: string | null): string {
     });
 }
 
-const RESENDABLE_STATUSES = ['sent', 'opened', 'viewed'];
+// Statuses that can be re-fired from the row dropdown or via bulk-resend.
+// `awaiting_internal_signature` re-fires the internal-signer reminder; the
+// rest cancel-and-recreate the recipient-bound request.
+const RESENDABLE_STATUSES = ['sent', 'opened', 'viewed', 'awaiting_internal_signature'];
 const isResendable = (status: string) => RESENDABLE_STATUSES.includes(status);
 
 function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
@@ -101,7 +106,8 @@ export default function SigningRequestsIndex() {
     const { signingRequests, filters, senders, recipients, signableTypes, statuses } = usePage<IndexPageProps>().props;
 
     const [q, setQ] = useState(filters.q ?? '');
-    const [status, setStatus] = useState(filters.status ?? 'all');
+    const [status, setStatus] = useState<string[]>(filters.status ?? []);
+    const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
     const [deliveryMethod, setDeliveryMethod] = useState(filters.delivery_method ?? 'all');
     const [signableType, setSignableType] = useState(filters.signable_type ?? 'all');
     const [sentBy, setSentBy] = useState<string>(filters.sent_by ?? 'all');
@@ -113,7 +119,7 @@ export default function SigningRequestsIndex() {
     const [bulkResending, setBulkResending] = useState(false);
 
     const buildParams = (overrides: Partial<Filters> = {}) => {
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const effective = {
             q, status, delivery_method: deliveryMethod, signable_type: signableType,
             sent_by: sentBy, recipient, date_from: dateFrom, date_to: dateTo,
@@ -121,7 +127,7 @@ export default function SigningRequestsIndex() {
             ...overrides,
         };
         if (effective.q) params.q = effective.q;
-        if (effective.status && effective.status !== 'all') params.status = effective.status;
+        if (Array.isArray(effective.status) && effective.status.length > 0) params.status = effective.status;
         if (effective.delivery_method && effective.delivery_method !== 'all') params.delivery_method = effective.delivery_method;
         if (effective.signable_type && effective.signable_type !== 'all') params.signable_type = effective.signable_type;
         if (effective.sent_by && effective.sent_by !== 'all') params.sent_by = effective.sent_by;
@@ -145,7 +151,7 @@ export default function SigningRequestsIndex() {
     };
 
     const resetFilters = () => {
-        setQ(''); setStatus('all'); setDeliveryMethod('all'); setSignableType('all'); setSentBy('all'); setRecipient('all'); setDateFrom(''); setDateTo('');
+        setQ(''); setStatus([]); setDeliveryMethod('all'); setSignableType('all'); setSentBy('all'); setRecipient('all'); setDateFrom(''); setDateTo('');
         router.get(route('signing-requests.index'), {}, { preserveState: true, preserveScroll: true });
     };
 
@@ -214,7 +220,7 @@ export default function SigningRequestsIndex() {
     }, [signableTypes]);
 
     const activeFilterCount = [
-        status !== 'all',
+        status.length > 0,
         deliveryMethod !== 'all',
         signableType !== 'all',
         sentBy !== 'all',
@@ -225,6 +231,28 @@ export default function SigningRequestsIndex() {
 
     const selectedSender = senders.find((s) => String(s.id) === sentBy);
     const selectedRecipient = recipients.find((r) => r.value === recipient) ?? null;
+
+    const toggleStatus = (s: string) => {
+        const next = status.includes(s) ? status.filter((x) => x !== s) : [...status, s];
+        setStatus(next);
+        applyFilters({ status: next });
+    };
+
+    const selectAllStatuses = () => {
+        setStatus(statuses);
+        applyFilters({ status: statuses });
+    };
+
+    const clearStatuses = () => {
+        setStatus([]);
+        applyFilters({ status: [] });
+    };
+
+    const statusLabel = status.length === 0
+        ? 'All (except cancelled)'
+        : status.length === 1
+            ? status[0]
+            : `${status.length} selected`;
 
     const fromRow = signingRequests.total === 0 ? 0 : (signingRequests.current_page - 1) * signingRequests.per_page + 1;
     const toRow = Math.min(signingRequests.current_page * signingRequests.per_page, signingRequests.total);
@@ -251,7 +279,7 @@ export default function SigningRequestsIndex() {
                             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1">
                                 <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
                                 <Button size="sm" onClick={bulkResend} disabled={bulkResending}>
-                                    {bulkResending ? 'Resending…' : 'Resend selected'}
+                                    {bulkResending ? 'Sending…' : 'Resend / Remind'}
                                 </Button>
                                 <Button size="sm" variant="ghost" onClick={clearSelection} disabled={bulkResending}>
                                     Clear
@@ -275,13 +303,47 @@ export default function SigningRequestsIndex() {
                                 <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
                                     <div className="flex flex-col gap-1.5">
                                         <Label>Status</Label>
-                                        <Select value={status} onValueChange={(v) => { setStatus(v); applyFilters({ status: v }); }}>
-                                            <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All statuses</SelectItem>
-                                                {statuses.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                        <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-between font-normal">
+                                                    <span className={status.length === 0 ? 'text-muted-foreground' : 'capitalize'}>{statusLabel}</span>
+                                                    <span className="text-muted-foreground text-xs">{status.length > 0 ? `${status.length}` : ''}</span>
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-(--anchor-width) min-w-(--anchor-width) p-2" align="start">
+                                                <div className="flex items-center justify-between px-1 pb-2">
+                                                    <button
+                                                        type="button"
+                                                        className="text-xs text-primary hover:underline"
+                                                        onClick={selectAllStatuses}
+                                                    >
+                                                        Select all
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-xs text-muted-foreground hover:underline"
+                                                        onClick={clearStatuses}
+                                                    >
+                                                        Reset (hide cancelled)
+                                                    </button>
+                                                </div>
+                                                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                                                    {statuses.map((s) => (
+                                                        <label
+                                                            key={s}
+                                                            className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                                                        >
+                                                            <Checkbox
+                                                                checked={status.includes(s)}
+                                                                onCheckedChange={() => toggleStatus(s)}
+                                                                aria-label={s}
+                                                            />
+                                                            <span className="capitalize">{s}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
 
                                     <div className="flex flex-col gap-1.5">
@@ -455,9 +517,10 @@ export default function SigningRequestsIndex() {
                                 signingRequests.data.map((sr) => {
                                     const isSigned = sr.status === 'signed';
                                     const isPending = ['pending', 'sent', 'opened', 'viewed'].includes(sr.status);
+                                    const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
                                     const rowResendable = isResendable(sr.status);
                                     const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
-                                    const statusLabel = isSigned ? 'signed' : sr.status;
+                                    const statusLabel = isSigned ? 'signed' : isAwaitingInternal ? 'awaiting internal signature' : sr.status;
                                     const statusTimestamp = isSigned
                                         ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
                                         : (sr.created_at ? formatDateTime(sr.created_at) : '');
@@ -481,6 +544,11 @@ export default function SigningRequestsIndex() {
                                             <TableCell className="px-3 text-xs">
                                                 <p>{sr.recipient_name}</p>
                                                 {sr.recipient_email && <p className="text-[10px] text-muted-foreground">{sr.recipient_email}</p>}
+                                                {isAwaitingInternal && sr.internal_signer && (
+                                                    <p className="mt-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                                                        Waiting on {sr.internal_signer.name}
+                                                    </p>
+                                                )}
                                             </TableCell>
                                             <TableCell className="px-3 text-xs">
                                                 {sr.signable_url && sr.signable_label ? (
@@ -537,7 +605,24 @@ export default function SigningRequestsIndex() {
                                                                 </DropdownMenuItem>
                                                             </>
                                                         )}
-                                                        {!isSigned && !isPending && (
+                                                        {isAwaitingInternal && (
+                                                            <>
+                                                                <DropdownMenuItem
+                                                                    className="whitespace-nowrap"
+                                                                    onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                >
+                                                                    {sr.internal_signer ? `Remind ${sr.internal_signer.name}` : 'Send reminder'}
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                    onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                >
+                                                                    Cancel
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                        {!isSigned && !isPending && !isAwaitingInternal && (
                                                             <DropdownMenuItem disabled className="whitespace-nowrap text-muted-foreground">
                                                                 No actions available
                                                             </DropdownMenuItem>

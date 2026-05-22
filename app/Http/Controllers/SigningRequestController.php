@@ -25,7 +25,8 @@ class SigningRequestController extends Controller
     public function index(Request $request)
     {
         $filters = $request->validate([
-            'status' => 'nullable|string',
+            'status' => 'nullable|array',
+            'status.*' => 'string',
             'delivery_method' => 'nullable|in:email,in_person',
             'signable_type' => 'nullable|string',
             'sent_by' => 'nullable|integer',
@@ -40,11 +41,14 @@ class SigningRequestController extends Controller
         unset($filters['per_page']);
 
         $query = SigningRequest::query()
-            ->with(['documentTemplate:id,name', 'sentBy:id,name', 'signable'])
+            ->with(['documentTemplate:id,name', 'sentBy:id,name', 'internalSigner:id,name', 'signable'])
             ->latest();
 
         if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $query->whereIn('status', $filters['status']);
+        } else {
+            // Default: hide cancelled requests unless the caller explicitly asks for them.
+            $query->where('status', '!=', 'cancelled');
         }
         if (! empty($filters['delivery_method'])) {
             $query->where('delivery_method', $filters['delivery_method']);
@@ -111,6 +115,7 @@ class SigningRequestController extends Controller
                     'name' => $sr->documentTemplate->name,
                 ] : null,
                 'sent_by' => $sr->sentBy ? ['id' => $sr->sentBy->id, 'name' => $sr->sentBy->name] : null,
+                'internal_signer' => $sr->internalSigner ? ['id' => $sr->internalSigner->id, 'name' => $sr->internalSigner->name] : null,
             ]),
             'filters' => $filters,
             'senders' => $senders,
@@ -1307,6 +1312,21 @@ class SigningRequestController extends Controller
     public function resend(Request $request, SigningRequest $signingRequest)
     {
         $this->authorizeSignableAction($signingRequest);
+
+        // For awaiting_internal_signature requests, "resend" means nudge the
+        // internal signer rather than cancel-and-recreate the request.
+        if ($signingRequest->status === 'awaiting_internal_signature') {
+            $this->signingService->resendInternalReminder($signingRequest, $request->user());
+            $signer = $signingRequest->internalSigner;
+
+            return redirect()->back()->with(
+                'success',
+                $signer
+                    ? "Reminder sent to {$signer->name}."
+                    : 'Reminder sent.',
+            );
+        }
+
         $this->signingService->resend($signingRequest, $request->user());
 
         return redirect()->back()->with('success', 'Document resent for signing.');
@@ -1359,16 +1379,25 @@ class SigningRequestController extends Controller
         ]);
 
         $resendableStatuses = ['sent', 'opened', 'viewed'];
-        $requests = SigningRequest::query()->whereIn('id', $data['ids'])->get();
+        $requests = SigningRequest::query()->whereIn('id', $data['ids'])->with('internalSigner')->get();
 
-        // Group resendable requests by recipient so each recipient receives a
-        // single consolidated email containing all of their resent links.
+        // Two flows here:
+        //   - Standard resends are grouped by recipient and re-fired as a single
+        //     consolidated email per recipient (cancel-and-recreate).
+        //   - awaiting_internal_signature rows are grouped by internal signer
+        //     and re-fired as a single reminder per signer; the original
+        //     request is preserved (we don't want to invalidate signing tokens).
         $byRecipient = [];
+        $byInternalSigner = [];
         foreach ($requests as $sr) {
+            $this->authorizeSignableAction($sr);
+            if ($sr->status === 'awaiting_internal_signature' && $sr->internal_signer_user_id) {
+                $byInternalSigner[$sr->internal_signer_user_id][] = $sr;
+                continue;
+            }
             if (! in_array($sr->status, $resendableStatuses, true)) {
                 continue;
             }
-            $this->authorizeSignableAction($sr);
             $key = ($sr->recipient_email ?? 'no-email') . '|' . $sr->recipient_name . '|' . $sr->delivery_method;
             $byRecipient[$key][] = $sr;
         }
@@ -1415,8 +1444,32 @@ class SigningRequestController extends Controller
             );
         }
 
-        $emailCount = count($byRecipient);
-        return redirect()->back()->with('success', "Resent {$resent} signing request" . ($resent === 1 ? '' : 's') . " in {$emailCount} email" . ($emailCount === 1 ? '' : 's') . '.');
+        // Internal-signer reminders: one notification per signer regardless of
+        // how many awaiting rows they hold. Use the batch notification when
+        // there's more than one document, otherwise the single-doc reminder.
+        $reminded = 0;
+        foreach ($byInternalSigner as $signerRequests) {
+            $signer = $signerRequests[0]->internalSigner;
+            if (! $signer) {
+                continue;
+            }
+            if (count($signerRequests) === 1) {
+                $signer->notify(new \App\Notifications\InternalSignatureRequestedNotification($signerRequests[0]));
+            } else {
+                $signer->notify(new \App\Notifications\BatchInternalSignatureRequestedNotification(collect($signerRequests)));
+            }
+            foreach ($signerRequests as $sr) {
+                $sr->logEvent('internal_reminder_sent', 'admin', $request->user()->id, null, [
+                    'to' => $signer->email,
+                    'batched' => count($signerRequests) > 1,
+                ]);
+                $reminded++;
+            }
+        }
+
+        $emailCount = count($byRecipient) + count($byInternalSigner);
+        $total = $resent + $reminded;
+        return redirect()->back()->with('success', "Resent {$total} signing request" . ($total === 1 ? '' : 's') . " in {$emailCount} email" . ($emailCount === 1 ? '' : 's') . '.');
     }
 
     public function bulkDownload(Request $request)

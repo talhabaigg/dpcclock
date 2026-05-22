@@ -77,6 +77,7 @@ interface SigningRequestSummary {
     signer_full_name: string | null;
     document_template: { id: number; name: string } | null;
     sent_by: { id: number; name: string } | null;
+    internal_signer: { id: number; name: string } | null;
     signing_url?: string | null;
 }
 
@@ -200,7 +201,9 @@ export default function EmployeeShow() {
         [signingRequests, selectedSigningIds],
     );
     const cancellableStatuses = useMemo(() => new Set(['sent', 'opened', 'viewed', 'awaiting_internal_signature']), []);
-    const resendableStatuses = useMemo(() => new Set(['sent', 'opened', 'viewed']), []);
+    // Resendable includes awaiting_internal_signature — the bulk-resend endpoint
+    // routes those rows through an internal-signer reminder instead of a recipient resend.
+    const resendableStatuses = useMemo(() => new Set(['sent', 'opened', 'viewed', 'awaiting_internal_signature']), []);
     const downloadableStatuses = useMemo(() => new Set(['signed', 'delivered']), []);
     const cancellableSelectedCount = selectedSigningRequests.filter((sr) => cancellableStatuses.has(sr.status)).length;
     const resendableSelectedCount = selectedSigningRequests.filter((sr) => resendableStatuses.has(sr.status)).length;
@@ -751,7 +754,7 @@ export default function EmployeeShow() {
                                                                 ? 'One-off · not yet sent'
                                                                 : (sr.delivery_method === 'email' ? 'Via email' : 'In-person');
                                                             const isSent = !isDraft && !isSigned && !isDelivered && !isAwaitingInternal;
-                                                            const hasActions = isDraft || isSigned || isDelivered || isSent;
+                                                            const hasActions = isDraft || isSigned || isDelivered || isSent || isAwaitingInternal;
                                                             return (
                                                                 <TableRow key={sr.id} data-state={selectedSigningIds.has(sr.id) ? 'selected' : undefined}>
                                                                     <TableCell className="w-10 px-3">
@@ -764,6 +767,11 @@ export default function EmployeeShow() {
                                                                     <TableCell className="px-3 text-xs">
                                                                         <p className="font-medium leading-tight">{docTitle}</p>
                                                                         <p className="text-[10px] text-muted-foreground">{deliveryLabel}</p>
+                                                                        {isAwaitingInternal && sr.internal_signer && (
+                                                                            <p className="mt-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                                                                                Waiting on {sr.internal_signer.name}
+                                                                            </p>
+                                                                        )}
                                                                     </TableCell>
                                                                     <TableCell className="px-3 text-xs">{isDraft ? '—' : (sr.sent_by?.name ?? '—')}</TableCell>
                                                                     <TableCell className="px-3 text-xs">
@@ -818,6 +826,23 @@ export default function EmployeeShow() {
                                                                                             </DropdownMenuItem>
                                                                                         </>
                                                                                     )}
+                                                                                    {isAwaitingInternal && (
+                                                                                        <>
+                                                                                            <DropdownMenuItem
+                                                                                                className="whitespace-nowrap"
+                                                                                                onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                            >
+                                                                                                {sr.internal_signer ? `Remind ${sr.internal_signer.name}` : 'Send reminder'}
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuSeparator />
+                                                                                            <DropdownMenuItem
+                                                                                                className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                                onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                                            >
+                                                                                                Cancel
+                                                                                            </DropdownMenuItem>
+                                                                                        </>
+                                                                                    )}
                                                                                 </DropdownMenuContent>
                                                                             </DropdownMenu>
                                                                         ) : (
@@ -846,7 +871,7 @@ export default function EmployeeShow() {
                                                             ? (sr.signed_at ? formatDateTime(sr.signed_at) : '')
                                                             : (sr.created_at ? formatDateTime(sr.created_at) : '');
                                                     const isSent = !isDraft && !isSigned && !isDelivered && !isAwaitingInternal;
-                                                    const hasActions = isDraft || isSigned || isDelivered || isSent;
+                                                    const hasActions = isDraft || isSigned || isDelivered || isSent || isAwaitingInternal;
                                                     return (
                                                         <div key={sr.id} className="rounded-md border p-3">
                                                             <div className="flex items-start justify-between gap-2">
@@ -860,10 +885,15 @@ export default function EmployeeShow() {
                                                                     <div>
                                                                         <p className="text-sm font-medium">{docTitle}</p>
                                                                         {!isDraft && <p className="text-[10px] text-muted-foreground">by {sr.sent_by?.name ?? '—'}</p>}
+                                                                        {isAwaitingInternal && sr.internal_signer && (
+                                                                            <p className="mt-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                                                                                Waiting on {sr.internal_signer.name}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-1">
-                                                                    <Badge variant={isDraft ? 'outline' : (isSigned ? 'default' : 'secondary')} className="shrink-0 text-[10px] capitalize">{statusLabel}</Badge>
+                                                                    <Badge variant={isDraft ? 'outline' : isDelivered ? 'default' : isAwaitingInternal ? 'outline' : (isSigned ? 'default' : 'secondary')} className="shrink-0 text-[10px] capitalize">{statusLabel}</Badge>
                                                                     {hasActions && (
                                                                         <DropdownMenu>
                                                                             <DropdownMenuTrigger asChild>
@@ -901,6 +931,23 @@ export default function EmployeeShow() {
                                                                                             onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
                                                                                         >
                                                                                             Resend
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuSeparator />
+                                                                                        <DropdownMenuItem
+                                                                                            className="whitespace-nowrap text-destructive focus:text-destructive"
+                                                                                            onClick={() => router.post(`/signing-requests/${sr.id}/cancel`, {}, { preserveScroll: true })}
+                                                                                        >
+                                                                                            Cancel
+                                                                                        </DropdownMenuItem>
+                                                                                    </>
+                                                                                )}
+                                                                                {isAwaitingInternal && (
+                                                                                    <>
+                                                                                        <DropdownMenuItem
+                                                                                            className="whitespace-nowrap"
+                                                                                            onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                        >
+                                                                                            {sr.internal_signer ? `Remind ${sr.internal_signer.name}` : 'Send reminder'}
                                                                                         </DropdownMenuItem>
                                                                                         <DropdownMenuSeparator />
                                                                                         <DropdownMenuItem
@@ -1177,14 +1224,14 @@ export default function EmployeeShow() {
             <AlertDialog open={confirmBulkResend} onOpenChange={setConfirmBulkResend}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Resend {resendableSelectedCount} signing request{resendableSelectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+                        <AlertDialogTitle>Resend / remind {resendableSelectedCount} signing request{resendableSelectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            A reminder email will be sent to each recipient for the selected pending requests.
+                            Recipients get a resent signing email; rows awaiting an internal signer get a reminder to the assigned signer. One email per recipient / signer.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={runBulkResend}>Resend selected</AlertDialogAction>
+                        <AlertDialogAction onClick={runBulkResend}>Send</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

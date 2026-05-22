@@ -13,7 +13,9 @@ use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
 use App\Models\TakeoffCondition;
 use App\Models\Variation;
+use App\Services\ChangeOrderGenerator;
 use App\Services\TakeoffCostCalculator;
+use App\Services\VariationCostCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -234,55 +236,221 @@ class DrawingController extends Controller
         // Compute costs live so the conditions tab matches Labour/Estimate,
         // even if the stored cost columns on measurements are stale.
         $calculator = new TakeoffCostCalculator;
+        $changeOrderGenerator = new ChangeOrderGenerator(new VariationCostCalculator);
 
-        $conditionSummaries = [];
+        // Build per-(condition, area) buckets so the frontend can group by
+        // either condition type or area without a second round-trip.
+        $bucketed = [];
 
-        foreach ($measurements->groupBy('takeoff_condition_id') as $conditionId => $condMeasurements) {
+        foreach ($measurements as $m) {
+            $conditionId = $m->takeoff_condition_id;
             $condition = $conditions->firstWhere('id', $conditionId);
             if (! $condition) {
                 continue;
             }
+            // When a condition has a manual_qty set, it overrides any
+            // measurement-derived qty — the Conditions tab is the source of
+            // truth and the Measure tab is hidden.
+            if ($condition->manual_qty !== null) {
+                continue;
+            }
+            $m->setRelation('condition', $condition);
 
-            $netQty = 0;
-            $materialCost = 0;
-            $labourCost = 0;
-            $totalCost = 0;
-            $areaNames = [];
+            $areaId = $m->bidArea?->id;
+            $areaName = $m->bidArea?->name ?? 'Unassigned';
+            $key = $conditionId.'|'.($areaId ?? 'null');
 
-            foreach ($condMeasurements as $m) {
-                $netQty += $m->computed_value ?? 0;
+            if (! isset($bucketed[$key])) {
+                $bucketed[$key] = [
+                    'condition' => $condition,
+                    'condition_id' => (int) $conditionId,
+                    'area_id' => $areaId,
+                    'area_name' => $areaName,
+                    'qty' => 0.0,
+                    'material_cost' => 0.0,
+                    'labour_cost' => 0.0,
+                    'total_cost' => 0.0,
+                ];
+            }
 
-                $m->setRelation('condition', $condition);
-                $costs = $calculator->compute($m);
-                $materialCost += $costs['material_cost'];
-                $labourCost += $costs['labour_cost'];
-                $totalCost += $costs['total_cost'];
+            $costs = $calculator->compute($m);
+            $bucketed[$key]['qty'] += $m->computed_value ?? 0;
+            $bucketed[$key]['material_cost'] += $costs['material_cost'];
+            $bucketed[$key]['labour_cost'] += $costs['labour_cost'];
+            $bucketed[$key]['total_cost'] += $costs['total_cost'];
 
-                foreach ($m->deductions as $d) {
-                    $netQty -= $d->computed_value ?? 0;
-                    $d->setRelation('condition', $condition);
-                    $dCosts = $calculator->compute($d);
-                    $materialCost -= $dCosts['material_cost'];
-                    $labourCost -= $dCosts['labour_cost'];
-                    $totalCost -= $dCosts['total_cost'];
-                }
+            foreach ($m->deductions as $d) {
+                $d->setRelation('condition', $condition);
+                $dCosts = $calculator->compute($d);
+                $bucketed[$key]['qty'] -= $d->computed_value ?? 0;
+                $bucketed[$key]['material_cost'] -= $dCosts['material_cost'];
+                $bucketed[$key]['labour_cost'] -= $dCosts['labour_cost'];
+                $bucketed[$key]['total_cost'] -= $dCosts['total_cost'];
+            }
+        }
 
-                if ($m->bidArea) {
-                    $areaNames[] = $m->bidArea->name;
+        // Per-unit cost cache for each condition, computed from a unit-1
+        // pseudo-measurement. Lets us populate unit_price for conditions
+        // that have no measurements yet (so manual_qty entry drives the
+        // total correctly) and for the synthetic 'manual' bucket below.
+        $perUnitCosts = [];
+        $perUnitFor = function (TakeoffCondition $c) use (&$perUnitCosts, $calculator) {
+            $cid = (int) $c->id;
+            if (isset($perUnitCosts[$cid])) {
+                return $perUnitCosts[$cid];
+            }
+            $pseudo = new DrawingMeasurement([
+                'computed_value' => 1.0,
+                'perimeter_value' => 0.0,
+            ]);
+            $pseudo->setRelation('condition', $c);
+            return $perUnitCosts[$cid] = $calculator->compute($pseudo);
+        };
+
+        // Ensure every condition appears in the conditions tab so the user
+        // can enter a qty for it directly. For conditions with manual_qty,
+        // build a synthetic bucket using the per-unit rate. For conditions
+        // with no measurements and no manual_qty, add an empty bucket so
+        // the row still shows.
+        foreach ($conditions as $condition) {
+            $cid = (int) $condition->id;
+            $hasBucket = false;
+            foreach ($bucketed as $row) {
+                if ($row['condition_id'] === $cid) {
+                    $hasBucket = true;
+                    break;
                 }
             }
 
-            $unit = match ($condition->type) {
-                'linear' => 'lm',
-                'area' => 'm²',
-                'count' => 'ea',
-                default => 'm',
-            };
+            if ($condition->manual_qty !== null) {
+                $qty = (float) $condition->manual_qty;
+                $costsPerUnit = $perUnitFor($condition);
 
+                $bucketed[$cid.'|manual'] = [
+                    'condition' => $condition,
+                    'condition_id' => $cid,
+                    'area_id' => null,
+                    'area_name' => 'Manual',
+                    'qty' => $qty,
+                    'material_cost' => $qty * $costsPerUnit['material_cost'],
+                    'labour_cost' => $qty * $costsPerUnit['labour_cost'],
+                    'total_cost' => $qty * $costsPerUnit['total_cost'],
+                ];
+            } elseif (! $hasBucket) {
+                $bucketed[$cid.'|none'] = [
+                    'condition' => $condition,
+                    'condition_id' => $cid,
+                    'area_id' => null,
+                    'area_name' => 'Unassigned',
+                    'qty' => 0.0,
+                    'material_cost' => 0.0,
+                    'labour_cost' => 0.0,
+                    'total_cost' => 0.0,
+                ];
+            }
+        }
+
+        // Per-condition aggregates (across all areas) — used for sell-rate
+        // calculation, since ratios are applied at the condition level.
+        $perCondition = [];
+        foreach ($bucketed as $row) {
+            $cid = $row['condition_id'];
+            if (! isset($perCondition[$cid])) {
+                $perCondition[$cid] = [
+                    'qty' => 0.0,
+                    'material_cost' => 0.0,
+                    'labour_cost' => 0.0,
+                    'total_cost' => 0.0,
+                ];
+            }
+            $perCondition[$cid]['qty'] += $row['qty'];
+            $perCondition[$cid]['material_cost'] += $row['material_cost'];
+            $perCondition[$cid]['labour_cost'] += $row['labour_cost'];
+            $perCondition[$cid]['total_cost'] += $row['total_cost'];
+        }
+
+        // Sell rate per condition: premier cost (with location oncost ratios)
+        // divided by qty. Mirrors `ClientVariationTab` premier_cost_per_unit.
+        // Detailed-priced conditions are skipped — VariationCostCalculator
+        // throws on detailed (computeDetailed not yet implemented).
+        $sellRateByCondition = [];
+        foreach ($conditions as $condition) {
+            $cid = (int) $condition->id;
+            if ($condition->pricing_method === 'detailed') {
+                $sellRateByCondition[$cid] = null;
+                continue;
+            }
+            // Use the aggregated cost when there's a qty; otherwise fall back
+            // to the unit-1 per-unit cost so we can still display a sell rate
+            // for conditions that have no measurements yet.
+            $agg = $perCondition[$cid] ?? null;
+            if ($agg && $agg['qty'] > 0) {
+                $labour = $agg['labour_cost'];
+                $material = $agg['material_cost'];
+                $qty = $agg['qty'];
+            } else {
+                $unit = $perUnitFor($condition);
+                $labour = $unit['labour_cost'];
+                $material = $unit['material_cost'];
+                $qty = 1.0;
+            }
+            $premier = $changeOrderGenerator->computeRowPremierCost([
+                'labour_cost' => $labour,
+                'material_cost' => $material,
+                'qty' => $qty,
+                'takeoff_condition_id' => $cid,
+            ], $project, 'standard');
+            $sellRateByCondition[$cid] = $premier / $qty;
+        }
+
+        $unitFor = fn (string $type) => match ($type) {
+            'linear' => 'lm',
+            'area' => 'm²',
+            'count' => 'ea',
+            default => 'm',
+        };
+
+        $lineItemsFor = fn (TakeoffCondition $c) => $c->pricing_method === 'detailed'
+            ? $c->lineItems->map(fn ($li) => [
+                'entry_type' => $li->entry_type,
+                'qty_source' => $li->qty_source,
+                'fixed_qty' => $li->fixed_qty,
+                'oc_spacing' => $li->oc_spacing,
+                'layers' => $li->layers,
+                'waste_percentage' => $li->waste_percentage,
+                'unit_cost' => $li->unit_cost,
+                'pack_size' => $li->pack_size,
+                'hourly_rate' => $li->hourly_rate,
+                'production_rate' => $li->production_rate,
+            ])->all()
+            : null;
+
+        // Per-condition summary (one row per condition, areas listed)
+        $conditionSummaries = [];
+        foreach ($perCondition as $cid => $agg) {
+            $condition = $conditions->firstWhere('id', $cid);
+            if (! $condition) {
+                continue;
+            }
+            // Collect unique area names for this condition
+            $areaNames = [];
+            foreach ($bucketed as $row) {
+                if ($row['condition_id'] === $cid && $row['qty'] != 0) {
+                    $areaNames[] = $row['area_name'];
+                }
+            }
             $uniqueAreas = array_values(array_unique($areaNames));
 
+            // For conditions without measurements (qty=0), still surface the
+            // theoretical per-unit rate so the user can see the price they'll
+            // pay when entering a manual qty.
+            $unitPrice = $agg['qty'] > 0
+                ? $agg['total_cost'] / $agg['qty']
+                : $perUnitFor($condition)['total_cost'];
+            $sellRate = $sellRateByCondition[$cid] ?? null;
+
             $conditionSummaries[] = [
-                'condition_id' => (int) $conditionId,
+                'condition_id' => (int) $cid,
                 'condition_number' => $condition->condition_number,
                 'condition_name' => $condition->name,
                 'condition_type' => $condition->conditionType?->name ?? 'Uncategorized',
@@ -290,32 +458,61 @@ class DrawingController extends Controller
                 'pricing_method' => $condition->pricing_method,
                 'color' => $condition->color,
                 'height' => $condition->height,
+                'description' => $condition->description,
+                'manual_qty' => $condition->manual_qty !== null ? (float) $condition->manual_qty : null,
                 'areas' => $uniqueAreas,
-                'qty' => round($netQty, 2),
-                'unit' => $unit,
-                'unit_price' => $netQty > 0 ? round($totalCost / $netQty, 2) : 0,
-                'material_cost' => round($materialCost, 2),
-                'labour_cost' => round($labourCost, 2),
-                'total_cost' => round($totalCost, 2),
-                'line_items' => $condition->pricing_method === 'detailed'
-                    ? $condition->lineItems->map(fn ($li) => [
-                        'entry_type' => $li->entry_type,
-                        'qty_source' => $li->qty_source,
-                        'fixed_qty' => $li->fixed_qty,
-                        'oc_spacing' => $li->oc_spacing,
-                        'layers' => $li->layers,
-                        'waste_percentage' => $li->waste_percentage,
-                        'unit_cost' => $li->unit_cost,
-                        'pack_size' => $li->pack_size,
-                        'hourly_rate' => $li->hourly_rate,
-                        'production_rate' => $li->production_rate,
-                    ])->all()
-                    : null,
+                'qty' => round($agg['qty'], 2),
+                'unit' => $unitFor($condition->type),
+                'unit_price' => round($unitPrice, 2),
+                'sell_rate' => $sellRate !== null ? round($sellRate, 2) : null,
+                'material_cost' => round($agg['material_cost'], 2),
+                'labour_cost' => round($agg['labour_cost'], 2),
+                'total_cost' => round($agg['total_cost'], 2),
+                'sell_total' => $sellRate !== null ? round($sellRate * $agg['qty'], 2) : null,
+                'line_items' => $lineItemsFor($condition),
             ];
         }
 
-        // Sort by condition number
+        // Per-(condition, area) rows — used by "Group by Area" view
+        $conditionAreaRows = [];
+        foreach ($bucketed as $row) {
+            $condition = $row['condition'];
+            $sellRate = $sellRateByCondition[$row['condition_id']] ?? null;
+            $unitPrice = $row['qty'] > 0
+                ? $row['total_cost'] / $row['qty']
+                : $perUnitFor($condition)['total_cost'];
+
+            $conditionAreaRows[] = [
+                'condition_id' => $row['condition_id'],
+                'condition_number' => $condition->condition_number,
+                'condition_name' => $condition->name,
+                'condition_type' => $condition->conditionType?->name ?? 'Uncategorized',
+                'type' => $condition->type,
+                'pricing_method' => $condition->pricing_method,
+                'color' => $condition->color,
+                'height' => $condition->height,
+                'description' => $condition->description,
+                'manual_qty' => $condition->manual_qty !== null ? (float) $condition->manual_qty : null,
+                'area_id' => $row['area_id'],
+                'area_name' => $row['area_name'],
+                'qty' => round($row['qty'], 2),
+                'unit' => $unitFor($condition->type),
+                'unit_price' => round($unitPrice, 2),
+                'sell_rate' => $sellRate !== null ? round($sellRate, 2) : null,
+                'material_cost' => round($row['material_cost'], 2),
+                'labour_cost' => round($row['labour_cost'], 2),
+                'total_cost' => round($row['total_cost'], 2),
+                'sell_total' => $sellRate !== null ? round($sellRate * $row['qty'], 2) : null,
+                'line_items' => $lineItemsFor($condition),
+            ];
+        }
+
+        // Sort by condition number, then area name
         usort($conditionSummaries, fn ($a, $b) => ($a['condition_number'] ?? 0) <=> ($b['condition_number'] ?? 0));
+        usort($conditionAreaRows, function ($a, $b) {
+            $byNum = ($a['condition_number'] ?? 0) <=> ($b['condition_number'] ?? 0);
+            return $byNum !== 0 ? $byNum : strcmp($a['area_name'], $b['area_name']);
+        });
 
         return Inertia::render('drawings/conditions', [
             'drawing' => $drawing,
@@ -324,6 +521,7 @@ class DrawingController extends Controller
             'activeTab' => 'conditions',
             'projectDrawings' => $projectDrawings,
             'conditionSummaries' => $conditionSummaries,
+            'conditionAreaRows' => $conditionAreaRows,
         ]);
     }
 

@@ -622,6 +622,24 @@ class DocumentSigningService
     }
 
     /**
+     * Re-notify the internal signer for a single awaiting-internal-signature request.
+     */
+    public function resendInternalReminder(SigningRequest $signingRequest, User $admin): void
+    {
+        if ($signingRequest->status !== 'awaiting_internal_signature') {
+            return;
+        }
+        $signer = $signingRequest->internalSigner;
+        if (! $signer) {
+            return;
+        }
+        $signer->notify(new InternalSignatureRequestedNotification($signingRequest));
+        $signingRequest->logEvent('internal_reminder_sent', 'admin', $admin->id, null, [
+            'to' => $signer->email,
+        ]);
+    }
+
+    /**
      * Resend the signed PDF copy to the recipient (and sender).
      */
     public function resendSignedCopy(SigningRequest $signingRequest): void

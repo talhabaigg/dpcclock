@@ -38,14 +38,17 @@ const TABS: { key: DrawingTab; label: string; permission: string }[] = [
 
 /** Sub-tabs within the Takeoff section */
 const TAKEOFF_SUBTABS: { key: DrawingTab; label: string }[] = [
-    { key: 'takeoff', label: 'Measure' },
+    // Measure tab hidden for now — qty is entered directly in Conditions.
+    // { key: 'takeoff', label: 'Measure' },
     { key: 'conditions', label: 'Conditions' },
     { key: 'labour', label: 'Labour' },
     { key: 'material', label: 'Material' },
     { key: 'estimate', label: 'Estimate' },
 ];
 
-const TAKEOFF_SUBTAB_KEYS = new Set(TAKEOFF_SUBTABS.map((t) => t.key));
+// 'takeoff' stays in the active-key set so the Workspace tab stays highlighted
+// when navigating to the (now-hidden) Measure page directly.
+const TAKEOFF_SUBTAB_KEYS = new Set<DrawingTab>([...TAKEOFF_SUBTABS.map((t) => t.key), 'takeoff']);
 
 interface DrawingWorkspaceLayoutProps {
     drawing: {

@@ -251,7 +251,7 @@ class EmployeeController extends Controller
                     $q->where('status', '!=', 'draft')
                         ->orWhere('sent_by', $viewerId);
                 })
-                ->with(['documentTemplate:id,name', 'sentBy:id,name'])
+                ->with(['documentTemplate:id,name', 'sentBy:id,name', 'internalSigner:id,name'])
                 ->latest()
                 ->get()
                 ->map(fn ($sr) => [
@@ -277,6 +277,10 @@ class EmployeeController extends Controller
                     'sent_by' => $sr->sentBy ? [
                         'id' => $sr->sentBy->id,
                         'name' => $sr->sentBy->name,
+                    ] : null,
+                    'internal_signer' => $sr->internalSigner ? [
+                        'id' => $sr->internalSigner->id,
+                        'name' => $sr->internalSigner->name,
                     ] : null,
                 ])
                 ->values();
