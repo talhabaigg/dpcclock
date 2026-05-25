@@ -7,12 +7,19 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-    AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+    ComboboxTrigger,
+} from '@/components/ui/combobox';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -24,8 +31,16 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -38,16 +53,13 @@ import {
     ArrowDown,
     ArrowUp,
     ArrowUpDown,
-    Check,
-    ChevronsUpDown,
+    ChevronsLeft,
+    ChevronsRight,
     CirclePlus,
     ClipboardList,
-    Copy,
     EllipsisVertical,
-    Eye,
     LayoutGrid,
     LayoutList,
-    ListFilter,
     Search,
     SlidersHorizontal,
     SquarePlus,
@@ -58,7 +70,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import CardsIndex from './index-partials/cardsIndex';
 import CostRangeSlider from './index-partials/costRangeSlider';
-import { getStatus, TONE_STYLES } from './index-partials/statusConfig';
+import { getStatus } from './index-partials/statusConfig';
 import { CostRange, FilterOptions, Filters, RequisitionData } from './index-partials/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -84,179 +96,118 @@ function formatCurrency(value: number | string) {
 
 function StatusBadge({ status }: { status: string }) {
     const cfg = getStatus(status);
-    const tone = TONE_STYLES[cfg.tone];
+    const isSent = cfg.key === 'sent';
     return (
-        <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium', tone.badge)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} aria-hidden />
+        <Badge
+            variant="secondary"
+            className={cn(
+                'text-[11px] font-medium',
+                isSent && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+            )}
+        >
             {cfg.label}
-        </span>
+        </Badge>
     );
 }
 
-// ── Actions dropdown (desktop) ────────────────────────────────────────
-function RequisitionActions({ requisition }: { requisition: { id: number; is_template: boolean } }) {
-    const [duplicateOpen, setDuplicateOpen] = useState(false);
+type RowActionTarget = { id: number; is_template: boolean };
 
+// ── Actions dropdown (desktop) ────────────────────────────────────────
+function RequisitionActions({
+    requisition,
+    onDuplicate,
+    onDelete,
+}: {
+    requisition: RowActionTarget;
+    onDuplicate: (req: RowActionTarget) => void;
+    onDelete: (req: RowActionTarget) => void;
+}) {
     return (
-        <>
-            <AlertDialog>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <span className="sr-only">Open menu</span>
-                            <EllipsisVertical className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="gap-2" onClick={() => router.visit(`/requisition/${requisition.id}`)}>
-                            <Eye className="h-4 w-4" />
-                            View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onClick={() => setDuplicateOpen(true)}>
-                            <Copy className="h-4 w-4" />
-                            Copy
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2" onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}>
-                            <SquarePlus className="h-4 w-4" />
-                            {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <AlertDialogTrigger asChild>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive gap-2">
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                            </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the requisition and all associated line items.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => router.delete(`/requisition/${requisition.id}`)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
-                            Duplicate
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-max">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="whitespace-nowrap" onClick={() => router.visit(`/requisition/${requisition.id}`)}>
+                    View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem className="whitespace-nowrap" onClick={() => onDuplicate(requisition)}>
+                    Copy
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="whitespace-nowrap"
+                    onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
+                >
+                    {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    className="text-destructive focus:text-destructive whitespace-nowrap"
+                    onClick={() => onDelete(requisition)}
+                >
+                    Delete
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 
 // ── Actions sheet (mobile) ────────────────────────────────────────────
-function RequisitionActionsMobile({ requisition }: { requisition: { id: number; is_template: boolean } }) {
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [duplicateOpen, setDuplicateOpen] = useState(false);
-
+function RequisitionActionsMobile({
+    requisition,
+    onDuplicate,
+    onDelete,
+}: {
+    requisition: RowActionTarget;
+    onDuplicate: (req: RowActionTarget) => void;
+    onDelete: (req: RowActionTarget) => void;
+}) {
     return (
-        <>
-            <Sheet>
-                <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <span className="sr-only">Open menu</span>
-                        <EllipsisVertical className="h-4 w-4" />
-                    </Button>
-                </SheetTrigger>
-                <SheetContent side="bottom" className="rounded-t-xl">
-                    <SheetHeader>
-                        <SheetTitle>Requisition #{requisition.id}</SheetTitle>
-                    </SheetHeader>
-                    <nav className="flex flex-col gap-1 px-4 pb-6">
-                        <Link
-                            href={`/requisition/${requisition.id}`}
-                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
-                        >
-                            <Eye className="text-muted-foreground h-4 w-4" />
-                            View Details
-                        </Link>
-                        <button
-                            onClick={() => setDuplicateOpen(true)}
-                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
-                        >
-                            <Copy className="text-muted-foreground h-4 w-4" />
-                            Copy
-                        </button>
-                        <button
-                            onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
-                            className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
-                        >
-                            <SquarePlus className="text-muted-foreground h-4 w-4" />
-                            {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
-                        </button>
-                        <Separator className="my-2" />
-                        <button
-                            onClick={() => setConfirmOpen(true)}
-                            className="hover:bg-destructive/10 text-destructive flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                        </button>
-                    </nav>
-                </SheetContent>
-            </Sheet>
-
-            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Requisition #{requisition.id}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the requisition and all associated line items.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => router.delete(`/requisition/${requisition.id}`)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => router.post(`/requisition/${requisition.id}/copy`)}>
-                            Duplicate
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisVertical className="h-4 w-4" />
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-xl">
+                <SheetHeader>
+                    <SheetTitle>Requisition #{requisition.id}</SheetTitle>
+                </SheetHeader>
+                <nav className="flex flex-col gap-1 px-4 pb-6">
+                    <Link
+                        href={`/requisition/${requisition.id}`}
+                        className="hover:bg-accent rounded-md px-3 py-2.5 text-sm font-medium"
+                    >
+                        View Details
+                    </Link>
+                    <button
+                        onClick={() => onDuplicate(requisition)}
+                        className="hover:bg-accent rounded-md px-3 py-2.5 text-left text-sm font-medium"
+                    >
+                        Copy
+                    </button>
+                    <button
+                        onClick={() => router.post(`/requisition/${requisition.id}/toggle-requisition-template`)}
+                        className="hover:bg-accent rounded-md px-3 py-2.5 text-left text-sm font-medium"
+                    >
+                        {requisition.is_template ? 'Remove Template' : 'Mark as Template'}
+                    </button>
+                    <Separator className="my-2" />
+                    <button
+                        onClick={() => onDelete(requisition)}
+                        className="hover:bg-destructive/10 text-destructive rounded-md px-3 py-2.5 text-left text-sm font-medium"
+                    >
+                        Delete
+                    </button>
+                </nav>
+            </SheetContent>
+        </Sheet>
     );
 }
 
@@ -271,6 +222,8 @@ export default function RequisitionList() {
     const [searchInput, setSearchInput] = useState(filters.search || '');
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<RowActionTarget | null>(null);
+    const [duplicateTarget, setDuplicateTarget] = useState<RowActionTarget | null>(null);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -326,9 +279,9 @@ export default function RequisitionList() {
     };
 
     const applyFilters = useCallback(
-        (newFilters: Partial<Filters>) => {
+        (newFilters: Partial<Filters> & { page?: number }) => {
             const merged = { ...filters, ...newFilters };
-            const query: Record<string, string> = {};
+            const query: Record<string, string | number> = {};
             if (merged.search) query.search = merged.search;
             if (merged.status) query.status = merged.status;
             if (merged.supplier) query.supplier = merged.supplier;
@@ -344,9 +297,18 @@ export default function RequisitionList() {
                 query.direction = merged.direction;
             }
             if (merged.view && merged.view !== 'table') query.view = merged.view;
+            if (merged.per_page && merged.per_page !== 25) query.per_page = merged.per_page;
+            if (newFilters.page && newFilters.page > 1) query.page = newFilters.page;
             router.get('/requisition/all', query, { preserveState: true, preserveScroll: true });
         },
         [filters],
+    );
+
+    const navigateToPage = useCallback(
+        (next: { page?: number; per_page?: number }) => {
+            applyFilters(next);
+        },
+        [applyFilters],
     );
 
     const handleSearchChange = useCallback(
@@ -423,7 +385,7 @@ export default function RequisitionList() {
         { key: 'contact' as const, label: 'Contact', options: filterOptions.contacts },
     ];
 
-    const excludedFilterKeys = new Set(['search', 'min_cost', 'max_cost', 'templates_only', 'sort', 'direction']);
+    const excludedFilterKeys = new Set(['search', 'min_cost', 'max_cost', 'templates_only', 'sort', 'direction', 'view', 'per_page']);
     const activeFilters = Object.entries(filters).filter(([key, value]) => value && !excludedFilterKeys.has(key));
 
     const totalActiveFilters = activeFilters.length + (filters.templates_only ? 1 : 0);
@@ -435,21 +397,7 @@ export default function RequisitionList() {
             <div className="@container flex min-w-0 flex-col gap-4 p-4">
                 {/* ── Toolbar ──────────────────────────────────────────── */}
                 <div className="flex min-w-0 flex-col gap-3">
-                    {/* Row 1: Title + Create (wide) / Title only (narrow) */}
-                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h1 className="text-xl font-semibold tracking-tight">Requisitions</h1>
-                            <p className="text-muted-foreground text-sm">Manage and track purchase requisitions</p>
-                        </div>
-                        <Link href="/requisition/create">
-                            <Button className="gap-2">
-                                <CirclePlus className="h-4 w-4" />
-                                Create Requisition
-                            </Button>
-                        </Link>
-                    </div>
-
-                    {/* Row 2: Search + Filters + View Toggle (wide) */}
+                    {/* Wide: Search + Filters + View Toggle + Create (single row) */}
                     <div className="hidden items-center gap-2 @3xl:flex">
                         <div className="relative w-72">
                             <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -481,33 +429,45 @@ export default function RequisitionList() {
                             clearAllFilters={clearAllFilters}
                         />
 
-                        {/* Active filter badges */}
-                        <ActiveFilterBadges activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
+                        <ActiveFilterChips activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
 
-                        <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-2">
                             <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
+                            <Link href="/requisition/create">
+                                <Button className="gap-2">
+                                    <CirclePlus className="h-4 w-4" />
+                                    Create Requisition
+                                </Button>
+                            </Link>
                         </div>
                     </div>
 
-                    {/* Row 2 (narrow): Search full-width, filters + toggle below */}
+                    {/* Narrow: Search full-width + Create, filters + toggle below */}
                     <div className="flex flex-col gap-2 @3xl:hidden">
-                        <div className="relative w-full">
-                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                            <Input
-                                type="text"
-                                placeholder="Search requisitions..."
-                                value={searchInput}
-                                onChange={(e) => handleSearchChange(e.target.value)}
-                                className="pl-9"
-                            />
-                            {searchInput && (
-                                <button
-                                    onClick={() => handleSearchChange('')}
-                                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            )}
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                <Input
+                                    type="text"
+                                    placeholder="Search requisitions..."
+                                    value={searchInput}
+                                    onChange={(e) => handleSearchChange(e.target.value)}
+                                    className="pl-9"
+                                />
+                                {searchInput && (
+                                    <button
+                                        onClick={() => handleSearchChange('')}
+                                        className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+                            <Link href="/requisition/create">
+                                <Button size="icon" aria-label="Create Requisition">
+                                    <CirclePlus className="h-4 w-4" />
+                                </Button>
+                            </Link>
                         </div>
                         <div className="flex items-center gap-2">
                             <FilterSheetButton
@@ -520,11 +480,11 @@ export default function RequisitionList() {
                                 handleCostRangeChange={handleCostRangeChange}
                                 clearAllFilters={clearAllFilters}
                             />
+                            <ActiveFilterChips activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
                             <div className="ml-auto">
                                 <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
                             </div>
                         </div>
-                        {totalActiveFilters > 0 && <ActiveFilterBadges activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />}
                     </div>
                 </div>
 
@@ -613,7 +573,7 @@ export default function RequisitionList() {
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <Link
                                                                 href={`/requisition/${req.id}`}
-                                                                className="font-mono text-sm font-semibold hover:underline"
+                                                                className="font-mono text-xs font-semibold hover:underline"
                                                             >
                                                                 #{req.id}
                                                             </Link>
@@ -643,7 +603,11 @@ export default function RequisitionList() {
                                                         <span className="text-sm font-semibold tabular-nums">
                                                             {formatCurrency(req.line_items_sum_total_cost)}
                                                         </span>
-                                                        <RequisitionActionsMobile requisition={req} />
+                                                        <RequisitionActionsMobile
+                                                            requisition={req}
+                                                            onDuplicate={setDuplicateTarget}
+                                                            onDelete={setDeleteTarget}
+                                                        />
                                                     </div>
                                                 </div>
                                             </div>
@@ -652,7 +616,7 @@ export default function RequisitionList() {
 
                                     {/* Table layout for wide containers */}
                                     <div className="hidden rounded-lg border @3xl:block">
-                                        <Table>
+                                        <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                                             <TableHeader>
                                                 <TableRow className="hover:bg-transparent">
                                                     {canDelete && (
@@ -792,7 +756,7 @@ export default function RequisitionList() {
 
                                                         <TableCell className="max-w-[200px]">
                                                             <span
-                                                                className="text-foreground block truncate text-sm font-medium"
+                                                                className="text-foreground block truncate text-xs font-medium"
                                                                 title={req.supplier?.name}
                                                             >
                                                                 {req.supplier?.name}
@@ -800,7 +764,7 @@ export default function RequisitionList() {
                                                         </TableCell>
 
                                                         <TableCell className="hidden max-w-[160px] @5xl:table-cell">
-                                                            <span className="block truncate text-sm" title={req.location?.name || undefined}>
+                                                            <span className="block truncate text-xs" title={req.location?.name || undefined}>
                                                                 {req.location?.name || <span className="text-muted-foreground">—</span>}
                                                             </span>
                                                         </TableCell>
@@ -811,7 +775,7 @@ export default function RequisitionList() {
                                                                     PO{req.po_number}
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-muted-foreground text-sm">—</span>
+                                                                <span className="text-muted-foreground text-xs">—</span>
                                                             )}
                                                         </TableCell>
 
@@ -825,52 +789,56 @@ export default function RequisitionList() {
                                                                     Template
                                                                 </Badge>
                                                             ) : (
-                                                                <span className="text-muted-foreground text-sm">—</span>
+                                                                <span className="text-muted-foreground text-xs">—</span>
                                                             )}
                                                         </TableCell>
 
                                                         <TableCell className="hidden max-w-[120px] @6xl:table-cell">
-                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                            <span className="text-muted-foreground block truncate text-xs">
                                                                 {req.order_reference || '—'}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="hidden @4xl:table-cell">
-                                                            <span className="text-muted-foreground text-sm">{req.creator?.name || '—'}</span>
+                                                            <span className="text-muted-foreground text-xs">{req.creator?.name || '—'}</span>
                                                         </TableCell>
 
                                                         <TableCell className="hidden @5xl:table-cell">
-                                                            <span className="text-muted-foreground text-sm tabular-nums">
+                                                            <span className="text-muted-foreground text-xs tabular-nums">
                                                                 {new Date(req.date_required).toLocaleDateString('en-GB')}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="hidden @6xl:table-cell">
-                                                            <span className="text-muted-foreground text-sm tabular-nums">
+                                                            <span className="text-muted-foreground text-xs tabular-nums">
                                                                 {new Date(req.created_at).toLocaleDateString('en-GB')}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="hidden max-w-[120px] @7xl:table-cell">
-                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                            <span className="text-muted-foreground block truncate text-xs">
                                                                 {req.delivery_contact || '—'}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="hidden max-w-[120px] @7xl:table-cell">
-                                                            <span className="text-muted-foreground block truncate text-sm">
+                                                            <span className="text-muted-foreground block truncate text-xs">
                                                                 {req.deliver_to || '—'}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="text-right">
-                                                            <span className="text-foreground text-sm font-semibold tabular-nums">
+                                                            <span className="text-foreground text-xs font-semibold tabular-nums">
                                                                 {formatCurrency(req.line_items_sum_total_cost)}
                                                             </span>
                                                         </TableCell>
 
                                                         <TableCell className="pr-4">
-                                                            <RequisitionActions requisition={req} />
+                                                            <RequisitionActions
+                                                                requisition={req}
+                                                                onDuplicate={setDuplicateTarget}
+                                                                onDelete={setDeleteTarget}
+                                                            />
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -878,122 +846,240 @@ export default function RequisitionList() {
                                         </Table>
                                     </div>
 
-                                    {/* Pagination */}
-                                    {requisitions.last_page > 1 && (
-                                        <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-                                            <p className="text-muted-foreground text-sm">
-                                                Showing <span className="text-foreground font-medium">{requisitions.from}</span>–
-                                                <span className="text-foreground font-medium">{requisitions.to}</span> of{' '}
-                                                <span className="text-foreground font-medium">{requisitions.total}</span> results
-                                            </p>
-                                            <Pagination>
-                                                <PaginationContent className="gap-1">
-                                                    <PaginationItem>
-                                                        <PaginationPrevious
-                                                            href={requisitions.prev_page_url || '#'}
-                                                            className={cn(!requisitions.prev_page_url && 'pointer-events-none opacity-50')}
-                                                        />
-                                                    </PaginationItem>
-
-                                                    {(() => {
-                                                        const current = requisitions.current_page;
-                                                        const last = requisitions.last_page;
-                                                        const start = Math.max(1, current - 1);
-                                                        const end = Math.min(last, current + 1);
-                                                        const pages = [];
-                                                        for (let page = start; page <= end; page++) {
-                                                            const url =
-                                                                requisitions.links.find((l) => l.label === String(page))?.url || `?page=${page}`;
-                                                            pages.push(
-                                                                <PaginationItem key={page} className="hidden sm:block">
-                                                                    <PaginationLink href={url} isActive={current === page}>
-                                                                        {page}
-                                                                    </PaginationLink>
-                                                                </PaginationItem>,
-                                                            );
-                                                        }
-                                                        return pages;
-                                                    })()}
-
-                                                    <PaginationItem className="sm:hidden">
-                                                        <span className="bg-primary text-primary-foreground flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium">
-                                                            {requisitions.current_page}
-                                                        </span>
-                                                    </PaginationItem>
-
-                                                    <PaginationItem>
-                                                        <PaginationNext
-                                                            href={requisitions.next_page_url || '#'}
-                                                            className={cn(!requisitions.next_page_url && 'pointer-events-none opacity-50')}
-                                                        />
-                                                    </PaginationItem>
-                                                </PaginationContent>
-                                            </Pagination>
-                                        </div>
-                                    )}
+                                    <PaginationFooter requisitions={requisitions} navigate={navigateToPage} />
                                 </>
                             )}
                         </>
                     )}
                 </div>
             </div>
+
+            {/* Page-level dialogs (hoisted out of row actions per skill rule 8b) */}
+            <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Requisition #{deleteTarget?.id}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the requisition and all associated line items.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (deleteTarget) {
+                                    router.delete(`/requisition/${deleteTarget.id}`, { onFinish: () => setDeleteTarget(null) });
+                                }
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!duplicateTarget} onOpenChange={(o) => !o && setDuplicateTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate this requisition?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            A new pending requisition will be created with the same line items. You'll be able to edit it before sending.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (duplicateTarget) {
+                                    router.post(`/requisition/${duplicateTarget.id}/copy`, undefined, {
+                                        onFinish: () => setDuplicateTarget(null),
+                                    });
+                                }
+                            }}
+                        >
+                            Duplicate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
+    );
+}
+
+// ── Pagination Footer (canonical per skill rule 6) ────────────────────
+function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
+    if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+    const around = [current - 1, current, current + 1].filter((p) => p > 1 && p < last);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (around[0] > 2) pages.push('ellipsis');
+    pages.push(...around);
+    if (around[around.length - 1] < last - 1) pages.push('ellipsis');
+    pages.push(last);
+    return pages;
+}
+
+function PaginationFooter({
+    requisitions,
+    navigate,
+}: {
+    requisitions: RequisitionData;
+    navigate: (next: { page?: number; per_page?: number }) => void;
+}) {
+    const fromRow = requisitions.total === 0 ? 0 : requisitions.from ?? 0;
+    const toRow = requisitions.total === 0 ? 0 : requisitions.to ?? 0;
+    const pageWindow = getPageWindow(requisitions.current_page, requisitions.last_page);
+
+    return (
+        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+            <p className="text-muted-foreground text-xs sm:text-sm">
+                {requisitions.total > 0
+                    ? `${fromRow}–${toRow} of ${requisitions.total.toLocaleString()} items`
+                    : 'No items'}
+            </p>
+
+            <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs sm:text-sm">Rows per page</span>
+                    <Select
+                        value={String(requisitions.per_page)}
+                        onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}
+                    >
+                        <SelectTrigger size="sm" className="w-[72px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {[10, 25, 50, 100].map((n) => (
+                                <SelectItem key={n} value={String(n)}>
+                                    {n}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <Pagination className="mx-0 w-auto justify-end">
+                    <PaginationContent>
+                        <PaginationItem>
+                            <PaginationLink
+                                aria-label="Go to first page"
+                                aria-disabled={requisitions.current_page <= 1}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    if (requisitions.current_page > 1) navigate({ page: 1 });
+                                }}
+                                className={requisitions.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                            >
+                                <ChevronsLeft className="h-4 w-4" />
+                            </PaginationLink>
+                        </PaginationItem>
+
+                        <PaginationItem>
+                            <PaginationPrevious
+                                aria-disabled={requisitions.current_page <= 1}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    if (requisitions.current_page > 1) navigate({ page: requisitions.current_page - 1 });
+                                }}
+                                className={requisitions.current_page <= 1 ? 'pointer-events-none opacity-50' : ''}
+                            />
+                        </PaginationItem>
+
+                        {pageWindow.map((p, i) =>
+                            p === 'ellipsis' ? (
+                                <PaginationItem key={`e-${i}`}>
+                                    <PaginationEllipsis />
+                                </PaginationItem>
+                            ) : (
+                                <PaginationItem key={p}>
+                                    <PaginationLink
+                                        isActive={p === requisitions.current_page}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            navigate({ page: p });
+                                        }}
+                                    >
+                                        {p}
+                                    </PaginationLink>
+                                </PaginationItem>
+                            ),
+                        )}
+
+                        <PaginationItem>
+                            <PaginationNext
+                                aria-disabled={requisitions.current_page >= requisitions.last_page}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    if (requisitions.current_page < requisitions.last_page)
+                                        navigate({ page: requisitions.current_page + 1 });
+                                }}
+                                className={
+                                    requisitions.current_page >= requisitions.last_page
+                                        ? 'pointer-events-none opacity-50'
+                                        : ''
+                                }
+                            />
+                        </PaginationItem>
+
+                        <PaginationItem>
+                            <PaginationLink
+                                aria-label="Go to last page"
+                                aria-disabled={requisitions.current_page >= requisitions.last_page}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    if (requisitions.current_page < requisitions.last_page)
+                                        navigate({ page: requisitions.last_page });
+                                }}
+                                className={
+                                    requisitions.current_page >= requisitions.last_page
+                                        ? 'pointer-events-none opacity-50'
+                                        : ''
+                                }
+                            >
+                                <ChevronsRight className="h-4 w-4" />
+                            </PaginationLink>
+                        </PaginationItem>
+                    </PaginationContent>
+                </Pagination>
+            </div>
+        </div>
     );
 }
 
 // ── Combobox Filter (searchable dropdown) ─────────────────────────────
 function ComboboxFilter({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (value: string) => void }) {
-    const [open, setOpen] = useState(false);
-
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className={cn('h-9 w-full justify-between font-normal', !value && 'text-muted-foreground')}
-                >
-                    <span className="truncate">{value || `Select ${label.toLowerCase()}...`}</span>
-                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-(--anchor-width) p-0" align="start">
-                <Command>
-                    <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
-                    <CommandList>
-                        <CommandEmpty>No results found.</CommandEmpty>
-                        <CommandGroup>
-                            {value && (
-                                <CommandItem
-                                    onSelect={() => {
-                                        onChange('');
-                                        setOpen(false);
-                                    }}
-                                    className="text-muted-foreground justify-center text-xs data-selected:bg-transparent"
-                                >
-                                    <X className="mr-1 h-3 w-3" />
-                                    Clear
-                                </CommandItem>
-                            )}
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option}
-                                    className="data-selected:bg-transparent"
-                                    onSelect={() => {
-                                        onChange(option === value ? '' : option);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Check className={cn('mr-2 h-3.5 w-3.5', value === option ? 'opacity-100' : 'opacity-0')} />
-                                    <span className="truncate">{option}</span>
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+        <Combobox<string>
+            items={options}
+            value={value || null}
+            itemToStringLabel={(o) => o}
+            itemToStringValue={(o) => o}
+            isItemEqualToValue={(a, b) => a === b}
+            onValueChange={(o: string | null) => onChange(o ?? '')}
+        >
+            <ComboboxTrigger
+                render={
+                    <Button
+                        variant="outline"
+                        className={cn('h-9 w-full justify-between font-normal', !value && 'text-muted-foreground')}
+                    />
+                }
+                aria-label={`Filter by ${label.toLowerCase()}`}
+            >
+                <span className="truncate">{value || `Select ${label.toLowerCase()}...`}</span>
+            </ComboboxTrigger>
+            <ComboboxContent className="min-w-(--anchor-width) p-0">
+                <ComboboxInput placeholder={`Search ${label.toLowerCase()}...`} className="h-9" showTrigger={false} />
+                <ComboboxEmpty>No results found.</ComboboxEmpty>
+                <ComboboxList>
+                    {(option: string) => (
+                        <ComboboxItem key={option} value={option}>
+                            <span className="truncate">{option}</span>
+                        </ComboboxItem>
+                    )}
+                </ComboboxList>
+            </ComboboxContent>
+        </Combobox>
     );
 }
 
@@ -1023,7 +1109,6 @@ function FilterSheetButton({
                 <Button variant="outline" size="sm" className="gap-2">
                     <SlidersHorizontal className="h-4 w-4" />
                     Filters
-                    {totalActiveFilters > 0 && <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">{totalActiveFilters}</Badge>}
                 </Button>
             </SheetTrigger>
             <SheetContent className="w-full overflow-y-auto sm:max-w-sm">
@@ -1092,8 +1177,8 @@ function FilterSheetButton({
     );
 }
 
-// ── Active Filter Badges (mobile) ─────────────────────────────────────
-const filterLabels: Record<string, string> = {
+// ── Active Filter Chips (inline next to Filters trigger) ──────────────
+const filterChipLabels: Record<string, string> = {
     status: 'Status',
     supplier: 'Supplier',
     location: 'Location',
@@ -1102,7 +1187,7 @@ const filterLabels: Record<string, string> = {
     contact: 'Contact',
 };
 
-function ActiveFilterBadges({
+function ActiveFilterChips({
     activeFilters,
     filters,
     updateFilter,
@@ -1114,13 +1199,13 @@ function ActiveFilterBadges({
     if (activeFilters.length === 0 && !filters.templates_only) return null;
 
     return (
-        <div className="flex flex-wrap items-center gap-1.5">
-            <ListFilter className="text-muted-foreground h-3.5 w-3.5" />
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {activeFilters.map(([key, value]) => (
-                <Badge key={key} variant="secondary" className="gap-1 pr-1">
-                    <span className="text-muted-foreground text-[10px] uppercase">{filterLabels[key] || key}:</span>
-                    <span className="max-w-28 truncate text-xs">{String(value)}</span>
+                <Badge key={key} variant="secondary" className="gap-1 pr-1 text-xs font-normal">
+                    <span className="max-w-32 truncate">{String(value)}</span>
                     <button
+                        type="button"
+                        aria-label={`Clear ${filterChipLabels[key] || key} filter`}
                         className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
                         onClick={() => updateFilter(key as keyof Filters, null)}
                     >
@@ -1129,9 +1214,14 @@ function ActiveFilterBadges({
                 </Badge>
             ))}
             {filters.templates_only && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                    <span className="text-xs">Templates Only</span>
-                    <button className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5" onClick={() => updateFilter('templates_only', false)}>
+                <Badge variant="secondary" className="gap-1 pr-1 text-xs font-normal">
+                    <span>Templates Only</span>
+                    <button
+                        type="button"
+                        aria-label="Clear Templates Only filter"
+                        className="hover:bg-muted-foreground/20 ml-0.5 rounded-full p-0.5"
+                        onClick={() => updateFilter('templates_only', false)}
+                    >
                         <X className="h-3 w-3" />
                     </button>
                 </Badge>
@@ -1164,7 +1254,7 @@ function SortableHeader({
             type="button"
             onClick={() => onSort(column)}
             className={cn(
-                'hover:text-foreground inline-flex items-center gap-1 text-sm font-medium transition-colors',
+                'hover:text-foreground inline-flex items-center gap-1 text-xs font-medium transition-colors',
                 isActive ? 'text-foreground' : 'text-muted-foreground',
                 align === 'right' && 'flex-row-reverse',
             )}

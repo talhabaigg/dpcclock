@@ -304,7 +304,11 @@ class PurchasingController extends Controller
             $query->orderByDesc('requisitions.id');
         }
 
-        $requisitions = $query->paginate(50)->withQueryString();
+        $perPage = (int) $request->input('per_page', 25);
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 25;
+        }
+        $requisitions = $query->paginate($perPage)->withQueryString();
 
         // Get filter options for dropdowns
         $filterOptionsQuery = Requisition::query();
@@ -359,6 +363,7 @@ class PurchasingController extends Controller
                 'sort' => $sort,
                 'direction' => $direction,
                 'view' => in_array($request->input('view'), ['table', 'cards']) ? $request->input('view') : 'table',
+                'per_page' => $perPage,
             ],
         ]);
     }

@@ -28,6 +28,7 @@ export interface RequisitionData {
     links: { url: string | null; label: string; active: boolean }[];
     next_page_url: string | null;
     prev_page_url: string | null;
+    per_page: number;
 }
 
 export interface FilterOptions {
@@ -58,4 +59,5 @@ export interface Filters {
     sort: string;
     direction: 'asc' | 'desc';
     view: 'table' | 'cards';
+    per_page: number;
 }
