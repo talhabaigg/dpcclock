@@ -139,17 +139,17 @@ const formatCurrency = (value: number): string => {
 };
 
 const StatusBadge = ({ status }: { status: ComparisonItem['status'] }) => {
-    const config = {
-        unchanged: { label: 'Match', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-        modified: { label: 'Modified', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-        added: { label: 'Added', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-        removed: { label: 'Local Only', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+    const config: Record<ComparisonItem['status'], { label: string; variant: 'secondary' | 'outline' | 'destructive' }> = {
+        unchanged: { label: 'Match', variant: 'secondary' },
+        modified: { label: 'Modified', variant: 'outline' },
+        added: { label: 'Added', variant: 'secondary' },
+        removed: { label: 'Local Only', variant: 'destructive' },
     };
 
-    const { label, className } = config[status];
+    const { label, variant } = config[status];
 
     return (
-        <Badge variant="outline" className={cn('text-[10px] font-normal', className)}>
+        <Badge variant={variant} className="text-[10px] font-medium">
             {label}
         </Badge>
     );
@@ -444,7 +444,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         className={cn(
                                                             'rounded px-1 font-mono font-bold',
                                                             match.best_desc >= 30 || match.cost_match
-                                                                ? 'bg-emerald-50 text-emerald-700'
+                                                                ? 'bg-secondary text-secondary-foreground'
                                                                 : 'bg-muted text-muted-foreground',
                                                         )}
                                                     >
@@ -473,53 +473,38 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
 
             {/* Summary Row */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Matched</p>
-                    <p className={cn('text-2xl font-semibold leading-none tabular-nums', summary.unchanged_count === 0 && 'text-muted-foreground/50')}>
-                        {summary.unchanged_count}
-                    </p>
-                </div>
-                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Modified</p>
-                    <p className={cn(
-                        'text-2xl font-semibold leading-none tabular-nums',
-                        summary.modified_count > 0 ? 'text-amber-600' : 'text-muted-foreground/50',
-                    )}>
-                        {summary.modified_count}
-                    </p>
-                </div>
-                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Added in Premier</p>
-                    <p className={cn(
-                        'text-2xl font-semibold leading-none tabular-nums',
-                        summary.added_count > 0 ? 'text-sky-600' : 'text-muted-foreground/50',
-                    )}>
-                        {summary.added_count}
-                    </p>
-                </div>
-                <div className="flex flex-col gap-1 rounded-md border px-4 py-3">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Missing in Premier</p>
-                    <p className={cn(
-                        'text-2xl font-semibold leading-none tabular-nums',
-                        summary.removed_count > 0 ? 'text-rose-600' : 'text-muted-foreground/50',
-                    )}>
-                        {summary.removed_count}
-                    </p>
-                </div>
+                {[
+                    { label: 'Matched', count: summary.unchanged_count, destructive: false },
+                    { label: 'Modified', count: summary.modified_count, destructive: false },
+                    { label: 'Added in Premier', count: summary.added_count, destructive: false },
+                    { label: 'Missing in Premier', count: summary.removed_count, destructive: true },
+                ].map(({ label, count, destructive }) => (
+                    <div key={label} className="flex flex-col gap-1 rounded-md border px-4 py-3">
+                        <p className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">{label}</p>
+                        <p
+                            className={cn(
+                                'text-xl leading-none font-semibold tabular-nums',
+                                count === 0 ? 'text-muted-foreground/50' : destructive ? 'text-destructive' : 'text-foreground',
+                            )}
+                        >
+                            {count}
+                        </p>
+                    </div>
+                ))}
             </div>
 
             {/* Totals Banner */}
             <div className="bg-muted/20 grid grid-cols-1 divide-y rounded-md border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                 <div className="flex flex-col gap-1.5 px-5 py-4">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Original (Local)</p>
-                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(local_total)}</p>
+                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">Original (Local)</p>
+                    <p className="text-base leading-none font-semibold tabular-nums">{formatCurrency(local_total)}</p>
                     <p className="text-muted-foreground/60 text-xs">Baseline</p>
                 </div>
                 <div className="flex flex-col gap-1.5 px-5 py-4">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Premier PO</p>
-                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(premier_total)}</p>
+                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">Premier PO</p>
+                    <p className="text-base leading-none font-semibold tabular-nums">{formatCurrency(premier_total)}</p>
                     {poVariance !== 0 ? (
-                        <p className={cn('text-xs tabular-nums', poVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                        <p className={cn('text-xs tabular-nums', poVariance > 0 ? 'text-destructive' : 'text-foreground')}>
                             {poVariance > 0 ? '+' : ''}
                             {formatCurrency(poVariance)} from original
                         </p>
@@ -528,11 +513,11 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     )}
                 </div>
                 <div className="flex flex-col gap-1.5 px-5 py-4">
-                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Invoiced</p>
-                    <p className="text-xl font-semibold leading-none tabular-nums">{formatCurrency(invoice_total)}</p>
+                    <p className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">Invoiced</p>
+                    <p className="text-base leading-none font-semibold tabular-nums">{formatCurrency(invoice_total)}</p>
                     {invoice_total > 0 ? (
                         invoiceVariance !== 0 ? (
-                            <p className={cn('text-xs tabular-nums', invoiceVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                            <p className={cn('text-xs tabular-nums', invoiceVariance > 0 ? 'text-destructive' : 'text-foreground')}>
                                 {invoiceVariance > 0 ? '+' : ''}
                                 {formatCurrency(invoiceVariance)} from PO
                             </p>
@@ -546,8 +531,8 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
             </div>
 
             {!summary.has_discrepancies && (
-                <Alert className="border-emerald-200 bg-emerald-50/50">
-                    <CheckCircle2 className="size-4 text-emerald-600" />
+                <Alert>
+                    <CheckCircle2 className="size-4" />
                     <AlertTitle>No Discrepancies Found</AlertTitle>
                     <AlertDescription className="text-muted-foreground">All line items match between local and Premier records.</AlertDescription>
                 </Alert>
@@ -603,7 +588,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                     </span>
                 </div>
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[1400px]">
+                    <Table className="min-w-[1400px] text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead rowSpan={2} className="w-[70px] border-r align-middle text-[11px] font-medium uppercase tracking-wide">
@@ -668,7 +653,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                             Line {displayItem.line_number}
                                                         </span>
                                                     )}
-                                                    <div className="text-sm break-words whitespace-normal leading-snug">
+                                                    <div className="break-words whitespace-normal leading-snug">
                                                         {displayItem?.code && <span className="font-medium">{displayItem.code}</span>}
                                                         {displayItem?.code && displayItem?.description && (
                                                             <span className="text-muted-foreground/60 mx-1">·</span>
@@ -705,25 +690,23 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                             {/* Premier PO Values */}
                                             <TableCell className="text-right tabular-nums">
                                                 {item.premier ? (
-                                                    <span className={cn(hasQtyChange && 'font-semibold text-amber-700')}>
-                                                        {item.premier.qty}
-                                                    </span>
+                                                    <span className={cn(hasQtyChange && 'font-semibold')}>{item.premier.qty}</span>
                                                 ) : (
                                                     <EmptyDash />
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right tabular-nums">
                                                 {item.premier ? (
-                                                    <span className={cn(hasUnitChange && 'font-semibold text-amber-700')}>
+                                                    <span className={cn(hasUnitChange && 'font-semibold')}>
                                                         {formatCurrency(item.premier.unit_cost)}
                                                     </span>
                                                 ) : (
                                                     <EmptyDash />
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums font-medium">
+                                            <TableCell className="text-right font-medium tabular-nums">
                                                 {item.premier ? (
-                                                    <span className={cn(hasTotalChange && 'text-amber-700')}>
+                                                    <span className={cn(hasTotalChange && 'font-semibold')}>
                                                         {formatCurrency(item.premier.total_cost)}
                                                     </span>
                                                 ) : (
@@ -734,7 +717,12 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                             <TableCell className="border-r text-right tabular-nums">
                                                 {item.premier && item.local ? (
                                                     hasTotalChange && item.variances ? (
-                                                        <div className={cn('text-xs font-medium leading-tight', totalVariance > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                                                        <div
+                                                            className={cn(
+                                                                'leading-tight font-medium',
+                                                                totalVariance > 0 ? 'text-destructive' : 'text-foreground',
+                                                            )}
+                                                        >
                                                             <div>
                                                                 {totalVariance > 0 ? '+' : ''}
                                                                 {formatCurrency(totalVariance)}
@@ -748,7 +736,7 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                         <EmptyDash />
                                                     )
                                                 ) : item.status === 'added' ? (
-                                                    <span className="text-sky-600 text-xs">New</span>
+                                                    <span className="text-muted-foreground">New</span>
                                                 ) : (
                                                     <EmptyDash />
                                                 )}
@@ -778,15 +766,22 @@ export default function ComparisonTab({ requisitionId, premierPoId }: Props) {
                                                 {item.premier ? (
                                                     hasInvoice ? (
                                                         Math.abs(remaining) < 0.01 ? (
-                                                            <span className="text-xs text-emerald-600">Fully invoiced</span>
+                                                            <span className="text-muted-foreground">Fully invoiced</span>
                                                         ) : (
-                                                            <div className={cn('text-xs font-medium leading-tight', remaining > 0 ? 'text-amber-600' : 'text-rose-600')}>
+                                                            <div
+                                                                className={cn(
+                                                                    'leading-tight font-medium',
+                                                                    remaining > 0 ? 'text-foreground' : 'text-destructive',
+                                                                )}
+                                                            >
                                                                 <div>{formatCurrency(Math.abs(remaining))}</div>
-                                                                <div className="text-muted-foreground font-normal">{remaining > 0 ? 'remaining' : 'over'}</div>
+                                                                <div className="text-muted-foreground font-normal">
+                                                                    {remaining > 0 ? 'remaining' : 'over'}
+                                                                </div>
                                                             </div>
                                                         )
                                                     ) : (
-                                                        <span className="text-muted-foreground/60 text-xs">Not invoiced</span>
+                                                        <span className="text-muted-foreground/60">Not invoiced</span>
                                                     )
                                                 ) : (
                                                     <EmptyDash />

@@ -32,18 +32,14 @@ import {
     Building,
     ChevronDown,
     ChevronRight,
-    CirclePlus,
     Cuboid,
-    Edit3,
     EllipsisVertical,
     HelpCircle,
-    History,
     Info,
     Loader2,
     Lock,
     RotateCcw,
     Send,
-    Trash2,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -218,22 +214,15 @@ export default function RequisitionShow() {
     };
 
     const getEventConfig = (event: string) => {
-        const base = {
-            bg: 'bg-slate-100 dark:bg-slate-800',
-            lineColor: 'bg-slate-200 dark:bg-slate-700',
-            badgeBg: 'bg-slate-50 dark:bg-slate-900/50',
-            badgeText: 'text-slate-700 dark:text-slate-300',
-            badgeBorder: 'border-slate-200 dark:border-slate-700',
-        };
         switch (event) {
             case 'created':
-                return { ...base, icon: CirclePlus, iconColor: 'text-emerald-600 dark:text-emerald-500', label: 'Created' };
+                return { dotColor: 'bg-primary', label: 'Created' };
             case 'updated':
-                return { ...base, icon: Edit3, iconColor: 'text-blue-600 dark:text-blue-500', label: 'Updated' };
+                return { dotColor: 'bg-muted-foreground', label: 'Updated' };
             case 'deleted':
-                return { ...base, icon: Trash2, iconColor: 'text-red-600 dark:text-red-500', label: 'Deleted' };
+                return { dotColor: 'bg-destructive', label: 'Deleted' };
             default:
-                return { ...base, icon: History, iconColor: 'text-slate-500 dark:text-slate-400', label: event };
+                return { dotColor: 'bg-muted-foreground', label: event };
         }
     };
 
@@ -740,113 +729,95 @@ export default function RequisitionShow() {
                                     </Card>
                                 </TabsContent>
 
-                                {/* Activity Log Tab - Timeline Style */}
+                                {/* Activity Log Tab */}
                                 <TabsContent value="log" className="mt-0">
-                                    <Card className="dark:border-border overflow-hidden border-slate-200/60">
+                                    <Card className="overflow-hidden">
                                         <CardContent className="p-0">
                                             {activities.length === 0 ? (
-                                                <div className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-16">
-                                                    <div className="mb-3 rounded-full bg-slate-100 p-2.5 sm:mb-4 sm:p-3 dark:bg-slate-800">
-                                                        <History className="h-5 w-5 text-slate-400 sm:h-6 sm:w-6 dark:text-slate-500" />
-                                                    </div>
-                                                    <p className="text-xs font-medium text-slate-500 sm:text-sm dark:text-slate-400">
-                                                        No activity recorded
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                                                <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+                                                    <p className="text-muted-foreground text-xs font-medium">No activity recorded</p>
+                                                    <p className="text-muted-foreground/70 mt-1 text-xs">
                                                         Activity will appear here once changes are made
                                                     </p>
                                                 </div>
                                             ) : (
-                                                <div className="relative">
-                                                    {/* Timeline */}
+                                                <div className="py-2">
                                                     {activities.map((activity, index) => {
                                                         const eventConfig = getEventConfig(activity.event);
-                                                        const EventIcon = eventConfig.icon;
                                                         const isExpanded = expandedActivities.has(activity.id);
                                                         const hasChanges = activity.properties?.attributes || activity.properties?.old;
                                                         const isLast = index === activities.length - 1;
 
                                                         return (
-                                                            <div key={activity.id} className="flex gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
-                                                                {/* Icon + timeline line */}
-                                                                <div className="flex flex-col items-center">
+                                                            <div key={activity.id} className="flex gap-3 px-4 py-2">
+                                                                {/* Dot + line */}
+                                                                <div className="flex flex-col items-center pt-1.5">
                                                                     <div
-                                                                        className={cn(
-                                                                            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-8 sm:w-8',
-                                                                            eventConfig.bg,
-                                                                        )}
-                                                                    >
-                                                                        <EventIcon className={cn('h-3 w-3 sm:h-4 sm:w-4', eventConfig.iconColor)} />
-                                                                    </div>
-                                                                    {!isLast && <div className={cn('mt-2 w-px flex-1', eventConfig.lineColor)} />}
+                                                                        className={cn('h-2 w-2 shrink-0 rounded-full', eventConfig.dotColor)}
+                                                                    />
+                                                                    {!isLast && <div className="bg-border mt-1 w-px flex-1" />}
                                                                 </div>
 
                                                                 {/* Content */}
-                                                                <div className="min-w-0 flex-1">
-                                                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                                                <div className="min-w-0 flex-1 pb-2">
+                                                                    <div className="flex flex-wrap items-center gap-2">
                                                                         <Badge
-                                                                            variant="outline"
-                                                                            className={cn(
-                                                                                'px-2 py-0.5 text-xs font-medium capitalize',
-                                                                                eventConfig.badgeBg,
-                                                                                eventConfig.badgeText,
-                                                                                eventConfig.badgeBorder,
-                                                                            )}
+                                                                            variant="secondary"
+                                                                            className="text-[11px] font-medium capitalize"
                                                                         >
                                                                             {eventConfig.label}
                                                                         </Badge>
-                                                                        <span className="hidden text-xs text-slate-400 sm:inline dark:text-slate-500">
+                                                                        <span className="text-muted-foreground hidden text-xs sm:inline">
                                                                             {activity.log_name}
                                                                         </span>
-                                                                        <span className="text-xs text-slate-400 tabular-nums dark:text-slate-500">
+                                                                        <span className="text-muted-foreground text-xs tabular-nums">
                                                                             {new Date(activity.created_at).toLocaleString()}
                                                                         </span>
                                                                     </div>
 
                                                                     {activity.causer && (
-                                                                        <div className="mt-2 flex items-center gap-2">
+                                                                        <div className="mt-1.5 flex items-center gap-2">
                                                                             <UserInfo user={{ ...activity.causer }} />
                                                                         </div>
                                                                     )}
 
-                                                                    {/* Collapsible Changes */}
                                                                     {hasChanges && (
                                                                         <Collapsible
                                                                             open={isExpanded}
                                                                             onOpenChange={() => toggleActivity(activity.id)}
-                                                                            className="mt-2 sm:mt-3"
+                                                                            className="mt-2"
                                                                         >
                                                                             <CollapsibleTrigger asChild>
                                                                                 <Button
                                                                                     variant="ghost"
                                                                                     size="sm"
-                                                                                    className="h-7 gap-1.5 px-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                                                                                    className="text-muted-foreground hover:text-foreground h-7 gap-1.5 px-2 text-xs"
                                                                                 >
                                                                                     {isExpanded ? (
-                                                                                        <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                                                                        <ChevronDown className="h-3 w-3" />
                                                                                     ) : (
-                                                                                        <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                                                                        <ChevronRight className="h-3 w-3" />
                                                                                     )}
                                                                                     {isExpanded ? 'Hide' : 'Show'} changes
                                                                                 </Button>
                                                                             </CollapsibleTrigger>
-                                                                            <CollapsibleContent className="mt-2 space-y-2 sm:space-y-3">
+                                                                            <CollapsibleContent className="mt-2 space-y-2">
                                                                                 {activity.properties?.attributes && (
-                                                                                    <div className="dark:border-border dark:bg-muted/30 rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3">
-                                                                                        <p className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                                                                    <div className="bg-muted/30 rounded-md border p-2.5">
+                                                                                        <p className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
                                                                                             New Values
                                                                                         </p>
-                                                                                        <div className="grid gap-2 text-sm">
+                                                                                        <div className="grid gap-1.5 text-xs">
                                                                                             {Object.entries(activity.properties.attributes).map(
                                                                                                 ([key, value]) => (
                                                                                                     <div
                                                                                                         key={key}
                                                                                                         className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2"
                                                                                                     >
-                                                                                                        <span className="font-medium text-slate-500 dark:text-slate-400">
+                                                                                                        <span className="text-muted-foreground font-medium">
                                                                                                             {key}:
                                                                                                         </span>
-                                                                                                        <span className="break-all text-slate-700 dark:text-slate-200">
+                                                                                                        <span className="text-foreground break-all">
                                                                                                             {String(value)}
                                                                                                         </span>
                                                                                                     </div>
@@ -856,21 +827,21 @@ export default function RequisitionShow() {
                                                                                     </div>
                                                                                 )}
                                                                                 {activity.properties?.old && (
-                                                                                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800 dark:bg-slate-900/30">
-                                                                                        <p className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                                                                    <div className="bg-muted/30 rounded-md border p-2.5">
+                                                                                        <p className="text-muted-foreground mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
                                                                                             Previous Values
                                                                                         </p>
-                                                                                        <div className="grid gap-2 text-sm">
+                                                                                        <div className="grid gap-1.5 text-xs">
                                                                                             {Object.entries(activity.properties.old).map(
                                                                                                 ([key, value]) => (
                                                                                                     <div
                                                                                                         key={key}
                                                                                                         className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:gap-2"
                                                                                                     >
-                                                                                                        <span className="font-medium text-slate-500 dark:text-slate-400">
+                                                                                                        <span className="text-muted-foreground font-medium">
                                                                                                             {key}:
                                                                                                         </span>
-                                                                                                        <span className="break-all text-slate-600 line-through dark:text-slate-400">
+                                                                                                        <span className="text-muted-foreground break-all line-through">
                                                                                                             {String(value)}
                                                                                                         </span>
                                                                                                     </div>
