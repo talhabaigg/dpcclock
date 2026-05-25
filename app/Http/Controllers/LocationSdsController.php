@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Location;
 use App\Models\SafetyDataSheet;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use setasign\Fpdi\Tcpdf\Fpdi;
 
@@ -58,39 +60,65 @@ class LocationSdsController extends Controller
         }
 
         $pdf = new Fpdi();
+        $tempFiles = [];
+        $skipped = [];
 
         foreach ($sdsRecords as $sds) {
             $media = $sds->getFirstMedia('sds_file');
             if (!$media) {
+                $skipped[] = $sds->product_name . ' (no file)';
                 continue;
             }
 
-            $filePath = $media->getPath();
-            if (!file_exists($filePath)) {
-                continue;
-            }
+            $tmpPath = tempnam(sys_get_temp_dir(), 'sds_merge_') . '.pdf';
+            $tempFiles[] = $tmpPath;
 
             try {
-                $pageCount = $pdf->setSourceFile($filePath);
+                $contents = Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
+                file_put_contents($tmpPath, $contents);
+
+                $pageCount = $pdf->setSourceFile($tmpPath);
                 for ($i = 1; $i <= $pageCount; $i++) {
                     $templateId = $pdf->importPage($i);
                     $size = $pdf->getTemplateSize($templateId);
                     $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
                     $pdf->useTemplate($templateId);
                 }
-            } catch (\Exception $e) {
-                // Skip files that can't be processed
-                continue;
+            } catch (\Throwable $e) {
+                $skipped[] = $sds->product_name;
+                Log::warning('SDS merge: failed to import PDF', [
+                    'location_id' => $location->id,
+                    'sds_id' => $sds->id,
+                    'product_name' => $sds->product_name,
+                    'disk' => $media->disk,
+                    'path' => $media->getPathRelativeToRoot(),
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
         if ($pdf->PageNo() === 0) {
-            return redirect()->back()->with('error', 'No PDF files could be merged.');
+            foreach ($tempFiles as $tmp) {
+                @unlink($tmp);
+            }
+            $msg = 'No PDF files could be merged.';
+            if (!empty($skipped)) {
+                $msg .= ' Skipped: ' . implode(', ', array_slice($skipped, 0, 5));
+                if (count($skipped) > 5) {
+                    $msg .= ' and ' . (count($skipped) - 5) . ' more';
+                }
+            }
+            return redirect()->back()->with('error', $msg);
         }
 
         $filename = 'SDS_Register_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $location->name) . '.pdf';
+        $output = $pdf->Output($filename, 'S');
 
-        return response($pdf->Output($filename, 'S'), 200, [
+        foreach ($tempFiles as $tmp) {
+            @unlink($tmp);
+        }
+
+        return response($output, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
