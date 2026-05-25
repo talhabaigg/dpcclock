@@ -82,10 +82,10 @@ export default function SyncManager() {
     const handleDispatch = async () => {
         if (selected.size === 0) return;
         setResult(null);
-        dispatchHttp.setData({
+        dispatchHttp.transform(() => ({
             jobs: Array.from(selected),
             force_full: forceFullSync,
-        });
+        }));
         dispatchHttp.post('/locations/sync-jobs', {
             onSuccess: (data: { message: string }) => {
                 setResult(data.message);
