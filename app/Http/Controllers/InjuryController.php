@@ -11,6 +11,7 @@ use App\Models\Injury;
 use App\Models\Location;
 use App\Models\User;
 use App\Notifications\InjuryCreatedNotification;
+use App\Services\GetCompanyCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
@@ -454,11 +455,15 @@ class InjuryController extends Controller
             'bodyImageDims' => $bodyImageDims,
         ])->render();
 
-        $logoPath = public_path('logo.png');
+        $companyCode = $injury->location ? (new GetCompanyCodeService)->getCompanyCode($injury->location->eh_parent_id) : null;
+        $isGre = in_array($companyCode, ['GREEN', 'GRE']);
+        $logoPath = public_path($isGre ? 'gre_logo.jpg' : 'logo.png');
         if (!file_exists($logoPath)) {
             $logoPath = public_path('SWCPE_Logo.PNG');
+            $isGre = false;
         }
-        $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath));
+        $logoMime = $isGre ? 'image/jpeg' : 'image/png';
+        $logoBase64 = 'data:' . $logoMime . ';base64,' . base64_encode(file_get_contents($logoPath));
         $headerHtml = <<<HEADER
         <div style="width: 100%; padding: 8px 15mm 6px;">
             <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 2px solid #334155;">

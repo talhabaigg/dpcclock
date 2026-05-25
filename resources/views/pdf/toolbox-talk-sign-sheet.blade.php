@@ -1,7 +1,10 @@
 @php
+    use App\Services\GetCompanyCodeService;
     use Carbon\Carbon;
     $location = $talk->location;
     $calledBy = $talk->calledBy;
+    $companyCode = $location ? (new GetCompanyCodeService)->getCompanyCode($location->eh_parent_id) : null;
+    $logoFile = in_array($companyCode, ['GREEN', 'GRE']) ? 'gre_logo.jpg' : 'logo.png';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -156,7 +159,7 @@
 </head>
 <body>
     <div class="title-section">
-        <img src="{{ public_path('logo.png') }}" alt="Logo" style="height: 36px;" />
+        <img src="{{ public_path($logoFile) }}" alt="Logo" style="height: 36px;" />
         <h1>Toolbox Talk</h1>
     </div>
 

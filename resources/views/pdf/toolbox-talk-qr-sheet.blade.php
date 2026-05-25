@@ -1,4 +1,5 @@
 @php
+    use App\Services\GetCompanyCodeService;
     use Carbon\Carbon;
     use Endroid\QrCode\Builder\Builder;
     use Endroid\QrCode\Writer\PngWriter;
@@ -11,12 +12,15 @@
     ))->build();
     $qrDataUri = $qrPng->getDataUri();
 
-    $logoPath = public_path('logo.png');
+    $location = $talk->location;
+    $companyCode = $location ? (new GetCompanyCodeService)->getCompanyCode($location->eh_parent_id) : null;
+    $isGre = in_array($companyCode, ['GREEN', 'GRE']);
+    $logoPath = public_path($isGre ? 'gre_logo.jpg' : 'logo.png');
+    $logoMime = $isGre ? 'image/jpeg' : 'image/png';
     $logoDataUri = file_exists($logoPath)
-        ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+        ? 'data:' . $logoMime . ';base64,' . base64_encode(file_get_contents($logoPath))
         : null;
 
-    $location = $talk->location;
     $subjectLabel = \App\Models\ToolboxTalk::SUBJECT_OPTIONS[$talk->meeting_subject] ?? $talk->meeting_subject;
 @endphp
 <!DOCTYPE html>

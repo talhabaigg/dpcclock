@@ -1,6 +1,9 @@
 @php
+    use App\Services\GetCompanyCodeService;
     use Carbon\Carbon;
     $location = $talk->location;
+    $companyCode = $location ? (new GetCompanyCodeService)->getCompanyCode($location->eh_parent_id) : null;
+    $logoFile = in_array($companyCode, ['GREEN', 'GRE']) ? 'gre_logo.jpg' : 'logo.png';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -79,7 +82,7 @@
             <tr class="header-row">
                 <td colspan="4">
                     <div class="header-inner">
-                        <img src="{{ public_path('logo.png') }}" class="header-logo" alt="Logo" />
+                        <img src="{{ public_path($logoFile) }}" class="header-logo" alt="Logo" />
                         <div style="text-align: right;">
                             <h1>Toolbox Talk — Sign Sheet</h1>
                             <div class="header-meta">{{ $location->name ?? '' }} — {{ Carbon::parse($talk->meeting_date)->format('D d/m/Y') }}</div>
