@@ -224,6 +224,7 @@ export default function RequisitionList() {
     const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<RowActionTarget | null>(null);
     const [duplicateTarget, setDuplicateTarget] = useState<RowActionTarget | null>(null);
+    const [resetCardsSeq, setResetCardsSeq] = useState(0);
 
     useEffect(() => {
         setSelectedIds(new Set());
@@ -429,6 +430,19 @@ export default function RequisitionList() {
                             clearAllFilters={clearAllFilters}
                         />
 
+                        {viewMode === 'cards' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setResetCardsSeq((n) => n + 1)}
+                                title="Reset column order"
+                                className="gap-2"
+                            >
+                                <X className="h-4 w-4" />
+                                Reset Layout
+                            </Button>
+                        )}
+
                         <ActiveFilterChips activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
 
                         <div className="ml-auto flex items-center gap-2">
@@ -480,6 +494,18 @@ export default function RequisitionList() {
                                 handleCostRangeChange={handleCostRangeChange}
                                 clearAllFilters={clearAllFilters}
                             />
+                            {viewMode === 'cards' && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setResetCardsSeq((n) => n + 1)}
+                                    title="Reset column order"
+                                    className="gap-2"
+                                >
+                                    <X className="h-4 w-4" />
+                                    Reset Layout
+                                </Button>
+                            )}
                             <ActiveFilterChips activeFilters={activeFilters} filters={filters} updateFilter={updateFilter} />
                             <div className="ml-auto">
                                 <ViewToggle viewMode={viewMode} onChange={handleViewModeChange} />
@@ -538,7 +564,7 @@ export default function RequisitionList() {
                     aria-busy={isNavigating || undefined}
                 >
                     {viewMode === 'cards' ? (
-                        <CardsIndex filteredRequisitions={reqs} />
+                        <CardsIndex filteredRequisitions={reqs} resetSeq={resetCardsSeq} />
                     ) : (
                         <>
                             {reqs.length === 0 ? (

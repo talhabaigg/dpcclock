@@ -121,7 +121,11 @@
       "Bash(cp \"/Users/talhabaig/Downloads/SAFTEY MANAGER SIGN OFF \\(1\\).docx\" smso.docx)",
       "Bash(unzip -p smso.docx word/document.xml)",
       "Bash(awk '{print $2}')",
-      "Bash(awk '{print $3}')"
+      "Bash(awk '{print $3}')",
+      "Bash(awk 'NR>=298 && NR<=310 { match\\($0,/^ */\\); print NR, RLENGTH, $0 }' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/purchasing/show.tsx)",
+      "Bash(awk 'NR>=903 && NR<=912 { match\\($0,/^ */\\); print NR, RLENGTH, $0 }' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/purchasing/show.tsx)",
+      "Bash(awk 'NR>=540 && NR<=580 { match\\($0,/^ */\\); print NR, RLENGTH, $0 }' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/purchasing/show.tsx)",
+      "Bash(awk 'NR>=520 && NR<=540 { match\\($0,/^ */\\); print NR, RLENGTH, $0 }' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/purchasing/show.tsx)"
     ]
   }
 }

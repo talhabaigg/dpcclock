@@ -15,9 +15,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -32,20 +33,14 @@ import {
     ChevronDown,
     ChevronRight,
     CirclePlus,
-    Copy,
     Cuboid,
     Edit3,
-    FileSpreadsheet,
-    GitCompare,
+    EllipsisVertical,
     HelpCircle,
     History,
+    Info,
     Loader2,
     Lock,
-    MoreHorizontal,
-    Package,
-    Pencil,
-    Printer,
-    RefreshCw,
     RotateCcw,
     Send,
     Trash2,
@@ -54,9 +49,24 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
 import { SmartPricingWizard } from '@/components/SmartPricingWizard';
+import { getStatus } from './index-partials/statusConfig';
 import ComparisonTab from './show-partials/ComparisonTab';
 import { DeliveryOrganizationPanel } from './show-partials/DeliveryOrganizationPanel';
 import { SmartPricingCards } from './show-partials/SmartPricingCards';
+
+function InlineDetail({ label, value, noTruncate }: { label: string; value: string | null | undefined; noTruncate?: boolean }) {
+    return (
+        <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">{label}</span>
+            <span
+                className={cn('text-foreground text-xs font-medium', !noTruncate && 'truncate')}
+                title={!noTruncate ? value ?? undefined : undefined}
+            >
+                {value || '—'}
+            </span>
+        </div>
+    );
+}
 
 export default function RequisitionShow() {
     const { requisition, activities, flash, auth, costCodes } = usePage().props as unknown as {
@@ -207,59 +217,6 @@ export default function RequisitionShow() {
         });
     };
 
-    const getStatusConfig = (status: string) => {
-        const neutral = {
-            bgLight: 'bg-slate-50 dark:bg-slate-900/50',
-            textColor: 'text-slate-700 dark:text-slate-300',
-            border: 'border-slate-200 dark:border-slate-700',
-        };
-        switch (status) {
-            case 'pending':
-                return {
-                    ...neutral,
-                    bg: 'bg-slate-400',
-                    text: 'Pending',
-                    description: 'Not yet sent. Edit line items and send to office or Premier.',
-                };
-            case 'office_review':
-                return {
-                    ...neutral,
-                    bg: 'bg-purple-500',
-                    text: 'Waiting for Review',
-                    description: 'An office admin is verifying pricing before sending to Premier.',
-                };
-            case 'processed':
-            case 'success':
-                return {
-                    ...neutral,
-                    bg: 'bg-amber-500',
-                    text: 'Awaiting in Premier',
-                    description: 'Sent to Premier. An admin will convert it into a purchase order.',
-                };
-            case 'sent':
-                return {
-                    ...neutral,
-                    bg: 'bg-emerald-500',
-                    text: 'Sent',
-                    description: 'Purchase order has been sent to the supplier.',
-                };
-            case 'failed':
-                return {
-                    ...neutral,
-                    bg: 'bg-red-500',
-                    text: 'Failed',
-                    description: 'The last send attempt failed. Use Retry once the issue is fixed.',
-                };
-            default:
-                return {
-                    ...neutral,
-                    bg: 'bg-slate-400',
-                    text: 'Unknown',
-                    description: `Unrecognised status: ${status}`,
-                };
-        }
-    };
-
     const getEventConfig = (event: string) => {
         const base = {
             bg: 'bg-slate-100 dark:bg-slate-800',
@@ -280,7 +237,7 @@ export default function RequisitionShow() {
         }
     };
 
-    const statusConfig = getStatusConfig(requisition.status);
+    const statusInfo = getStatus(requisition.status);
     const totalCost =
         Number(requisition.line_items_sum_total_cost) || requisition.line_items?.reduce((sum, item) => sum + Number(item.total_cost || 0), 0) || 0;
     const itemCount = requisition.line_items?.length || 0;
@@ -322,37 +279,21 @@ export default function RequisitionShow() {
         }
     };
 
-    // Grouped detail items
-    const orderDetails = [
+    const details: { label: string; value: ReactNode; tabular?: boolean }[] = [
         { label: 'Project', value: requisition.location?.name },
         { label: 'Supplier', value: requisition.supplier?.name },
+        { label: 'Required', value: requisition.date_required },
+        { label: 'Reference', value: requisition.order_reference },
         { label: 'Deliver To', value: requisition.deliver_to },
         { label: 'Contact', value: requisition.delivery_contact },
-        { label: 'Reference', value: requisition.order_reference },
-        { label: 'Required', value: requisition.date_required },
-    ];
-
-    const peopleDetails = [
         { label: 'Requested By', value: requisition.requested_by },
         { label: 'Created By', value: requisition.creator?.name },
+        { label: 'Created', value: formatDateTime(requisition.created_at), tabular: true },
         { label: 'Submitted By', value: requisition.submitter?.name },
+        { label: 'Submitted', value: formatDateTime(requisition.submitted_at), tabular: true },
         { label: 'Processed By', value: requisition.processor?.name },
+        { label: 'Processed', value: formatDateTime(requisition.processed_at), tabular: true },
     ];
-
-    const timelineDetails = [
-        { label: 'Created', value: formatDateTime(requisition.created_at) },
-        { label: 'Submitted', value: formatDateTime(requisition.submitted_at) },
-        { label: 'Processed', value: formatDateTime(requisition.processed_at) },
-    ];
-
-    const renderDetailRow = ({ label, value }: { label: string; value: ReactNode }, tabular = false) => (
-        <div key={label} className="flex items-start justify-between gap-3 px-4 py-2">
-            <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
-            <span className={cn('text-right text-sm font-medium break-words text-slate-700 dark:text-slate-200', tabular && 'tabular-nums')}>
-                {value || <span className="text-slate-400">—</span>}
-            </span>
-        </div>
-    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -360,107 +301,28 @@ export default function RequisitionShow() {
 
             <div className="dark:bg-background flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-slate-50/40 [&_[data-slot=card-content]]:px-0 [&_[data-slot=card-footer]]:px-0 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card]]:gap-0 [&_[data-slot=card]]:py-0">
                 {/* Compact Header Bar */}
-                <div className="dark:border-border dark:bg-background sticky top-0 z-10 border-b border-slate-200 bg-white">
-                    <div className="max-w-full px-3 py-3 sm:px-6 md:px-8">
-                        {/* Top row: ID, Status, Key Stats */}
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg font-bold text-slate-900 sm:text-xl dark:text-white">#{requisition.id}</span>
-                                    {requisition.po_number && (
-                                        <Badge variant="outline" className="font-mono text-xs font-semibold">
-                                            PO{requisition.po_number}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <TooltipProvider delayDuration={200}>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Badge
-                                                className={cn(
-                                                    'cursor-default font-medium',
-                                                    statusConfig.bgLight,
-                                                    statusConfig.textColor,
-                                                    statusConfig.border,
-                                                )}
-                                            >
-                                                <div className={cn('mr-1.5 h-1.5 w-1.5 rounded-full', statusConfig.bg)} />
-                                                {statusConfig.text}
-                                            </Badge>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-xs">{statusConfig.description}</TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                <div className="dark:bg-background sticky top-0 z-10 bg-white">
+                    <div className="mx-auto w-full max-w-5xl px-3 py-3 sm:px-6 md:px-8">
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-slate-900 sm:text-xl dark:text-white">#{requisition.id}</span>
+                                {requisition.po_number && (
+                                    <Badge variant="outline" className="font-mono text-xs font-semibold">
+                                        PO{requisition.po_number}
+                                    </Badge>
+                                )}
                             </div>
+                            <Badge
+                                variant="secondary"
+                                className={cn(
+                                    'text-[11px] font-medium',
+                                    statusInfo.key === 'sent' && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+                                )}
+                            >
+                                {statusInfo.label}
+                            </Badge>
 
-                            <div className="flex items-center gap-2 text-sm sm:gap-4">
-                                <div className="hidden items-center gap-1.5 sm:flex">
-                                    <span className="text-slate-500 dark:text-slate-400">Items:</span>
-                                    <span className="font-semibold text-slate-900 dark:text-white">{itemCount}</span>
-                                </div>
-                                <div className="dark:bg-border hidden h-4 w-px bg-slate-200 sm:block" />
-                                <div className="flex items-center gap-1">
-                                    <span className="xs:inline hidden text-slate-500 dark:text-slate-400">Total:</span>
-                                    <span className="text-base font-bold text-slate-900 sm:text-lg dark:text-white">
-                                        ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="-mx-1 mt-3 flex flex-wrap items-center gap-1.5 sm:mx-0 sm:gap-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                        <MoreHorizontal className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                        <span className="hidden sm:inline">More</span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-48">
-                                    <DropdownMenuItem
-                                        onClick={() => router.visit(`/requisition/${requisition.id}/edit`)}
-                                        disabled={
-                                            requisition.status !== 'pending' &&
-                                            requisition.status !== 'failed' &&
-                                            !(requisition.status === 'office_review' && canApprovePricing)
-                                        }
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                        Edit
-                                    </DropdownMenuItem>
-                                    {canProcessRequisitions &&
-                                        (requisition.status === 'pending' ||
-                                            requisition.status === 'failed' ||
-                                            requisition.status === 'office_review') && (
-                                            <DropdownMenuItem onClick={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}>
-                                                <RefreshCw className="h-4 w-4" />
-                                                Refresh Pricing
-                                            </DropdownMenuItem>
-                                        )}
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild>
-                                        <a href={`/requisition/excel/${requisition.id}`}>
-                                            <FileSpreadsheet className="h-4 w-4" />
-                                            Excel
-                                        </a>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setDuplicateOpen(true)}>
-                                        <Copy className="h-4 w-4" />
-                                        Duplicate
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
-                            <Link href={`/requisition/${requisition.id}/print`}>
-                                <Button size="sm" variant="outline" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
-                                    <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    <span className="hidden sm:inline">Print</span>
-                                </Button>
-                            </Link>
-
-                            <div className="flex-1" />
-
+                            <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
                             {requisition.status === 'failed' && (
                                 <Link href={`/requisition/${requisition.id}/api-send`}>
                                     <Button size="sm" className="h-8 gap-1 px-2 text-xs sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm">
@@ -584,26 +446,17 @@ export default function RequisitionShow() {
                                                 <div className="border-border bg-muted/30 rounded-lg border p-3">
                                                     <p className="text-muted-foreground text-xs font-medium">Status meanings:</p>
                                                     <div className="mt-2 flex flex-wrap gap-2">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
-                                                        >
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                                            Pending
+                                                        <Badge variant="secondary" className="text-[11px] font-medium">
+                                                            {getStatus('pending').label}
+                                                        </Badge>
+                                                        <Badge variant="secondary" className="text-[11px] font-medium">
+                                                            {getStatus('processed').label}
                                                         </Badge>
                                                         <Badge
-                                                            variant="outline"
-                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
+                                                            variant="secondary"
+                                                            className="bg-emerald-500/10 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
                                                         >
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                                            Awaiting in Premier
-                                                        </Badge>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="gap-1 border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
-                                                        >
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                            Sent
+                                                            {getStatus('sent').label}
                                                         </Badge>
                                                     </div>
                                                 </div>
@@ -620,6 +473,49 @@ export default function RequisitionShow() {
                                     </Button>
                                 </Link>
                             )}
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon" aria-label="More actions" className="h-8 sm:h-9">
+                                        <EllipsisVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="min-w-max">
+                                    <DropdownMenuItem
+                                        className="whitespace-nowrap"
+                                        onClick={() => router.visit(`/requisition/${requisition.id}/edit`)}
+                                        disabled={
+                                            requisition.status !== 'pending' &&
+                                            requisition.status !== 'failed' &&
+                                            !(requisition.status === 'office_review' && canApprovePricing)
+                                        }
+                                    >
+                                        Edit
+                                    </DropdownMenuItem>
+                                    {canProcessRequisitions &&
+                                        (requisition.status === 'pending' ||
+                                            requisition.status === 'failed' ||
+                                            requisition.status === 'office_review') && (
+                                            <DropdownMenuItem
+                                                className="whitespace-nowrap"
+                                                onClick={() => router.visit(`/requisition/${requisition.id}/refresh-pricing`)}
+                                            >
+                                                Refresh Pricing
+                                            </DropdownMenuItem>
+                                        )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="whitespace-nowrap" asChild>
+                                        <a href={`/requisition/excel/${requisition.id}`}>Excel</a>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="whitespace-nowrap" asChild>
+                                        <Link href={`/requisition/${requisition.id}/print`}>Print</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="whitespace-nowrap" onClick={() => setDuplicateOpen(true)}>
+                                        Duplicate
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -635,61 +531,61 @@ export default function RequisitionShow() {
                     </div>
                 )}
 
-                {/* Main Content - Two Column Layout */}
-                <div className="min-w-0 flex-1 p-3 sm:p-4 md:p-6 lg:p-8">
-                    <div className="grid min-w-0 gap-4 md:gap-6 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr]">
-                        {/* Left Column - Details */}
-                        <div>
-                            {/* Details Card */}
-                            <Card className="dark:border-border overflow-hidden border-slate-200/60">
-                                <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase dark:border-slate-800 dark:text-slate-400">
-                                    Order
-                                </div>
-                                <div className="py-1">{orderDetails.map((item) => renderDetailRow(item))}</div>
-                                <Collapsible>
-                                    <CollapsibleTrigger className="group flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase transition-colors hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900/50">
-                                        <span>People</span>
-                                        <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent className="border-t border-slate-100 py-1 dark:border-slate-800">
-                                        {peopleDetails.map((item) => renderDetailRow(item))}
-                                    </CollapsibleContent>
-                                </Collapsible>
-                                <Collapsible>
-                                    <CollapsibleTrigger className="group flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-xs font-semibold tracking-wider text-slate-500 uppercase transition-colors hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900/50">
-                                        <span>Timeline</span>
-                                        <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent className="border-t border-slate-100 py-1 dark:border-slate-800">
-                                        {timelineDetails.map((item) => renderDetailRow(item, true))}
-                                    </CollapsibleContent>
-                                </Collapsible>
-                            </Card>
+                {/* Main Content */}
+                <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-1 flex-col gap-4 p-3 sm:p-4 md:gap-6 md:p-6 lg:p-8">
+                    {/* Inline summary strip + Details sheet */}
+                    <div className="flex items-start justify-between gap-4 text-xs">
+                        <div className="flex min-w-0 flex-1 flex-col gap-3">
+                            <InlineDetail label="Project" value={requisition.location?.name} />
+                            <InlineDetail label="Supplier" value={requisition.supplier?.name} />
+                            <InlineDetail label="Required" value={requisition.date_required} />
+                            <InlineDetail label="Reference" value={requisition.order_reference} noTruncate />
                         </div>
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+                                    <Info className="h-3.5 w-3.5" />
+                                    Details
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+                                <SheetHeader>
+                                    <SheetTitle>Requisition Details</SheetTitle>
+                                </SheetHeader>
+                                <div className="grid grid-cols-1 gap-x-6 gap-y-3 px-4 pb-6 sm:grid-cols-2">
+                                    {details.map(({ label, value, tabular }) => (
+                                        <div key={label} className="flex min-w-0 flex-col gap-0.5">
+                                            <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+                                                {label}
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    'text-sm font-medium break-words text-slate-700 dark:text-slate-200',
+                                                    tabular && 'tabular-nums',
+                                                )}
+                                            >
+                                                {value || <span className="text-slate-400">—</span>}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
 
-                        {/* Right Column - Tabs */}
-                        <div className="min-w-0">
+                    {/* Tabs — full width */}
+                    <div className="min-w-0">
                             <Tabs defaultValue="items" className="w-full">
-                                <TabsList className="mb-3 w-full justify-start overflow-x-auto sm:mb-4 sm:w-auto">
+                                <TabsList className="mb-3 w-full justify-start sm:mb-4 sm:w-auto">
                                     <TabsTrigger value="items" className="gap-1.5">
-                                        <Cuboid className="h-4 w-4" />
                                         Items
                                         <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                                             {itemCount}
                                         </Badge>
                                     </TabsTrigger>
-                                    <TabsTrigger value="log" className="gap-1.5">
-                                        <History className="h-4 w-4" />
-                                        Activity
-                                    </TabsTrigger>
-                                    <TabsTrigger value="compare" className="gap-1.5">
-                                        <GitCompare className="h-4 w-4" />
-                                        Compare
-                                    </TabsTrigger>
-                                    <TabsTrigger value="delivery" className="gap-1.5">
-                                        <Package className="h-4 w-4" />
-                                        Delivery
-                                    </TabsTrigger>
+                                    <TabsTrigger value="log">Activity</TabsTrigger>
+                                    <TabsTrigger value="compare">Compare</TabsTrigger>
+                                    <TabsTrigger value="delivery">Delivery</TabsTrigger>
                                 </TabsList>
 
                                 {/* Line Items Tab */}
@@ -717,10 +613,10 @@ export default function RequisitionShow() {
                                             </div>
                                         ) : (
                                             <div className="overflow-x-auto">
-                                                <Table>
+                                                <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
                                                     <TableHeader>
                                                         <TableRow className="hover:bg-transparent">
-                                                            <TableHead aria-sort={getAriaSort('code')} className="h-10">
+                                                            <TableHead aria-sort={getAriaSort('code')} className="h-10 pl-4">
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
@@ -786,7 +682,7 @@ export default function RequisitionShow() {
                                                     <TableBody>
                                                         {getSortedItems().map((item) => (
                                                             <TableRow key={item.id}>
-                                                                <TableCell className="font-mono text-xs sm:text-sm">
+                                                                <TableCell className="pl-4 font-mono">
                                                                     <div className="flex items-center gap-1.5">
                                                                         {item.is_locked ? (
                                                                             <Tooltip>
@@ -799,39 +695,39 @@ export default function RequisitionShow() {
                                                                         <span>{item.code}</span>
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell className="text-muted-foreground max-w-[140px] text-xs sm:max-w-[220px] sm:text-sm">
+                                                                <TableCell className="text-muted-foreground max-w-[140px] sm:max-w-[220px]">
                                                                     <span className="line-clamp-2">{item.description}</span>
                                                                     {item.price_list && (
-                                                                        <span className="text-muted-foreground/70 mt-1 block text-xs lg:hidden">
+                                                                        <span className="text-muted-foreground/70 mt-1 block lg:hidden">
                                                                             {item.price_list}
                                                                         </span>
                                                                     )}
                                                                 </TableCell>
-                                                                <TableCell className="text-right text-xs font-medium tabular-nums sm:text-sm">
-                                                                    {item.qty}
+                                                                <TableCell className="text-right font-medium tabular-nums">
+                                                                    {Number(item.qty).toLocaleString('en-US', { maximumFractionDigits: 6 })}
                                                                 </TableCell>
-                                                                <TableCell className="text-muted-foreground hidden text-right text-xs tabular-nums sm:table-cell sm:text-sm">
+                                                                <TableCell className="text-muted-foreground hidden text-right tabular-nums sm:table-cell">
                                                                     ${Number(item.unit_cost)?.toFixed(2)}
                                                                 </TableCell>
-                                                                <TableCell className="text-right text-xs font-semibold tabular-nums sm:text-sm">
+                                                                <TableCell className="text-right font-semibold tabular-nums">
                                                                     ${Number(item.total_cost)?.toFixed(2)}
                                                                 </TableCell>
-                                                                <TableCell className="text-muted-foreground hidden text-sm md:table-cell">
+                                                                <TableCell className="text-muted-foreground hidden md:table-cell">
                                                                     {item.cost_code || <span className="text-muted-foreground/50">—</span>}
                                                                 </TableCell>
-                                                                <TableCell className="text-muted-foreground hidden text-sm lg:table-cell">
+                                                                <TableCell className="text-muted-foreground hidden lg:table-cell">
                                                                     {item.price_list || <span className="text-muted-foreground/50">—</span>}
                                                                 </TableCell>
                                                             </TableRow>
                                                         ))}
                                                         <TableRow className="bg-muted/50 hover:bg-muted/50 font-semibold">
-                                                            <TableCell colSpan={4} className="text-muted-foreground text-right text-xs sm:text-sm">
+                                                            <TableCell colSpan={4} className="text-muted-foreground text-right">
                                                                 <span className="sm:hidden">Total ({itemCount})</span>
                                                                 <span className="hidden sm:inline">
                                                                     Total ({itemCount} {itemCount === 1 ? 'item' : 'items'})
                                                                 </span>
                                                             </TableCell>
-                                                            <TableCell className="text-right text-sm tabular-nums sm:text-base">
+                                                            <TableCell className="text-right tabular-nums">
                                                                 ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                                             </TableCell>
                                                             <TableCell className="hidden md:table-cell" />
@@ -1009,7 +905,6 @@ export default function RequisitionShow() {
                         </div>
                     </div>
                 </div>
-            </div>
             <AlertDialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
