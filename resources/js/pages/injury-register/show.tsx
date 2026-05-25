@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock, X } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
 import { useEffect, useRef, useState } from 'react';
@@ -364,6 +364,15 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
     const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
     const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+    const [removingMediaId, setRemovingMediaId] = useState<number | null>(null);
+
+    function confirmRemoveAttachment() {
+        if (removingMediaId === null) return;
+        router.delete(`/injury-register/${injury.id}/files/${removingMediaId}`, {
+            preserveScroll: true,
+            onFinish: () => setRemovingMediaId(null),
+        });
+    }
 
     const filteredComments = (() => {
         let result = comments;
@@ -781,10 +790,23 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                                             {injury.media
                                                 .filter((m) => m.collection_name === 'files')
                                                 .map((m) => (
-                                                    <a key={m.id} href={`/injury-register/${injury.id}/files/${m.id}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex items-center gap-2 rounded border px-2 py-1.5 text-xs">
-                                                        <FileText className="h-3.5 w-3.5 shrink-0" />
-                                                        <span className="truncate">{m.file_name}</span>
-                                                    </a>
+                                                    <div key={m.id} className="flex items-center gap-1 rounded border px-2 py-1.5 text-xs">
+                                                        <a href={`/injury-register/${injury.id}/files/${m.id}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex min-w-0 flex-1 items-center gap-2">
+                                                            <FileText className="h-3.5 w-3.5 shrink-0" />
+                                                            <span className="truncate">{m.file_name}</span>
+                                                        </a>
+                                                        {can('injury-register.delete') && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setRemovingMediaId(m.id)}
+                                                                className="text-muted-foreground hover:bg-muted hover:text-red-500 shrink-0 rounded p-0.5 transition-colors"
+                                                                aria-label={`Remove ${m.file_name}`}
+                                                                title="Remove attachment"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 ))}
                                         </div>
                                     </div>
@@ -1105,6 +1127,22 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDeletingCommentId(null)}>Cancel</Button>
                         <Button variant="destructive" onClick={confirmDeleteComment}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Remove Attachment Confirmation */}
+            <Dialog open={removingMediaId !== null} onOpenChange={(open) => { if (!open) setRemovingMediaId(null); }}>
+                <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
+                    <DialogHeader>
+                        <DialogTitle>Remove Attachment</DialogTitle>
+                        <DialogDescription>
+                            This will hide the attachment from the injury record. The file is retained and can be restored by an admin.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRemovingMediaId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmRemoveAttachment}>Remove</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

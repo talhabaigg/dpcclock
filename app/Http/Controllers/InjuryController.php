@@ -518,6 +518,17 @@ class InjuryController extends Controller
         return redirect($this->mediaUrl($mediaItem));
     }
 
+    public function deleteAttachment(Injury $injury, int $media)
+    {
+        $mediaItem = $injury->media()->where('id', $media)->where('collection_name', 'files')->first();
+        abort_unless($mediaItem, 404);
+
+        $mediaItem->collection_name = 'files_removed';
+        $mediaItem->save();
+
+        return back()->with('success', 'Attachment removed.');
+    }
+
     public function dropAll()
     {
         abort_unless(app()->environment('local'), 403);

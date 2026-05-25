@@ -1384,6 +1384,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/injury-register/{injury}/pdf', [InjuryController::class, 'downloadPdf'])->name('injury-register.pdf')
             ->middleware('permission:injury-register.view');
         Route::get('/injury-register/{injury}/files/{media}', [InjuryController::class, 'downloadFile'])->name('injury-register.download-file');
+        Route::delete('/injury-register/{injury}/files/{media}', [InjuryController::class, 'deleteAttachment'])->name('injury-register.delete-file')
+            ->middleware('permission:injury-register.delete');
         Route::post('/injury-register/{injury}/test-notification', [InjuryController::class, 'testNotification'])->name('injury-register.test-notification');
         Route::post('/injury-register/{injury}/send-notification', [InjuryController::class, 'sendNotification'])->name('injury-register.send-notification');
     });
