@@ -42,7 +42,7 @@ const MOBILE_WIDGET_CONFIG: Record<string, { minH: number; size: 'sm' | 'md' | '
     'claim-vs-production':  { minH: 150, size: 'sm' },
     'oncost-ratio':         { minH: 150, size: 'sm' },
     'pending-pos':           { minH: 140, size: 'sm' },
-    'project-income':       { minH: 220, size: 'md' },
+    'project-income':       { minH: 280, size: 'md' },
     'labour-budget':        { minH: 300, size: 'lg' },
 };
 
@@ -523,7 +523,7 @@ export default function DashboardGrid(props: DashboardGridProps) {
             { ids: ['po-commitments', 'sc-commitments'], minH: 140 },
             { ids: ['pending-pos'], minH: 140 },
             { ids: ['claim-vs-production', 'oncost-ratio'], minH: 150 },
-            { ids: ['project-income'], minH: 220 },
+            { ids: ['project-income'], minH: 280 },
             { ids: ['labour-budget'], minH: 300 },
             { ids: ['employees-on-site'], minH: 280 },
         ];
