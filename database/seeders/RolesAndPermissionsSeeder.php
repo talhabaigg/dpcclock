@@ -89,6 +89,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // ============================================
         'Daily Prestarts' => [
             'prestarts.view' => 'View daily prestarts',
+            'prestarts.view-all' => 'View all daily prestarts (across all locations)',
             'prestarts.create' => 'Create daily prestarts',
             'prestarts.edit' => 'Edit daily prestarts',
             'prestarts.delete' => 'Delete daily prestarts',
@@ -480,6 +481,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'injury-register.export',
             // Daily Prestarts
             'prestarts.view',
+            'prestarts.view-all',
             'prestarts.create',
             'prestarts.edit',
             'prestarts.delete',

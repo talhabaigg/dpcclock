@@ -25,8 +25,16 @@ class DailyPrestartController extends Controller
             $perPage = 25;
         }
 
+        $user = auth()->user();
+        $canViewAll = $user->hasPermissionTo('prestarts.view-all');
+
         $query = DailyPrestart::with(['location', 'foreman', 'createdBy', 'signatures.employee'])
             ->withCount('signatures');
+
+        if (! $canViewAll) {
+            $locationIds = $this->scopedLocations()->pluck('id');
+            $query->whereIn('location_id', $locationIds);
+        }
 
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->location_id);
@@ -80,7 +88,7 @@ class DailyPrestartController extends Controller
         return Inertia::render('daily-prestarts/index', [
             'prestarts' => $prestarts,
             'filters' => array_merge($request->only(['location_id', 'work_date']), ['per_page' => $perPage]),
-            'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
+            'locations' => $this->scopedLocations()->get(['id', 'name']),
             'workDates' => $workDates,
         ]);
     }
@@ -89,7 +97,7 @@ class DailyPrestartController extends Controller
     {
         return Inertia::render('daily-prestarts/form', [
             'prestart' => null,
-            'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
+            'locations' => $this->scopedLocations()->get(['id', 'name']),
             'locationKioskData' => $this->getLocationKioskData(),
             'trainings' => [],
         ]);
@@ -108,7 +116,7 @@ class DailyPrestartController extends Controller
         return Inertia::render('daily-prestarts/form', [
             'prestart' => null,
             'duplicateFrom' => $duplicate,
-            'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
+            'locations' => $this->scopedLocations()->get(['id', 'name']),
             'locationKioskData' => $this->getLocationKioskData(),
             'trainings' => [],
         ]);
@@ -336,7 +344,7 @@ class DailyPrestartController extends Controller
 
         return Inertia::render('daily-prestarts/form', [
             'prestart' => $dailyPrestart,
-            'locations' => Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get(['id', 'name']),
+            'locations' => $this->scopedLocations()->get(['id', 'name']),
             'locationKioskData' => $this->getLocationKioskData(),
             'trainings' => $trainings,
         ]);
@@ -734,9 +742,22 @@ class DailyPrestartController extends Controller
         );
     }
 
+    private function scopedLocations()
+    {
+        $query = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open();
+
+        $user = auth()->user();
+        if ($user && ! $user->hasPermissionTo('prestarts.view-all')) {
+            $ehLocationIds = $user->managedKiosks()->pluck('eh_location_id');
+            $query->whereIn('eh_location_id', $ehLocationIds);
+        }
+
+        return $query;
+    }
+
     private function getLocationKioskData(): array
     {
-        $locations = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])->open()->get();
+        $locations = $this->scopedLocations()->get();
         $data = [];
 
         foreach ($locations as $location) {
