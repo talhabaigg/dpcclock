@@ -41,6 +41,7 @@ return [
         'retry_delay' => env('PREMIER_JOB_RETRY_DELAY', 60), // seconds
         'timeout' => env('PREMIER_JOB_TIMEOUT', 600), // 10 minutes
         'batch_size' => env('PREMIER_JOB_BATCH_SIZE', 1000),
+        'full_sync_start_date' => env('PREMIER_FULL_SYNC_START_DATE', '2000-01-01'),
     ],
 
     'swcp_company_id' => env('PREMIER_SWCP_COMPANY_ID', '3341c7c6-2abb-49e1-8a59-839d1bcff972'),

@@ -46,116 +46,35 @@ class LoadApPostedInvoices implements ShouldQueue
         ]);
 
         try {
-            $baseUrl = config('premier.api.base_url').config('premier.endpoints.ap_posted_invoices');
-            $insertBatchSize = 100;
-            $pageSize = 200;
-            $skip = 0;
             $totalProcessed = 0;
-            $isFirstBatch = true;
             $maxDate = $lastDate;
+            $tableCleared = false;
 
-            // Build the OData filter for incremental mode
-            $filterParam = '';
-            if ($isIncremental) {
-                $filterParam = "\$filter=Transaction_Date ge datetime'".$lastDate."T00:00:00'&";
+            if ($this->forceFullSync) {
+                // Full sync walks the date range in monthly windows — Premier's OData 500s
+                // on unbounded queries regardless of $top, but handles filtered windows fine.
+                $windows = $this->buildMonthlyWindows(
+                    config('premier.jobs.full_sync_start_date', '2000-01-01'),
+                    now()
+                );
+                Log::info('LoadApPostedInvoices: Full sync window plan', ['windows' => count($windows)]);
+            } else {
+                if ($isIncremental) {
+                    $deleted = ApPostedInvoice::where('transaction_date', '>=', $lastDate)->delete();
+                    Log::info('LoadApPostedInvoices: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+                    $tableCleared = true;
+                }
+                $windows = [[$lastDate, null]];
             }
 
-            // Delete overlap records before fetching (inside incremental mode)
-            if ($isIncremental) {
-                $deleted = ApPostedInvoice::where('transaction_date', '>=', $lastDate)->delete();
-                Log::info('LoadApPostedInvoices: Deleted overlap records', ['from' => $lastDate, 'deleted' => $deleted]);
+            foreach ($windows as [$start, $end]) {
+                $this->fetchWindow($start, $end, $totalProcessed, $maxDate, $tableCleared);
             }
 
-            do {
-                $url = $baseUrl.'?'.$filterParam.'$top='.$pageSize.'&$skip='.$skip;
+            if ($this->forceFullSync && ! $tableCleared) {
+                Log::warning('LoadApPostedInvoices: ERP returned 0 rows across all windows, table left untouched');
+            }
 
-                Log::info('LoadApPostedInvoices: Fetching page', [
-                    'skip' => $skip,
-                    'top' => $pageSize,
-                    'incremental' => $isIncremental,
-                ]);
-
-                $response = Http::timeout(config('premier.api.timeout', 300))
-                    ->withBasicAuth(
-                        config('premier.api.username'),
-                        config('premier.api.password')
-                    )
-                    ->withHeaders([
-                        'Accept' => 'application/json',
-                        'DataServiceVersion' => '2.0',
-                        'MaxDataServiceVersion' => '2.0',
-                    ])
-                    ->get($url);
-
-                if (! $response->successful()) {
-                    throw new \RuntimeException(
-                        "API request failed with status {$response->status()}: {$response->body()}"
-                    );
-                }
-
-                $json = $response->json();
-                unset($response);
-
-                if (! isset($json['d'])) {
-                    throw new \RuntimeException('Invalid API response structure: missing "d" property');
-                }
-
-                $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
-                unset($json);
-
-                if (! is_array($rows)) {
-                    throw new \RuntimeException('Invalid API response: expected array of rows');
-                }
-
-                $rowCount = count($rows);
-
-                if ($rowCount === 0 && $isFirstBatch && ! $isIncremental) {
-                    Log::warning('LoadApPostedInvoices: ERP returned 0 rows, skipping database update');
-
-                    return;
-                }
-
-                if ($rowCount === 0) {
-                    break;
-                }
-
-                Log::info('LoadApPostedInvoices: Processing page', [
-                    'rows' => $rowCount,
-                    'skip' => $skip,
-                ]);
-
-                if ($isFirstBatch && ! $isIncremental) {
-                    ApPostedInvoice::query()->delete();
-                }
-                $isFirstBatch = false;
-
-                $chunks = array_chunk($rows, $insertBatchSize);
-                unset($rows);
-
-                foreach ($chunks as $chunk) {
-                    $data = [];
-                    foreach ($chunk as $r) {
-                        $record = $this->mapRowToRecord($r);
-
-                        if ($record['transaction_date'] && ($maxDate === null || $record['transaction_date'] > $maxDate)) {
-                            $maxDate = $record['transaction_date'];
-                        }
-
-                        $data[] = $record;
-                    }
-                    ApPostedInvoice::insert($data);
-                    unset($data);
-                }
-                unset($chunks);
-
-                $totalProcessed += $rowCount;
-                $skip += $pageSize;
-
-                gc_collect_cycles();
-
-            } while ($rowCount === $pageSize);
-
-            // Update sync log
             $syncLog->last_successful_sync = now();
             $syncLog->last_filter_value = $maxDate;
             $syncLog->records_synced = $totalProcessed;
@@ -178,6 +97,133 @@ class LoadApPostedInvoices implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    private function fetchWindow(?string $start, ?string $end, int &$totalProcessed, ?string &$maxDate, bool &$tableCleared): void
+    {
+        $baseUrl = config('premier.api.base_url').config('premier.endpoints.ap_posted_invoices');
+        $insertBatchSize = 100;
+        $pageSize = 200;
+        $skip = 0;
+
+        $filterParts = [];
+        if ($start !== null) {
+            $filterParts[] = "Transaction_Date ge datetime'{$start}T00:00:00'";
+        }
+        if ($end !== null) {
+            $filterParts[] = "Transaction_Date lt datetime'{$end}T00:00:00'";
+        }
+        $filterString = implode(' and ', $filterParts);
+
+        $fetched = 0;
+        $totalCount = null;
+
+        do {
+            $query = [];
+            if ($filterString !== '') {
+                $query[] = '$filter='.rawurlencode($filterString);
+            }
+            $query[] = '$top='.$pageSize;
+            $query[] = '$skip='.$skip;
+            $query[] = '$inlinecount=allpages';
+            $url = $baseUrl.'?'.implode('&', $query);
+
+            Log::info('LoadApPostedInvoices: Fetching page', [
+                'window_start' => $start,
+                'window_end' => $end,
+                'skip' => $skip,
+                'expected_total' => $totalCount,
+            ]);
+
+            // Premier's OData randomly 500s on valid queries — retry transient failures.
+            $response = Http::timeout(config('premier.api.timeout', 300))
+                ->retry(3, 1000, throw: false)
+                ->withBasicAuth(
+                    config('premier.api.username'),
+                    config('premier.api.password')
+                )
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'DataServiceVersion' => '2.0',
+                    'MaxDataServiceVersion' => '2.0',
+                ])
+                ->get($url);
+
+            if (! $response->successful()) {
+                throw new \RuntimeException(
+                    "API request failed with status {$response->status()}: {$response->body()}"
+                );
+            }
+
+            $json = $response->json();
+            unset($response);
+
+            if (! isset($json['d'])) {
+                throw new \RuntimeException('Invalid API response structure: missing "d" property');
+            }
+
+            $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
+            $totalCount ??= isset($json['d']['__count']) ? (int) $json['d']['__count'] : null;
+            unset($json);
+
+            if (! is_array($rows)) {
+                throw new \RuntimeException('Invalid API response: expected array of rows');
+            }
+
+            $rowCount = count($rows);
+
+            if ($rowCount === 0) {
+                break;
+            }
+
+            // Defer the destructive full-sync truncate until we've actually received data.
+            if (! $tableCleared) {
+                ApPostedInvoice::query()->delete();
+                $tableCleared = true;
+                Log::info('LoadApPostedInvoices: Cleared table prior to full sync insert');
+            }
+
+            $chunks = array_chunk($rows, $insertBatchSize);
+            unset($rows);
+
+            foreach ($chunks as $chunk) {
+                $data = [];
+                foreach ($chunk as $r) {
+                    $record = $this->mapRowToRecord($r);
+
+                    if ($record['transaction_date'] && ($maxDate === null || $record['transaction_date'] > $maxDate)) {
+                        $maxDate = $record['transaction_date'];
+                    }
+
+                    $data[] = $record;
+                }
+                ApPostedInvoice::insert($data);
+                unset($data);
+            }
+            unset($chunks);
+
+            $totalProcessed += $rowCount;
+            $fetched += $rowCount;
+            $skip += $pageSize;
+
+            gc_collect_cycles();
+
+        } while ($totalCount !== null && $fetched < $totalCount);
+    }
+
+    private function buildMonthlyWindows(string $startDate, Carbon $endDate): array
+    {
+        $cursor = Carbon::parse($startDate)->startOfMonth();
+        $stop = $endDate->copy()->startOfMonth()->addMonth();
+
+        $windows = [];
+        while ($cursor < $stop) {
+            $next = $cursor->copy()->addMonth();
+            $windows[] = [$cursor->toDateString(), $next->toDateString()];
+            $cursor = $next;
+        }
+
+        return $windows;
     }
 
     private function mapRowToRecord(array $r): array

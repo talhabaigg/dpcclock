@@ -70,9 +70,9 @@ jobs:
             # Clear and warm caches
             php artisan optimize
 
-            # Restart queue workers to pick up new code
-            php artisan queue:restart
-            sudo supervisorctl restart all
+            # Gracefully terminate Horizon — supervisor's autorestart boots a fresh one with new code
+            php artisan horizon:terminate
+            sudo supervisorctl restart reverb
 
             # Reload PHP-FPM to pick up new code
             sudo systemctl reload php8.4-fpm
