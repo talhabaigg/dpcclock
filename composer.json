@@ -19,6 +19,7 @@
         "laravel-notification-channels/webpush": "*",
         "laravel/ai": "^0.2.1",
         "laravel/framework": "^13.0",
+        "laravel/horizon": "^5.47",
         "laravel/mcp": "^0.6",
         "laravel/pennant": "^1.23",
         "laravel/reverb": "^1.0",
@@ -82,12 +83,12 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan horizon\" \"npm run dev\" --names='server,queue,vite'"
         ],
         "dev:ssr": [
             "npm run build:ssr",
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan horizon\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr"
         ]
     },
     "extra": {

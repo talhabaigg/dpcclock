@@ -65,6 +65,14 @@ class QueueStatusController extends Controller
         return response()->json(['message' => "Cleared {$count} completed job logs."]);
     }
 
+    public function clearJobLogs(): JsonResponse
+    {
+        $count = DB::table('queue_job_logs')->count();
+        DB::table('queue_job_logs')->truncate();
+
+        return response()->json(['message' => "Cleared {$count} job log entries."]);
+    }
+
     public function clearLogs(): JsonResponse
     {
         $logFile = storage_path('logs/laravel.log');

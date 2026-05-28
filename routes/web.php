@@ -1504,6 +1504,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:admin');
     Route::post('/queue-status/clear-completed', [QueueStatusController::class, 'clearCompleted'])->name('queueStatus.clearCompleted')
         ->middleware('role:admin');
+    Route::post('/queue-status/clear-job-logs', [QueueStatusController::class, 'clearJobLogs'])->name('queueStatus.clearJobLogs')
+        ->middleware('role:admin');
     Route::post('/queue-status/clear-logs', [QueueStatusController::class, 'clearLogs'])->name('queueStatus.clearLogs')
         ->middleware('role:admin');
     Route::get('/queue-status/view-logs', [QueueStatusController::class, 'viewLogs'])->name('queueStatus.viewLogs')

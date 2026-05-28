@@ -128,7 +128,11 @@
       "Bash(awk 'NR>=520 && NR<=540 { match\\($0,/^ */\\); print NR, RLENGTH, $0 }' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/purchasing/show.tsx)",
       "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('Info:', typeof l.Info\\); console.log\\('History:', typeof l.History\\); console.log\\('CirclePlus:', typeof l.CirclePlus\\);\")",
       "Bash(awk 'NR==1899,NR==2278 {next} {print}' resources/js/pages/employment-applications/show.tsx)",
-      "Bash(mv /tmp/show.tsx.new resources/js/pages/employment-applications/show.tsx)"
+      "Bash(mv /tmp/show.tsx.new resources/js/pages/employment-applications/show.tsx)",
+      "Bash(redis-cli ping *)",
+      "Bash(brew --version)",
+      "Bash(redis-cli --scan --pattern '*horizon*')",
+      "Bash(redis-cli keys *)"
     ]
   }
 }

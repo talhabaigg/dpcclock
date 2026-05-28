@@ -26,6 +26,7 @@ import {
     FolderOpen,
     FolderTree,
     FormInput,
+    Gauge,
     GitCompare,
     GraduationCap,
     Hammer,
@@ -485,6 +486,13 @@ const footerNavItems: NavItem[] = [
         icon: Activity,
         permission: 'queue-status.view',
     },
+    {
+        title: 'Horizon',
+        href: '/horizon',
+        icon: Gauge,
+        adminOnly: true,
+        external: true,
+    },
 ];
 
 type AuthUser = {
@@ -528,7 +536,12 @@ export function AppSidebar() {
     const filteredDocuments = filterGroup(documents);
     const filteredReports = filterGroup(reports);
     const filteredConfiguration = filterGroup(configuration);
-    const filteredFooterNavItems = footerNavItems.filter((item) => !item.permission || permissions.includes(item.permission));
+    const filteredFooterNavItems = footerNavItems.filter((item) => {
+        if (item.adminOnly && !isAdmin) {
+            return false;
+        }
+        return !item.permission || permissions.includes(item.permission);
+    });
 
     const allNavGroups = [
         filteredProjects,

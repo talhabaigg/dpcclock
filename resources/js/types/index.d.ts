@@ -22,6 +22,7 @@ export interface NavItem {
     isActive?: boolean;
     adminOnly?: boolean;
     permission?: string;
+    external?: boolean;
 }
 
 export interface SharedData {

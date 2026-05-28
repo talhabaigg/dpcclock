@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import Echo from 'laravel-echo';
-import { Activity, CheckCircle2, Clock, Download, Eye, FileText, Loader2, MoreVertical, Power, RefreshCw, Trash2, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, Database, Download, Eye, FileText, Loader2, MoreVertical, Power, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { useEffect, useRef, useState } from 'react';
 
@@ -188,8 +188,11 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     });
     const logEndRef = useRef<HTMLDivElement>(null);
 
-    const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs' | 'restart') => {
+    const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs' | 'clear-job-logs' | 'restart') => {
         if (action === 'restart' && !confirm('Restart queue workers? This will signal workers to stop gracefully, clear stuck "processing" entries, and release reserved jobs back to the queue.')) {
+            return;
+        }
+        if (action === 'clear-job-logs' && !confirm('Truncate the queue_job_logs table? This wipes all processing/completed/failed history shown on this dashboard.')) {
             return;
         }
         setClearing(action);
@@ -211,6 +214,19 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 setJobs((prev) => ({ ...prev, failed: [], stats: { ...prev.stats, failed_count: 0 } }));
             } else if (action === 'restart') {
                 setProcessingJobs([]);
+            } else if (action === 'clear-job-logs') {
+                setProcessingJobs([]);
+                setCompletedJobs([]);
+                setJobs((prev) => ({
+                    ...prev,
+                    completed: [],
+                    failed: prev.failed.filter((j) => !!j.failed_at),
+                    stats: {
+                        ...prev.stats,
+                        completed_count: 0,
+                        failed_count: prev.failed.filter((j) => !!j.failed_at).length,
+                    },
+                }));
             }
             alert(data.message);
         } catch {
@@ -379,6 +395,10 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                     Clear Failed Jobs
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleClear('clear-job-logs')} className="text-destructive focus:text-destructive">
+                                    <Database className="mr-2 h-4 w-4" />
+                                    Clear Job Log Table
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleClear('clear-logs')} className="text-destructive focus:text-destructive">
                                     <FileText className="mr-2 h-4 w-4" />
                                     Clear Log File
