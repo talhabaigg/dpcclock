@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Events\DocumentSigned;
 use App\Events\FormSubmitted;
 use App\Listeners\BroadcastQueueJobEvents;
-use App\Listeners\UpdateEmploymentApplicationOnFormSubmitted;
+use App\Listeners\AddFormSubmittedSystemComment;
 use App\Listeners\UpdateEmploymentApplicationOnSigned;
 use App\Support\FeatureFlags;
 use Illuminate\Queue\Events\JobFailed;
@@ -46,7 +46,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Document signing events
         Event::listen(DocumentSigned::class, UpdateEmploymentApplicationOnSigned::class);
-        Event::listen(FormSubmitted::class, UpdateEmploymentApplicationOnFormSubmitted::class);
+        Event::listen(FormSubmitted::class, AddFormSubmittedSystemComment::class);
 
         // Register queue event listeners for real-time broadcasting
         Event::listen(JobProcessing::class, [BroadcastQueueJobEvents::class, 'handleJobProcessing']);

@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import Echo from 'laravel-echo';
-import { Activity, CheckCircle2, Clock, Download, Eye, FileText, Loader2, MoreVertical, RefreshCw, Trash2, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, Download, Eye, FileText, Loader2, MoreVertical, Power, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { useEffect, useRef, useState } from 'react';
 
@@ -188,7 +188,10 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     });
     const logEndRef = useRef<HTMLDivElement>(null);
 
-    const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs') => {
+    const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs' | 'restart') => {
+        if (action === 'restart' && !confirm('Restart queue workers? This will signal workers to stop gracefully, clear stuck "processing" entries, and release reserved jobs back to the queue.')) {
+            return;
+        }
         setClearing(action);
         try {
             const response = await fetch(`/queue-status/${action}`, {
@@ -206,6 +209,8 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                 setJobs((prev) => ({ ...prev, completed: [], stats: { ...prev.stats, completed_count: 0 } }));
             } else if (action === 'clear-failed') {
                 setJobs((prev) => ({ ...prev, failed: [], stats: { ...prev.stats, failed_count: 0 } }));
+            } else if (action === 'restart') {
+                setProcessingJobs([]);
             }
             alert(data.message);
         } catch {
@@ -356,6 +361,11 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleClear('restart')}>
+                                    <Power className="mr-2 h-4 w-4" />
+                                    Restart Queue Workers
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleClear('clear-queue')}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Clear Pending Queue

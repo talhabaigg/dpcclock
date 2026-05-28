@@ -89,6 +89,7 @@ interface Template {
     category: string | null;
     model_type: string | null;
     is_active: boolean;
+    is_sendable: boolean;
     fields: FieldItem[];
 }
 
@@ -120,7 +121,10 @@ const FIELD_TYPES = [
 const TYPES_WITH_OPTIONS = ['select', 'radio', 'checkbox', 'multiselect', 'button_group', 'button_group_multi'];
 const DISPLAY_ONLY_TYPES = ['heading', 'paragraph', 'page_break'];
 
-const MODEL_OPTIONS = [{ value: 'employment_application', label: 'Employment Enquiry' }];
+const MODEL_OPTIONS = [
+    { value: 'employment_application', label: 'Employment Enquiry' },
+    { value: 'injury', label: 'Injury Report' },
+];
 
 /** Map field type to its icon. All icons render in a single neutral tone — colour
  *  is reserved for state (errors, required), not field-type categorisation. */
@@ -1002,10 +1006,13 @@ export default function FormTemplateForm({ template }: PageProps) {
     const [name, setName] = useState(template?.name ?? '');
     const [description, setDescription] = useState(template?.description ?? '');
     const [category, setCategory] = useState(template?.category ?? '');
-    const [modelType, setModelType] = useState<string>(
-        template?.model_type === 'App\\Models\\EmploymentApplication' ? 'employment_application' : '',
-    );
+    const [modelType, setModelType] = useState<string>(() => {
+        if (template?.model_type === 'App\\Models\\EmploymentApplication') return 'employment_application';
+        if (template?.model_type === 'App\\Models\\Injury') return 'injury';
+        return '';
+    });
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
+    const [isSendable, setIsSendable] = useState(template?.is_sendable ?? true);
     const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], options_source: f.options_source ?? null, placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '', visible_if: f.visible_if ?? null })) : [emptyField()]);
     const [saving, setSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1258,6 +1265,7 @@ export default function FormTemplateForm({ template }: PageProps) {
             category: category.trim() || null,
             model_type: modelType || null,
             is_active: isActive,
+            is_sendable: isSendable,
             fields: remappedFields.map((f) => ({
                 id: f.id,
                 label: f.label.trim(),
@@ -1388,6 +1396,19 @@ export default function FormTemplateForm({ template }: PageProps) {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                        </div>
+
+                                        {/* Sendable toggle */}
+                                        <div className="mt-4 flex items-center justify-between border-t border-dashed border-border/60 pt-3">
+                                            <div>
+                                                <Label htmlFor="is-sendable" className="cursor-pointer text-xs font-medium">
+                                                    Sendable
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    When off, this form is in-app only — no email is sent
+                                                </p>
+                                            </div>
+                                            <Switch checked={isSendable} onCheckedChange={setIsSendable} id="is-sendable" />
                                         </div>
 
                                         {/* Active toggle */}

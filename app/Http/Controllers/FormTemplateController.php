@@ -106,6 +106,7 @@ class FormTemplateController extends Controller
             'category' => $validated['category'] ?? null,
             'model_type' => $this->resolveModelType($validated['model_type'] ?? null),
             'is_active' => $validated['is_active'] ?? true,
+            'is_sendable' => $validated['is_sendable'] ?? true,
             'created_by' => $request->user()->id,
         ]);
 
@@ -155,6 +156,7 @@ class FormTemplateController extends Controller
             'category' => $validated['category'] ?? null,
             'model_type' => $this->resolveModelType($validated['model_type'] ?? null),
             'is_active' => $validated['is_active'] ?? true,
+            'is_sendable' => $validated['is_sendable'] ?? true,
             'updated_by' => $request->user()->id,
         ]);
 
@@ -212,6 +214,7 @@ class FormTemplateController extends Controller
             'category' => $formTemplate->category,
             'model_type' => $formTemplate->model_type,
             'is_active' => $formTemplate->is_active,
+            'is_sendable' => $formTemplate->is_sendable,
             'fields' => $orderedFields->map(fn ($f) => [
                 'label' => $f->label,
                 'type' => $f->type,
@@ -251,6 +254,7 @@ class FormTemplateController extends Controller
             'category' => $data['category'] ?? null,
             'model_type' => $this->resolveModelType($data['model_type'] ?? null),
             'is_active' => $data['is_active'] ?? true,
+            'is_sendable' => $data['is_sendable'] ?? true,
             'created_by' => $request->user()->id,
         ]);
 
@@ -284,6 +288,8 @@ class FormTemplateController extends Controller
         return match ($value) {
             'employment_application' => \App\Models\EmploymentApplication::class,
             \App\Models\EmploymentApplication::class => \App\Models\EmploymentApplication::class,
+            'injury' => \App\Models\Injury::class,
+            \App\Models\Injury::class => \App\Models\Injury::class,
             default => null,
         };
     }
@@ -325,6 +331,7 @@ class FormTemplateController extends Controller
             'category' => 'nullable|string|max:255',
             'model_type' => 'nullable|string',
             'is_active' => 'boolean',
+            'is_sendable' => 'boolean',
             'fields' => 'required|array|min:1',
             'fields.*.label' => 'required|string|max:1000',
             'fields.*.type' => 'required|in:text,textarea,number,email,phone,date,select,radio,checkbox,multiselect,button_group,button_group_multi,heading,paragraph,signature,page_break',
@@ -474,6 +481,7 @@ class FormTemplateController extends Controller
             'category' => $formTemplate->category,
             'model_type' => $formTemplate->model_type,
             'is_active' => $formTemplate->is_active,
+            'is_sendable' => $formTemplate->is_sendable,
             'fields' => $orderedFields->map(fn ($f) => [
                 'id' => $f->id,
                 'label' => $f->label,

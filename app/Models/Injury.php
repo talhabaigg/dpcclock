@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasFormRequests;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\LogOptions;
@@ -12,7 +13,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 
 class Injury extends Model implements HasMedia
 {
-    use HasComments, InteractsWithMedia, LogsActivity;
+    use HasComments, HasFormRequests, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
         'id_formal', 'external_id', 'location_id', 'employee_id', 'employee_name', 'employee_address',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\QueueJobLog;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,6 +29,22 @@ class QueueStatusController extends Controller
         DB::table('jobs')->truncate();
 
         return response()->json(['message' => "Cleared {$count} pending jobs."]);
+    }
+
+    public function restartQueue(): JsonResponse
+    {
+        Artisan::call('queue:restart');
+
+        $stuckCount = QueueJobLog::where('status', 'processing')->count();
+        QueueJobLog::where('status', 'processing')->delete();
+
+        $reservedReleased = DB::table('jobs')
+            ->whereNotNull('reserved_at')
+            ->update(['reserved_at' => null, 'attempts' => DB::raw('attempts + 1')]);
+
+        return response()->json([
+            'message' => "Workers signalled to restart. Cleared {$stuckCount} stuck processing entries and released {$reservedReleased} reserved jobs.",
+        ]);
     }
 
     public function clearFailed(): JsonResponse

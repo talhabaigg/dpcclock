@@ -23,6 +23,7 @@ class FormRequest extends Model implements HasMedia
         'recipient_email',
         'assignee_strategy',
         'assignee_permission',
+        'assignee_user_id',
         'responses',
         'response_snapshot',
         'sent_by',

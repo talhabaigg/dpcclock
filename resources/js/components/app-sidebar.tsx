@@ -55,6 +55,7 @@ import {
     UserX,
     UsersRound,
     Wind,
+    Workflow,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
@@ -447,6 +448,12 @@ const configuration = [
                 name: 'Form Templates',
                 url: '/form-templates',
                 icon: FormInput,
+                permission: 'document-templates.manage',
+            },
+            {
+                name: 'Trigger Forms',
+                url: '/trigger-form-mappings',
+                icon: Workflow,
                 permission: 'document-templates.manage',
             },
             {

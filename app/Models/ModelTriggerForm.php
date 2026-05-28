@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class ApplicationPhaseForm extends Model
+class ModelTriggerForm extends Model
 {
     protected $fillable = [
         'model_type',
-        'status',
+        'trigger_key',
         'form_template_id',
         'assignee_strategy',
         'assignee_value',
@@ -37,10 +37,10 @@ class ApplicationPhaseForm extends Model
         return $query->where('is_active', true);
     }
 
-    public function scopeForModelStatus(Builder $query, string $modelClass, string $status): Builder
+    public function scopeForModelTrigger(Builder $query, string $modelClass, string $triggerKey): Builder
     {
         return $query->where('model_type', $modelClass)
-            ->where('status', $status)
+            ->where('trigger_key', $triggerKey)
             ->orderBy('sort_order');
     }
 

@@ -30,7 +30,14 @@ class FormService
         ?Model $formable = null,
         ?string $assigneeStrategy = null,
         ?string $assigneePermission = null,
+        ?int $assigneeUserId = null,
     ): FormRequest {
+        // Templates marked non-sendable are always in-app — no email path.
+        if (! $template->is_sendable) {
+            $deliveryMethod = 'in_app';
+            $recipientEmail = null;
+        }
+
         // Cancel any existing pending requests for the same formable + template
         if ($formable) {
             FormRequest::query()
@@ -55,6 +62,7 @@ class FormService
             'recipient_email' => $recipientEmail,
             'assignee_strategy' => $assigneeStrategy,
             'assignee_permission' => $assigneePermission,
+            'assignee_user_id' => $assigneeUserId,
             'expires_at' => now()->addDays(7),
         ]);
 

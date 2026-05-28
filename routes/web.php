@@ -414,12 +414,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/form-templates/import', [FormTemplateController::class, 'import'])->name('form-templates.import');
         Route::get('/form-templates/placeholders/list', [FormTemplateController::class, 'placeholders'])->name('form-templates.placeholders');
 
-        // Phase-form mappings (which form auto-sends on which status, to whom)
+        // Trigger-form mappings (which form auto-fires on which model trigger, to whom)
         // URL avoids the `/app*` prefix because the prod nginx Reverb location block swallows it.
-        Route::get('/phase-form-mappings', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'index'])->name('application-phase-forms.index');
-        Route::post('/phase-form-mappings', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'store'])->name('application-phase-forms.store');
-        Route::put('/phase-form-mappings/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'update'])->name('application-phase-forms.update');
-        Route::delete('/phase-form-mappings/{applicationPhaseForm}', [\App\Http\Controllers\ApplicationPhaseFormController::class, 'destroy'])->name('application-phase-forms.destroy');
+        Route::get('/trigger-form-mappings', [\App\Http\Controllers\ModelTriggerFormController::class, 'index'])->name('model-trigger-forms.index');
+        Route::post('/trigger-form-mappings', [\App\Http\Controllers\ModelTriggerFormController::class, 'store'])->name('model-trigger-forms.store');
+        Route::put('/trigger-form-mappings/{modelTriggerForm}', [\App\Http\Controllers\ModelTriggerFormController::class, 'update'])->name('model-trigger-forms.update');
+        Route::delete('/trigger-form-mappings/{modelTriggerForm}', [\App\Http\Controllers\ModelTriggerFormController::class, 'destroy'])->name('model-trigger-forms.destroy');
     });
 
     // Form Requests (admin actions)
@@ -1497,6 +1497,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/queue-status/stats', [QueueStatusController::class, 'stats'])->name('queueStatus.stats')
         ->middleware('permission:queue-status.view');
     Route::post('/queue-status/clear-queue', [QueueStatusController::class, 'clearQueue'])->name('queueStatus.clearQueue')
+        ->middleware('role:admin');
+    Route::post('/queue-status/restart', [QueueStatusController::class, 'restartQueue'])->name('queueStatus.restart')
         ->middleware('role:admin');
     Route::post('/queue-status/clear-failed', [QueueStatusController::class, 'clearFailed'])->name('queueStatus.clearFailed')
         ->middleware('role:admin');

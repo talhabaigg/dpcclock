@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\User;
 use App\Notifications\InjuryCreatedNotification;
 use App\Services\GetCompanyCodeService;
+use App\Services\ModelTriggerFormService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
@@ -142,7 +143,7 @@ class InjuryController extends Controller
         ]);
     }
 
-    public function store(StoreInjuryRequest $request)
+    public function store(StoreInjuryRequest $request, ModelTriggerFormService $triggerFormService)
     {
         $data = $request->validated();
         $data['id_formal'] = Injury::generateFormalId();
@@ -190,13 +191,49 @@ class InjuryController extends Controller
             $recipient->notify(new InjuryCreatedNotification($injury));
         }
 
+        $triggerFormService->dispatchFormsFor($injury, 'created', $request->user());
+
         return redirect()->route('injury-register.index')
             ->with('success', 'Injury report created successfully.');
     }
 
     public function show(Injury $injury)
     {
-        $injury->load(['employee', 'location', 'representative', 'creator', 'media']);
+        $injury->load(['employee', 'location', 'representative', 'creator', 'media', 'formRequests.formTemplate.fields', 'formRequests.media']);
+
+        $formRequests = $injury->formRequests->map(fn ($fr) => [
+            'id' => $fr->id,
+            'token' => $fr->token,
+            'status' => $fr->status,
+            'delivery_method' => $fr->delivery_method,
+            'recipient_name' => $fr->recipient_name,
+            'recipient_email' => $fr->recipient_email,
+            'assignee_strategy' => $fr->assignee_strategy,
+            'assignee_permission' => $fr->assignee_permission,
+            'assignee_user_id' => $fr->assignee_user_id,
+            'submitted_at' => $fr->submitted_at?->toISOString(),
+            'opened_at' => $fr->opened_at?->toISOString(),
+            'expires_at' => $fr->expires_at?->toISOString(),
+            'response_snapshot' => $this->resolveSnapshotSignatureUrls($fr),
+            'created_at' => $fr->created_at->toISOString(),
+            'form_template' => [
+                'id' => $fr->formTemplate->id,
+                'name' => $fr->formTemplate->name,
+                'is_sendable' => $fr->formTemplate->is_sendable,
+                'fields' => $fr->formTemplate->fields->map(fn ($f) => [
+                    'id' => $f->id,
+                    'label' => $f->label,
+                    'type' => $f->type,
+                    'is_required' => $f->is_required,
+                    'options' => $f->options,
+                    'options_source' => $f->options_source,
+                    'placeholder' => $f->placeholder,
+                    'help_text' => $f->help_text,
+                    'default_value' => $f->default_value,
+                    'visible_if' => $f->visible_if,
+                ])->values(),
+            ],
+        ]);
 
         $comments = $injury->comments()
             ->with(['user', 'media', 'replies.user', 'replies.media'])
@@ -245,6 +282,7 @@ class InjuryController extends Controller
             'comments' => $comments,
             'options' => $this->getFormOptions(),
             'notifyUsers' => $notifyUsers,
+            'formRequests' => $formRequests,
         ]);
     }
 
@@ -688,5 +726,35 @@ class InjuryController extends Controller
             'matched_by' => $matchMethod,
             'comment_id' => $comment->id,
         ], 200);
+    }
+
+    /**
+     * Walk a FormRequest's response_snapshot and swap each signature row's
+     * value (the stored media id) for a usable URL. Mirrors the application
+     * controller's pattern — temporary URL on S3, public URL on local disk.
+     *
+     * @return array<int, array<string,mixed>>|null
+     */
+    private function resolveSnapshotSignatureUrls(\App\Models\FormRequest $fr): ?array
+    {
+        $snapshot = $fr->response_snapshot;
+        if (! is_array($snapshot)) {
+            return $snapshot;
+        }
+        $mediaById = $fr->getMedia('signatures')->keyBy('id');
+        foreach ($snapshot as $i => $row) {
+            if (! is_array($row) || ($row['type'] ?? null) !== 'signature') {
+                continue;
+            }
+            $value = $row['value'] ?? null;
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $media = $mediaById->get((int) $value);
+            if ($media) {
+                $snapshot[$i]['value'] = $this->mediaUrl($media);
+            }
+        }
+        return $snapshot;
     }
 }

@@ -15,6 +15,7 @@ class FormTemplate extends Model
         'category',
         'model_type',
         'is_active',
+        'is_sendable',
         'created_by',
         'updated_by',
     ];
@@ -23,6 +24,7 @@ class FormTemplate extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_sendable' => 'boolean',
         ];
     }
 

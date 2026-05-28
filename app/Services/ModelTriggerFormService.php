@@ -2,27 +2,27 @@
 
 namespace App\Services;
 
-use App\Models\ApplicationPhaseForm;
 use App\Models\FormRequest;
+use App\Models\ModelTriggerForm;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
-class ApplicationPhaseFormService
+class ModelTriggerFormService
 {
     public function __construct(
         private FormService $formService,
     ) {}
 
     /**
-     * Reasons why a transition out of the current status is blocked because
-     * required phase forms haven't been submitted yet. Empty array = ok to move.
+     * Reasons why a transition out of the current trigger key is blocked because
+     * required forms haven't been submitted yet. Empty array = ok to move.
      *
      * @return array<int, string>
      */
-    public function blockersForLeaving(Model $formable, string $currentStatus): array
+    public function blockersForLeaving(Model $formable, string $currentTriggerKey): array
     {
-        $mappings = $this->activeMappingsFor($formable, $currentStatus)
+        $mappings = $this->activeMappingsFor($formable, $currentTriggerKey)
             ->where('is_required', true);
 
         if ($mappings->isEmpty()) {
@@ -48,16 +48,16 @@ class ApplicationPhaseFormService
     }
 
     /**
-     * Dispatch all phase forms configured for the new status. Idempotent —
+     * Dispatch all forms configured for the given trigger key. Idempotent —
      * skips if a non-cancelled FormRequest already exists for the same template.
      *
      * @return Collection<int, FormRequest>
      */
-    public function dispatchFormsFor(Model $formable, string $newStatus, User $admin): Collection
+    public function dispatchFormsFor(Model $formable, string $triggerKey, User $admin): Collection
     {
         $created = collect();
 
-        $mappings = $this->activeMappingsFor($formable, $newStatus);
+        $mappings = $this->activeMappingsFor($formable, $triggerKey);
 
         foreach ($mappings as $mapping) {
             $existing = FormRequest::query()
@@ -89,27 +89,33 @@ class ApplicationPhaseFormService
                 continue;
             }
 
-            // User-based mapping: resolve to the specific user and email them.
+            // User-based mapping: resolve to the specific user.
             $assignee = $mapping->resolveAssignee();
 
             if (! $assignee) {
                 if (method_exists($formable, 'addSystemComment')) {
                     $formable->addSystemComment(
-                        "Unable to send \"{$mapping->formTemplate->name}\": no user matched assignee \"{$mapping->assignee_value}\"",
-                        ['type' => 'phase_form_assignee_missing', 'phase_form_id' => $mapping->id],
+                        "Unable to dispatch \"{$mapping->formTemplate->name}\": no user matched assignee \"{$mapping->assignee_value}\"",
+                        ['type' => 'trigger_form_assignee_missing', 'trigger_form_id' => $mapping->id],
                         $admin->id,
                     );
                 }
                 continue;
             }
 
+            // Non-sendable templates stay in-app even when a specific user is
+            // assigned. Sendable templates email the assignee.
+            $deliveryMethod = $mapping->formTemplate->is_sendable ? 'email' : 'in_app';
+
             $formRequest = $this->formService->createAndSend(
                 template: $mapping->formTemplate,
-                deliveryMethod: 'email',
+                deliveryMethod: $deliveryMethod,
                 admin: $admin,
                 recipientName: $assignee->name,
-                recipientEmail: $assignee->email,
+                recipientEmail: $deliveryMethod === 'email' ? $assignee->email : null,
                 formable: $formable,
+                assigneeStrategy: 'user',
+                assigneeUserId: $assignee->id,
             );
 
             $created->push($formRequest);
@@ -119,13 +125,13 @@ class ApplicationPhaseFormService
     }
 
     /**
-     * @return Collection<int, ApplicationPhaseForm>
+     * @return Collection<int, ModelTriggerForm>
      */
-    private function activeMappingsFor(Model $formable, string $status): Collection
+    private function activeMappingsFor(Model $formable, string $triggerKey): Collection
     {
-        return ApplicationPhaseForm::query()
+        return ModelTriggerForm::query()
             ->active()
-            ->forModelStatus(get_class($formable), $status)
+            ->forModelTrigger(get_class($formable), $triggerKey)
             ->with('formTemplate')
             ->get();
     }

@@ -1,6 +1,7 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -17,7 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, ArrowRight, CalendarIcon, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock, X } from 'lucide-react';
+import { FormFillPane, FormResponsePane, type FormRequestData } from '@/components/form-renderer/form-fill-pane';
+import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock, X } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
 import { useEffect, useRef, useState } from 'react';
@@ -53,6 +55,7 @@ interface Props {
     comments: CommentData[];
     options: InjuryFormOptions;
     notifyUsers: NotifyUser[];
+    formRequests: FormRequestData[];
 }
 
 function UserAvatar({ name }: { name: string }) {
@@ -223,8 +226,17 @@ function AttachmentBadge({ count }: { count: number }) {
     );
 }
 
-function SystemComment({ comment, onPreviewAttachment }: { comment: CommentData; onPreviewAttachment: (a: Attachment) => void }) {
-    const event = (comment.metadata as Record<string, unknown>)?.event as string | undefined;
+function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
+    comment: CommentData;
+    onPreviewAttachment: (a: Attachment) => void;
+    onOpenFormResponse?: (formRequestId: number) => void;
+}) {
+    const metadata = comment.metadata as Record<string, unknown> | null;
+    const event = metadata?.event as string | undefined;
+    const metaType = metadata?.type as string | undefined;
+    const formSubmittedMeta = metaType === 'form_submitted'
+        ? (metadata as { type: string; form_request_id: number; form_name: string })
+        : undefined;
 
     return (
         <div className="flex items-start gap-3">
@@ -233,6 +245,8 @@ function SystemComment({ comment, onPreviewAttachment }: { comment: CommentData;
                     <Lock className="h-3 w-3 text-amber-500" />
                 ) : event === 'unlocked' ? (
                     <Unlock className="h-3 w-3 text-green-500" />
+                ) : formSubmittedMeta ? (
+                    <ClipboardCheck className="h-3 w-3 text-emerald-600" />
                 ) : (
                     <Activity className="text-muted-foreground h-3 w-3" />
                 )}
@@ -249,20 +263,31 @@ function SystemComment({ comment, onPreviewAttachment }: { comment: CommentData;
                     />
                 )}
                 <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} compact />
+                {formSubmittedMeta && onOpenFormResponse && (
+                    <button
+                        type="button"
+                        onClick={() => onOpenFormResponse(formSubmittedMeta.form_request_id)}
+                        className="bg-background text-foreground hover:bg-muted mt-1.5 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium shadow-sm transition-colors"
+                    >
+                        <ClipboardCheck className="h-3 w-3" />
+                        View response
+                    </button>
+                )}
             </div>
         </div>
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment, onOpenFormResponse }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
     onPreviewAttachment: (a: Attachment) => void;
+    onOpenFormResponse?: (formRequestId: number) => void;
 }) {
     if (comment.metadata) {
-        return <SystemComment comment={comment} onPreviewAttachment={onPreviewAttachment} />;
+        return <SystemComment comment={comment} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} />;
     }
 
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
@@ -296,7 +321,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
                 {comment.replies && comment.replies.length > 0 && (
                     <div className="mt-3 space-y-3 border-l-2 pl-4">
                         {comment.replies.map((reply) => (
-                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} />
+                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} />
                         ))}
                     </div>
                 )}
@@ -314,7 +339,7 @@ function SidebarField({ label, value }: { label: string; value?: string | number
     );
 }
 
-export default function InjuryShow({ injury, comments, options, notifyUsers }: Props) {
+export default function InjuryShow({ injury, comments, options, notifyUsers, formRequests }: Props) {
     const pageProps = usePage().props;
     const auth = pageProps.auth as { user?: { id: number }; permissions?: string[] };
     const flash = pageProps.flash as { success?: string } | undefined;
@@ -322,6 +347,21 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
     const currentUserId = auth?.user?.id;
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
+
+    function canFillFormRequest(fr: FormRequestData): boolean {
+        if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
+            return permissions.includes(fr.assignee_permission);
+        }
+        if (fr.assignee_strategy === 'user' && fr.assignee_user_id) {
+            return currentUserId === fr.assignee_user_id;
+        }
+        return false;
+    }
+
+    const pendingFormRequests = formRequests.filter((fr) => fr.status !== 'submitted' && fr.status !== 'cancelled');
+
+    const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
+    const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
     const [sendingTestNotification, setSendingTestNotification] = useState(false);
     const [testPopoverOpen, setTestPopoverOpen] = useState(false);
     const [testPhone, setTestPhone] = useState('');
@@ -482,6 +522,12 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
 
             {flash?.success && <SuccessAlertFlash message={flash.success} />}
 
+            <div
+                className={cn(
+                    'transition-[padding] duration-200',
+                    (fillingFormRequest || viewingFormRequest) && 'xl:pr-[520px]',
+                )}
+            >
             <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 <Card className="gap-0 overflow-hidden rounded-xl py-0 lg:min-h-[calc(100vh-7rem)]">
                     <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
@@ -536,6 +582,10 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
                                                 onPreviewAttachment={setPreviewAttachment}
+                                                onOpenFormResponse={(id) => {
+                                                    const fr = formRequests.find((f) => f.id === id);
+                                                    if (fr) setViewingFormRequest(fr);
+                                                }}
                                             />
                                         ))}
                                     </div>
@@ -671,6 +721,41 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                                     </Popover>
                                 )}
                             </div>
+
+                            {pendingFormRequests.length > 0 && (
+                                <>
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sign-off</h4>
+
+                                        {pendingFormRequests.map((fr) => {
+                                            const fillable = canFillFormRequest(fr);
+                                            return (
+                                                <div key={fr.id} className="rounded-md border bg-background p-2.5">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
+                                                            <p className="mt-0.5 text-xs text-muted-foreground">Awaiting {fr.recipient_name}</p>
+                                                        </div>
+                                                        <Badge variant="secondary" className="shrink-0 text-xs">Pending</Badge>
+                                                    </div>
+                                                    {fillable && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="mt-2 h-7 w-full text-xs"
+                                                            disabled={!fr.form_template?.fields?.length}
+                                                            onClick={() => setFillingFormRequest(fr)}
+                                                        >
+                                                            <ClipboardCheck className="mr-1 h-3 w-3" />
+                                                            Sign off
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
 
                             <Separator />
 
@@ -831,6 +916,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                         </div>
                     </div>
                 </Card>
+            </div>
             </div>
 
             {/* Attachment Preview Dialog */}
@@ -1146,6 +1232,16 @@ export default function InjuryShow({ injury, comments, options, notifyUsers }: P
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <FormFillPane
+                formRequest={fillingFormRequest}
+                onClose={() => setFillingFormRequest(null)}
+            />
+
+            <FormResponsePane
+                formRequest={viewingFormRequest}
+                onClose={() => setViewingFormRequest(null)}
+            />
         </AppLayout>
     );
 }

@@ -31,12 +31,24 @@ function getInitials(name: string): string {
         .toUpperCase();
 }
 
+interface ModelType {
+    value: string;
+    label: string;
+}
+
+interface FormTemplateOption {
+    id: number;
+    name: string;
+    model_type: string | null;
+    is_sendable: boolean;
+}
+
 interface Mapping {
     id: number;
     model_type: string;
-    status: string;
+    trigger_key: string;
     form_template_id: number;
-    form_template: { id: number; name: string };
+    form_template: { id: number; name: string; model_type: string | null; is_sendable: boolean };
     assignee_strategy: 'permission' | 'user';
     assignee_value: string;
     is_required: boolean;
@@ -46,19 +58,19 @@ interface Mapping {
 
 interface PageProps {
     mappings: Mapping[];
-    statuses: string[];
-    modelTypes: { value: string; label: string }[];
-    formTemplates: { id: number; name: string }[];
+    modelTypes: ModelType[];
+    triggerKeysByModel: Record<string, string[]>;
+    formTemplates: FormTemplateOption[];
     permissions: { id: number; name: string }[];
     users: { id: number; name: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Form Templates', href: '/form-templates' },
-    { title: 'Phase Form Mappings', href: '/phase-form-mappings' },
+    { title: 'Trigger Form Mappings', href: '/trigger-form-mappings' },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
+const TRIGGER_LABELS: Record<string, string> = {
     new: 'New',
     reviewing: 'Reviewing',
     phone_interview: 'Phone Interview',
@@ -67,12 +79,17 @@ const STATUS_LABELS: Record<string, string> = {
     whs_review: 'WHS Review',
     final_review: 'Final Review',
     approved: 'Approved',
+    created: 'Created',
 };
+
+function triggerLabel(key: string): string {
+    return TRIGGER_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 interface FormState {
     id: number | null;
     model_type: string;
-    status: string;
+    trigger_key: string;
     form_template_id: number | '';
     assignee_strategy: 'permission' | 'user';
     assignee_value: string;
@@ -81,11 +98,13 @@ interface FormState {
     is_active: boolean;
 }
 
-function emptyForm(modelTypes: PageProps['modelTypes']): FormState {
+function emptyForm(modelTypes: ModelType[], triggerKeysByModel: Record<string, string[]>): FormState {
+    const firstModel = modelTypes[0]?.value ?? '';
+    const firstTrigger = triggerKeysByModel[firstModel]?.[0] ?? '';
     return {
         id: null,
-        model_type: modelTypes[0]?.value ?? '',
-        status: 'whs_review',
+        model_type: firstModel,
+        trigger_key: firstTrigger,
         form_template_id: '',
         assignee_strategy: 'permission',
         assignee_value: '',
@@ -95,21 +114,21 @@ function emptyForm(modelTypes: PageProps['modelTypes']): FormState {
     };
 }
 
-export default function ApplicationPhaseFormsIndex({
+export default function ModelTriggerFormsIndex({
     mappings,
-    statuses,
     modelTypes,
+    triggerKeysByModel,
     formTemplates,
     permissions,
     users,
 }: PageProps) {
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [form, setForm] = useState<FormState>(() => emptyForm(modelTypes));
+    const [form, setForm] = useState<FormState>(() => emptyForm(modelTypes, triggerKeysByModel));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
 
     function openCreate() {
-        setForm(emptyForm(modelTypes));
+        setForm(emptyForm(modelTypes, triggerKeysByModel));
         setErrors({});
         setDialogOpen(true);
     }
@@ -118,7 +137,7 @@ export default function ApplicationPhaseFormsIndex({
         setForm({
             id: m.id,
             model_type: m.model_type,
-            status: m.status,
+            trigger_key: m.trigger_key,
             form_template_id: m.form_template_id,
             assignee_strategy: m.assignee_strategy,
             assignee_value: m.assignee_value,
@@ -145,7 +164,7 @@ export default function ApplicationPhaseFormsIndex({
 
         const payload = {
             model_type: form.model_type,
-            status: form.status,
+            trigger_key: form.trigger_key,
             form_template_id: form.form_template_id,
             assignee_strategy: form.assignee_strategy,
             assignee_value: form.assignee_value,
@@ -161,15 +180,19 @@ export default function ApplicationPhaseFormsIndex({
         };
 
         if (form.id) {
-            router.put(route('application-phase-forms.update', form.id), payload, opts);
+            router.put(route('model-trigger-forms.update', form.id), payload, opts);
         } else {
-            router.post(route('application-phase-forms.store'), payload, opts);
+            router.post(route('model-trigger-forms.store'), payload, opts);
         }
     }
 
     function handleDelete(m: Mapping) {
-        if (!confirm(`Delete the "${m.form_template.name}" mapping for ${STATUS_LABELS[m.status] ?? m.status}?`)) return;
-        router.delete(route('application-phase-forms.destroy', m.id));
+        if (!confirm(`Delete the "${m.form_template.name}" mapping for ${triggerLabel(m.trigger_key)}?`)) return;
+        router.delete(route('model-trigger-forms.destroy', m.id));
+    }
+
+    function modelLabel(value: string): string {
+        return modelTypes.find((mt) => mt.value === value)?.label ?? value;
     }
 
     function renderAssignee(m: Mapping) {
@@ -195,9 +218,16 @@ export default function ApplicationPhaseFormsIndex({
         );
     }
 
+    const triggersForCurrentModel = triggerKeysByModel[form.model_type] ?? [];
+
+    // Filter form templates to those matching the selected model (or model-agnostic)
+    const eligibleTemplates = formTemplates.filter(
+        (t) => !t.model_type || t.model_type === form.model_type,
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Phase Form Mappings" />
+            <Head title="Trigger Form Mappings" />
 
             <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
                 <div className="mb-6 flex items-center justify-end">
@@ -213,9 +243,9 @@ export default function ApplicationPhaseFormsIndex({
                             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                                 <Workflow className="h-7 w-7 text-muted-foreground" />
                             </div>
-                            <h3 className="text-base font-medium">No phase mappings configured</h3>
+                            <h3 className="text-base font-medium">No trigger mappings configured</h3>
                             <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                                Connect a status to a form template and an assignee so the form is auto-sent when an application reaches that phase.
+                                Connect a model trigger to a form template and an assignee so the form is created automatically when the trigger fires.
                             </p>
                             <Button size="sm" className="mt-5" onClick={openCreate}>
                                 <Plus className="mr-1.5 h-4 w-4" />
@@ -229,7 +259,8 @@ export default function ApplicationPhaseFormsIndex({
                             <Table className="text-xs">
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="pl-4">Status</TableHead>
+                                        <TableHead className="pl-4">Model</TableHead>
+                                        <TableHead>Trigger</TableHead>
                                         <TableHead>Form Template</TableHead>
                                         <TableHead>Assignee</TableHead>
                                         <TableHead className="text-center">Required</TableHead>
@@ -240,12 +271,20 @@ export default function ApplicationPhaseFormsIndex({
                                 <TableBody>
                                     {mappings.map((m) => (
                                         <TableRow key={m.id}>
-                                            <TableCell className="pl-4">
+                                            <TableCell className="pl-4 text-muted-foreground">{modelLabel(m.model_type)}</TableCell>
+                                            <TableCell>
                                                 <Badge variant="outline" className="font-normal">
-                                                    {STATUS_LABELS[m.status] ?? m.status}
+                                                    {triggerLabel(m.trigger_key)}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="font-medium">{m.form_template.name}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {m.form_template.name}
+                                                {!m.form_template.is_sendable && (
+                                                    <Badge variant="secondary" className="ml-2 shadow-none">
+                                                        In-app only
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
                                             <TableCell>{renderAssignee(m)}</TableCell>
                                             <TableCell className="text-center">
                                                 {m.is_required ? (
@@ -308,13 +347,19 @@ export default function ApplicationPhaseFormsIndex({
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>{form.id ? 'Edit phase form mapping' : 'New phase form mapping'}</DialogTitle>
+                        <DialogTitle>{form.id ? 'Edit trigger form mapping' : 'New trigger form mapping'}</DialogTitle>
                     </DialogHeader>
 
                     <div className="grid gap-4 py-2">
                         <div>
                             <Label className="mb-1 text-xs text-muted-foreground">Model type</Label>
-                            <Select value={form.model_type} onValueChange={(v) => setForm({ ...form, model_type: v })}>
+                            <Select
+                                value={form.model_type}
+                                onValueChange={(v) => {
+                                    const firstTrigger = triggerKeysByModel[v]?.[0] ?? '';
+                                    setForm({ ...form, model_type: v, trigger_key: firstTrigger, form_template_id: '' });
+                                }}
+                            >
                                 <SelectTrigger className="h-9">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -329,15 +374,15 @@ export default function ApplicationPhaseFormsIndex({
                         </div>
 
                         <div>
-                            <Label className="mb-1 text-xs text-muted-foreground">Trigger on status</Label>
-                            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                            <Label className="mb-1 text-xs text-muted-foreground">Trigger</Label>
+                            <Select value={form.trigger_key} onValueChange={(v) => setForm({ ...form, trigger_key: v })}>
                                 <SelectTrigger className="h-9">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {statuses.map((s) => (
-                                        <SelectItem key={s} value={s}>
-                                            {STATUS_LABELS[s] ?? s}
+                                    {triggersForCurrentModel.map((t) => (
+                                        <SelectItem key={t} value={t}>
+                                            {triggerLabel(t)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -354,9 +399,10 @@ export default function ApplicationPhaseFormsIndex({
                                     <SelectValue placeholder="Pick a template" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {formTemplates.map((ft) => (
+                                    {eligibleTemplates.map((ft) => (
                                         <SelectItem key={ft.id} value={String(ft.id)}>
                                             {ft.name}
+                                            {!ft.is_sendable && ' · in-app only'}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
