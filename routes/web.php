@@ -220,8 +220,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::get('/users/edit/{user}', [UserController::class, 'edit'])->name('users.edit');
     });
-    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update')
-        ->middleware('permission:users.manage-roles');
+    Route::middleware('permission:users.manage-roles')->group(function () {
+        Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::post('/users/{user}/resend-welcome', [UserController::class, 'resendWelcome'])->name('users.resend-welcome');
+    });
     Route::post('/users/kiosk/{user}/store', [UserController::class, 'storeKiosk'])->name('users.kiosk.store')
         ->middleware('permission:kiosks.manage-managers');
     Route::get('/users/kiosk/{kiosk}/{user}/remove', [UserController::class, 'removeKiosk'])->name('users.kiosk.remove')

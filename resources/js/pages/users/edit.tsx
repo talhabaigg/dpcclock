@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, Ban, KeyRound, Loader2, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Ban, KeyRound, Loader2, Mail, MessageSquare, Search, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -140,6 +140,19 @@ export default function UserEdit() {
 
     const [disableDialog, setDisableDialog] = useState(false);
     const [togglingDisable, setTogglingDisable] = useState(false);
+    const [sendingChannel, setSendingChannel] = useState<'mail' | 'sms' | null>(null);
+
+    const handleResendWelcome = (channel: 'mail' | 'sms') => {
+        setSendingChannel(channel);
+        router.post(
+            route('users.resend-welcome', user.id),
+            { channel },
+            {
+                preserveScroll: true,
+                onFinish: () => setSendingChannel(null),
+            },
+        );
+    };
 
     const [permSheetOpen, setPermSheetOpen] = useState(false);
     const [selectedPerms, setSelectedPerms] = useState<string[]>(directPermissions ?? []);
@@ -537,6 +550,71 @@ export default function UserEdit() {
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Account Setup */}
+                    <Card>
+                        <CardHeader className="px-4 sm:px-6">
+                            <CardTitle className="text-base sm:text-lg">Account Setup</CardTitle>
+                            <CardDescription>Resend a fresh one-time link to set their password</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3 px-4 sm:px-6">
+                            <div className="flex flex-col gap-3 rounded-md border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <Mail className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">Send via email</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            Emails {user.email} the welcome message and setup link.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 gap-2"
+                                    onClick={() => handleResendWelcome('mail')}
+                                    disabled={sendingChannel !== null}
+                                >
+                                    {sendingChannel === 'mail' ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Mail className="h-4 w-4" />
+                                    )}
+                                    {sendingChannel === 'mail' ? 'Sending...' : 'Send Email'}
+                                </Button>
+                            </div>
+
+                            <div className="flex flex-col gap-3 rounded-md border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <MessageSquare className="text-muted-foreground mt-0.5 h-5 w-5 shrink-0" />
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">Send via SMS</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {user.phone
+                                                ? `Texts ${user.phone} the setup link.`
+                                                : 'Add a phone number above to enable SMS delivery.'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 gap-2"
+                                    onClick={() => handleResendWelcome('sms')}
+                                    disabled={sendingChannel !== null || !user.phone}
+                                >
+                                    {sendingChannel === 'sms' ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <MessageSquare className="h-4 w-4" />
+                                    )}
+                                    {sendingChannel === 'sms' ? 'Sending...' : 'Send SMS'}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     {/* Danger Zone */}
                     <Card className={cn(
