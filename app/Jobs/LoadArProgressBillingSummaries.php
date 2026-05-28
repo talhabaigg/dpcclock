@@ -50,23 +50,17 @@ class LoadArProgressBillingSummaries implements ShouldQueue
         Log::info('LoadArProgressBillingSummaries: Job started');
 
         try {
-            $baseUrl = config('premier.api.base_url').config('premier.endpoints.ar_progress_billing');
-            $insertBatchSize = 100; // Smaller batch size for inserts due to many columns
-            $pageSize = 200; // Smaller OData page size for API requests
-            $skip = 0;
-            $totalProcessed = 0;
-            $isFirstBatch = true;
+            // Small table (~80 rows). Single $top=1000 request + retry pulls everything.
+            // Premier's $skip is unreliable on this endpoint and the unbounded query randomly 500s.
+            $url = config('premier.api.base_url').config('premier.endpoints.ar_progress_billing').'?$top=1000';
 
-            do {
-                // Fetch data in pages using OData $skip and $top
-                $url = $baseUrl.'?$top='.$pageSize.'&$skip='.$skip;
-
-                Log::info('LoadArProgressBillingSummaries: Fetching page', [
-                    'skip' => $skip,
-                    'top' => $pageSize,
-                ]);
-
+            try {
                 $response = Http::timeout(config('premier.api.timeout', 300))
+                    ->retry([1000, 2000, 5000, 10000, 20000, 30000], throw: true, when: function (\Throwable $exception): bool {
+                        return $exception instanceof \Illuminate\Http\Client\ConnectionException
+                            || ($exception instanceof \Illuminate\Http\Client\RequestException
+                                && $exception->response->serverError());
+                    })
                     ->withBasicAuth(
                         config('premier.api.username'),
                         config('premier.api.password')
@@ -76,74 +70,53 @@ class LoadArProgressBillingSummaries implements ShouldQueue
                         'DataServiceVersion' => '2.0',
                         'MaxDataServiceVersion' => '2.0',
                     ])
+                    ->throw()
                     ->get($url);
+            } catch (\Illuminate\Http\Client\RequestException $e) {
+                throw new \RuntimeException(
+                    "API request failed with status {$e->response->status()} after retries: {$e->response->body()}"
+                );
+            }
 
-                if (! $response->successful()) {
-                    throw new \RuntimeException(
-                        "API request failed with status {$response->status()}: {$response->body()}"
-                    );
+            $json = $response->json();
+            unset($response);
+
+            if (! isset($json['d'])) {
+                throw new \RuntimeException('Invalid API response structure: missing "d" property');
+            }
+
+            $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
+            unset($json);
+
+            if (! is_array($rows)) {
+                throw new \RuntimeException('Invalid API response: expected array of rows');
+            }
+
+            $rowCount = count($rows);
+
+            if ($rowCount === 0) {
+                Log::warning('LoadArProgressBillingSummaries: ERP returned 0 rows, skipping database update');
+
+                return;
+            }
+
+            Log::info('LoadArProgressBillingSummaries: Processing records', ['rows' => $rowCount]);
+
+            $totalProcessed = 0;
+            ArProgressBillingSummary::query()->delete();
+
+            $insertBatchSize = 100;
+            foreach (array_chunk($rows, $insertBatchSize) as $chunk) {
+                $data = [];
+                foreach ($chunk as $r) {
+                    $data[] = $this->mapRowToRecord($r);
                 }
-
-                $json = $response->json();
-                unset($response); // Free response memory immediately
-
-                // Validate response structure
-                if (! isset($json['d'])) {
-                    throw new \RuntimeException('Invalid API response structure: missing "d" property');
-                }
-
-                // OData v2: rows are usually in d.results, but can also be d.{0,1,2...}
-                $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
-                unset($json); // Free json memory immediately
-
-                if (! is_array($rows)) {
-                    throw new \RuntimeException('Invalid API response: expected array of rows');
-                }
-
-                $rowCount = count($rows);
-
-                if ($rowCount === 0 && $isFirstBatch) {
-                    Log::warning('LoadArProgressBillingSummaries: ERP returned 0 rows, skipping database update');
-
-                    return;
-                }
-
-                if ($rowCount === 0) {
-                    break; // No more records to fetch
-                }
-
-                Log::info('LoadArProgressBillingSummaries: Processing page', [
-                    'rows' => $rowCount,
-                    'skip' => $skip,
-                ]);
-
-                // On first batch, delete all existing records
-                if ($isFirstBatch) {
-                    ArProgressBillingSummary::query()->delete();
-                    $isFirstBatch = false;
-                }
-
-                // Process and insert data in smaller chunks to reduce memory usage
-                $chunks = array_chunk($rows, $insertBatchSize);
-                unset($rows); // Free rows memory
-
-                foreach ($chunks as $chunk) {
-                    $data = [];
-                    foreach ($chunk as $r) {
-                        $data[] = $this->mapRowToRecord($r);
-                    }
-                    ArProgressBillingSummary::insert($data);
-                    unset($data);
-                }
-                unset($chunks);
-
-                $totalProcessed += $rowCount;
-                $skip += $pageSize;
-
-                // Force garbage collection
-                gc_collect_cycles();
-
-            } while ($rowCount === $pageSize); // Continue if we got a full page
+                ArProgressBillingSummary::insert($data);
+                $totalProcessed += count($data);
+                unset($data);
+            }
+            unset($rows);
+            gc_collect_cycles();
 
             DataSyncLog::updateOrCreate(
                 ['job_name' => 'ar_progress_billing'],

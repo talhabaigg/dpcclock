@@ -1205,10 +1205,12 @@ class LocationController extends Controller
         $validated = $request->validate([
             'jobs' => 'required|array|min:1',
             'jobs.*' => 'string|in:job_summaries,job_cost_data,job_report_by_cost_item,ar_progress_billing,ar_posted_invoices,ap_posted_invoices,ap_posted_invoice_lines,job_vendor_commitments,ap_purchase_orders,gl_transaction_details,variations,premier_vendors,premier_gl_accounts,job_addresses',
-            'force_full' => 'boolean',
+            'mode' => 'sometimes|string|in:incremental,last_30,last_60,full',
         ]);
 
-        $forceFullSync = $validated['force_full'] ?? false;
+        $mode = $validated['mode'] ?? 'incremental';
+        // Legacy bool-based jobs (not yet refactored to mode-string) only understand full vs not.
+        $forceFullSync = $mode === 'full';
 
         $jobClassMap = [
             'job_summaries' => \App\Jobs\LoadJobSummaries::class,
@@ -1253,14 +1255,15 @@ class LocationController extends Controller
             }
 
             $class = $jobClassMap[$jobKey];
-            // Jobs that support forceFullSync parameter
-            $supportsForce = in_array($jobKey, [
-                'job_cost_data', 'ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders', 'gl_transaction_details',
-            ]);
 
-            if ($supportsForce) {
+            if (in_array($jobKey, ['ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders', 'gl_transaction_details'], true)) {
+                // Refactored onto the SyncsPremierODataByDateWindow trait — accept mode string.
+                $class::dispatch($mode);
+            } elseif ($jobKey === 'job_cost_data') {
+                // Still on bool $forceFullSync constructor — pending refactor.
                 $class::dispatch($forceFullSync);
             } else {
+                // Jobs with no mode/force concept (full-replace always, or unparameterised).
                 $class::dispatch();
             }
             $dispatched[] = $jobKey;

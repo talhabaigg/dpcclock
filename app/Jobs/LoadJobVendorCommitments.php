@@ -49,23 +49,32 @@ class LoadJobVendorCommitments implements ShouldQueue
         Log::info('LoadJobVendorCommitments: Job started');
 
         try {
-            $url = config('premier.api.base_url').config('premier.endpoints.job_vendor_commitments');
+            // Premier's /JobVendorsCommitments endpoint doesn't honour $skip pagination and reliably
+            // 500s on the first few attempts of an unbounded query. The table is small (~1500 rows),
+            // so a single request with $top=10000 + aggressive retry pulls the whole thing.
+            $url = config('premier.api.base_url').config('premier.endpoints.job_vendor_commitments').'?$top=10000';
 
-            $response = Http::timeout(config('premier.api.timeout', 300))
-                ->withBasicAuth(
-                    config('premier.api.username'),
-                    config('premier.api.password')
-                )
-                ->withHeaders([
-                    'Accept' => 'application/json',
-                    'DataServiceVersion' => '2.0',
-                    'MaxDataServiceVersion' => '2.0',
-                ])
-                ->get($url);
-
-            if (! $response->successful()) {
+            try {
+                $response = Http::timeout(config('premier.api.timeout', 300))
+                    ->retry([1000, 2000, 5000, 10000, 20000, 30000], throw: true, when: function (\Throwable $exception): bool {
+                        return $exception instanceof \Illuminate\Http\Client\ConnectionException
+                            || ($exception instanceof \Illuminate\Http\Client\RequestException
+                                && $exception->response->serverError());
+                    })
+                    ->withBasicAuth(
+                        config('premier.api.username'),
+                        config('premier.api.password')
+                    )
+                    ->withHeaders([
+                        'Accept' => 'application/json',
+                        'DataServiceVersion' => '2.0',
+                        'MaxDataServiceVersion' => '2.0',
+                    ])
+                    ->throw()
+                    ->get($url);
+            } catch (\Illuminate\Http\Client\RequestException $e) {
                 throw new \RuntimeException(
-                    "API request failed with status {$response->status()}: {$response->body()}"
+                    "API request failed with status {$e->response->status()} after retries: {$e->response->body()}"
                 );
             }
 

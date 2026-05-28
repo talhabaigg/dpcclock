@@ -2,10 +2,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useHttp } from '@inertiajs/react';
 import { CheckCircle2, Clock, Loader2, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+
+type SyncMode = 'incremental' | 'last_30' | 'last_60' | 'full';
+
+const MODE_OPTIONS: { value: SyncMode; label: string; hint: string }[] = [
+    { value: 'incremental', label: 'Incremental', hint: 'New transactions since last sync (+ 7-day backfill for backdated entries)' },
+    { value: 'last_30', label: 'Last 30 days', hint: 'Re-pull the past 30 days' },
+    { value: 'last_60', label: 'Last 60 days', hint: 'Re-pull the past 60 days' },
+    { value: 'full', label: 'Full reset', hint: 'Delete table and re-pull everything (rarely needed)' },
+];
 
 type SyncJob = {
     key: string;
@@ -33,13 +42,13 @@ export default function SyncManager() {
     const [jobs, setJobs] = useState<SyncJob[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
-    const [forceFullSync, setForceFullSync] = useState(false);
+    const [mode, setMode] = useState<SyncMode>('incremental');
     const [result, setResult] = useState<string | null>(null);
 
     const listHttp = useHttp({});
     const dispatchHttp = useHttp({
         jobs: [] as string[],
-        force_full: false,
+        mode: 'incremental' as SyncMode,
     });
 
     const fetchStatus = useCallback(() => {
@@ -81,10 +90,19 @@ export default function SyncManager() {
 
     const handleDispatch = async () => {
         if (selected.size === 0) return;
+        if (
+            mode === 'full' &&
+            !confirm(
+                'Full reset will delete every record in the selected tables and re-pull from Premier (back to 2025-01-01). ' +
+                    'This is rarely needed — pick "Last 60 days" if you just want to catch backdated entries. Proceed?',
+            )
+        ) {
+            return;
+        }
         setResult(null);
         dispatchHttp.transform(() => ({
             jobs: Array.from(selected),
-            force_full: forceFullSync,
+            mode,
         }));
         dispatchHttp.post('/locations/sync-jobs', {
             onSuccess: (data: { message: string }) => {
@@ -163,14 +181,27 @@ export default function SyncManager() {
                 </div>
             )}
 
+            {/* Mode selection */}
+            <div className="rounded-lg border p-4">
+                <Label className="text-xs font-medium">Sync mode</Label>
+                <RadioGroup value={mode} onValueChange={(v) => setMode(v as SyncMode)} className="mt-2 gap-2">
+                    {MODE_OPTIONS.map((opt) => (
+                        <label
+                            key={opt.value}
+                            className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md p-2"
+                        >
+                            <RadioGroupItem value={opt.value} className="mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium">{opt.label}</div>
+                                <div className="text-muted-foreground text-xs">{opt.hint}</div>
+                            </div>
+                        </label>
+                    ))}
+                </RadioGroup>
+            </div>
+
             {/* Actions */}
-            <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                    <Switch id="force-full" checked={forceFullSync} onCheckedChange={setForceFullSync} />
-                    <Label htmlFor="force-full" className="text-muted-foreground text-xs">
-                        Force full sync
-                    </Label>
-                </div>
+            <div className="flex items-center justify-end gap-4">
                 <Button onClick={handleDispatch} disabled={selected.size === 0 || dispatchHttp.processing}>
                     {dispatchHttp.processing ? (
                         <>
