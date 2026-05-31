@@ -17,7 +17,7 @@ type RevenueTargetProps = {
 };
 
 type PageProps = {
-    auth: { isAdmin: boolean };
+    auth: { permissions?: string[] };
     flash?: { success?: string; error?: string };
 };
 
@@ -87,7 +87,8 @@ function CurrencyInput({ value, onChange, disabled }: { value: number; onChange:
 
 export default function BudgetManagementIndex({ fyYear, months, targets, availableFYs }: RevenueTargetProps) {
     const { props } = usePage<PageProps>();
-    const isAdmin = props?.auth?.isAdmin ?? false;
+    const permissions: string[] = props?.auth?.permissions ?? [];
+    const canEdit = permissions.includes('budget.edit');
     const flashSuccess = props?.flash?.success;
     const [showSuccess, setShowSuccess] = useState(false);
 
@@ -222,7 +223,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                                             [month]: v,
                                                         })
                                                     }
-                                                    disabled={!isAdmin}
+                                                    disabled={!canEdit}
                                                 />
                                             </td>
                                         </tr>
@@ -261,7 +262,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                                                                         [month]: v,
                                                                     })
                                                                 }
-                                                                disabled={!isAdmin}
+                                                                disabled={!canEdit}
                                                             />
                                                         </div>
                                                     </TooltipTrigger>
@@ -275,7 +276,7 @@ export default function BudgetManagementIndex({ fyYear, months, targets, availab
                         </table>
                     </div>
 
-                    {isAdmin && (
+                    {canEdit && (
                         <div className="flex justify-end">
                             <Button type="submit" size="sm" disabled={processing} className="gap-2">
                                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
