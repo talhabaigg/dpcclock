@@ -1209,8 +1209,6 @@ class LocationController extends Controller
         ]);
 
         $mode = $validated['mode'] ?? 'incremental';
-        // Legacy bool-based jobs (not yet refactored to mode-string) only understand full vs not.
-        $forceFullSync = $mode === 'full';
 
         $jobClassMap = [
             'job_summaries' => \App\Jobs\LoadJobSummaries::class,
@@ -1256,12 +1254,9 @@ class LocationController extends Controller
 
             $class = $jobClassMap[$jobKey];
 
-            if (in_array($jobKey, ['ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders', 'gl_transaction_details'], true)) {
+            if (in_array($jobKey, ['ap_posted_invoices', 'ap_posted_invoice_lines', 'ar_posted_invoices', 'ap_purchase_orders', 'gl_transaction_details', 'job_cost_data'], true)) {
                 // Refactored onto the SyncsPremierODataByDateWindow trait — accept mode string.
                 $class::dispatch($mode);
-            } elseif ($jobKey === 'job_cost_data') {
-                // Still on bool $forceFullSync constructor — pending refactor.
-                $class::dispatch($forceFullSync);
             } else {
                 // Jobs with no mode/force concept (full-replace always, or unparameterised).
                 $class::dispatch();
