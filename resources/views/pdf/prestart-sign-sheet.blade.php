@@ -239,8 +239,8 @@
         </ul>
     @endif
 
-    {{-- Signatures --}}
-    <h2>Signatures ({{ $signatures->count() }})</h2>
+    {{-- Workers (signatures + absentees) --}}
+    <h2>Workers ({{ $signatures->count() + $absentees->count() }})</h2>
     <table class="signatures">
         <thead>
             <tr>
@@ -251,7 +251,7 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($signatures as $index => $sig)
+            @foreach($signatures as $index => $sig)
                 <tr>
                     <td>{{ $index + 1 }}</td>
                     <td>{{ $sig->employee->preferred_name ?? $sig->employee->name ?? '—' }}</td>
@@ -264,11 +264,22 @@
                     </td>
                     <td>{{ Carbon::parse($sig->signed_at)->timezone('Australia/Brisbane')->format('d/m/Y g:i A') }}</td>
                 </tr>
-            @empty
-                <tr class="empty-row">
-                    <td colspan="4">No signatures recorded.</td>
+            @endforeach
+            @foreach($absentees as $index => $emp)
+                <tr>
+                    <td>{{ $signatures->count() + $index + 1 }}</td>
+                    <td>{{ $emp->preferred_name ?? $emp->name ?? '—' }}</td>
+                    <td style="color: #9ca3af;">—</td>
+                    <td style="color: #6b7280; font-style: italic;">
+                        {{ $emp->note ? 'Absent - ' . $emp->note : 'Absent' }}
+                    </td>
                 </tr>
-            @endforelse
+            @endforeach
+            @if($signatures->count() + $absentees->count() === 0)
+                <tr class="empty-row">
+                    <td colspan="4">No workers recorded.</td>
+                </tr>
+            @endif
         </tbody>
     </table>
 

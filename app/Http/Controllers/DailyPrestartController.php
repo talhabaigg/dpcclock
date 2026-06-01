@@ -562,7 +562,19 @@ class DailyPrestartController extends Controller
         }
 
         $signedIds = $dailyPrestart->signatures->pluck('employee_id')->toArray();
-        $absentees = $kioskEmployees->filter(fn ($emp) => ! in_array($emp->id, $signedIds));
+
+        // User-input notes for absentees (system-generated status intentionally excluded)
+        $absenteeNotes = PrestartAbsentee::where('daily_prestart_id', $dailyPrestart->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        $absentees = $kioskEmployees
+            ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
+            ->map(function ($emp) use ($absenteeNotes) {
+                $emp->note = $absenteeNotes->get($emp->id)?->notes;
+                return $emp;
+            })
+            ->values();
 
         $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
             ->forLocation($dailyPrestart->location_id)
