@@ -39,7 +39,7 @@ return [
     'jobs' => [
         'retry_times' => env('PREMIER_JOB_RETRY_TIMES', 3),
         'retry_delay' => env('PREMIER_JOB_RETRY_DELAY', 60), // seconds
-        'timeout' => env('PREMIER_JOB_TIMEOUT', 600), // 10 minutes
+        'timeout' => env('PREMIER_JOB_TIMEOUT', 1800), // 30 minutes — full syncs of job_cost_details can exceed 10 min under Premier OData latency
         'batch_size' => env('PREMIER_JOB_BATCH_SIZE', 1000),
         'full_sync_start_date' => env('PREMIER_FULL_SYNC_START_DATE', '2025-01-01'),
     ],

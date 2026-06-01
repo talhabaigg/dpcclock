@@ -207,7 +207,7 @@ return [
             'maxJobs' => 0,
             'memory' => 128,
             'tries' => 1,
-            'timeout' => 600,
+            'timeout' => 1830, // must exceed premier.jobs.timeout (1800) + small buffer
             'nice' => 0,
         ],
     ],

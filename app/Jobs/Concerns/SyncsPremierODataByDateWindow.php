@@ -4,6 +4,7 @@ namespace App\Jobs\Concerns;
 
 use App\Models\DataSyncLog;
 use Carbon\Carbon;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -26,6 +27,18 @@ trait SyncsPremierODataByDateWindow
     abstract protected function dbDateColumn(): string;
 
     abstract protected function mapRowToRecord(array $r): array;
+
+    public function middleware(): array
+    {
+        // Lock keyed by jobName() so different sync types still run in parallel,
+        // but two LoadJobCostData (etc.) can never race on the same __staging table.
+        // expireAfter must exceed the job's $timeout so a healthy long-run never loses its lock.
+        return [
+            (new WithoutOverlapping($this->jobName()))
+                ->expireAfter((int) config('premier.jobs.timeout', 1800) + 60)
+                ->dontRelease(),
+        ];
+    }
 
     protected function runSync(): void
     {
