@@ -320,7 +320,7 @@ export default function PrestartSign() {
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base">Sign Below</CardTitle>
                         <p className="text-xs text-muted-foreground">
-                            By signing, you confirm you have read and understood today's prestart.
+                            By signing, you confirm you have read and understood today's prestart and that you are required to attend the prestart meeting in person.
                         </p>
                     </CardHeader>
                     <CardContent>

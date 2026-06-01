@@ -16,7 +16,7 @@ class CommentController extends Controller
     {
         $request->validate([
             'commentable_type' => ['required', 'string'],
-            'commentable_id' => ['required', 'integer'],
+            'commentable_id' => ['required'],
             'body' => ['required_without:attachments', 'nullable', 'string', 'max:5000'],
             'type' => ['nullable', 'string', 'in:positive,negative'],
             'parent_id' => ['nullable', 'integer', 'exists:comments,id'],
@@ -32,6 +32,7 @@ class CommentController extends Controller
             'employee' => \App\Models\Employee::class,
             'forecast_project' => \App\Models\ForecastProject::class,
             'App\\Models\\ForecastProject' => \App\Models\ForecastProject::class,
+            'daily_prestart' => \App\Models\DailyPrestart::class,
         ];
 
         $class = $allowedModels[$modelClass] ?? null;

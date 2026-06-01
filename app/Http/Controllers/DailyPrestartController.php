@@ -325,11 +325,44 @@ class DailyPrestartController extends Controller
             ->forDate($dailyPrestart->work_date)
             ->get();
 
+        $comments = $dailyPrestart->comments()
+            ->with(['user', 'media', 'replies.user', 'replies.media'])
+            ->whereNull('parent_id')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'body' => $c->body,
+                'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
+                'metadata' => $c->metadata,
+                'created_at' => $c->created_at->toISOString(),
+                'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
+                    'id' => $m->id,
+                    'file_name' => $m->file_name,
+                    'url' => route('comments.attachment', ['comment' => $c->id, 'media' => $m->id]),
+                    'mime_type' => $m->mime_type,
+                ]),
+                'replies' => $c->replies->map(fn ($r) => [
+                    'id' => $r->id,
+                    'body' => $r->body,
+                    'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name] : null,
+                    'metadata' => $r->metadata,
+                    'created_at' => $r->created_at->toISOString(),
+                    'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
+                        'id' => $m->id,
+                        'file_name' => $m->file_name,
+                        'url' => route('comments.attachment', ['comment' => $r->id, 'media' => $m->id]),
+                        'mime_type' => $m->mime_type,
+                    ]),
+                ]),
+            ]);
+
         return Inertia::render('daily-prestarts/show', [
             'prestart' => $dailyPrestart,
             'unsignedEmployees' => $unsignedEmployees,
             'trainings' => $trainings,
             'reasonOptions' => PrestartAbsentee::REASON_OPTIONS,
+            'comments' => $comments,
         ]);
     }
 

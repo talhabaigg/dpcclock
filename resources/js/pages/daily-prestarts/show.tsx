@@ -11,8 +11,8 @@ import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Download, GraduationCap, Lock, MessageSquare, Pencil, Trash2, Unlock } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, Download, File as FileIcon, FileImage, FileText, GraduationCap, Lock, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -66,11 +66,179 @@ interface TrainingItem {
     employees: { id: number; name: string; preferred_name: string | null; display_name: string }[];
 }
 
+interface Attachment {
+    id: number;
+    file_name: string;
+    url: string;
+    mime_type: string;
+}
+
+interface CommentData {
+    id: number;
+    body: string;
+    metadata: Record<string, unknown> | null;
+    user: { id: number; name: string } | null;
+    created_at: string;
+    attachments: Attachment[];
+    replies?: CommentData[];
+}
+
 interface Props {
     prestart: Prestart;
     unsignedEmployees: UnsignedEmployee[];
     trainings: TrainingItem[];
     reasonOptions: Record<string, string>;
+    comments: CommentData[];
+}
+
+function UserAvatar({ name }: { name: string }) {
+    const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+    return (
+        <div className="bg-muted text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+            {initials}
+        </div>
+    );
+}
+
+function attachmentKind(mime: string): 'pdf' | 'image' | 'other' {
+    if (mime === 'application/pdf') return 'pdf';
+    if (mime.startsWith('image/')) return 'image';
+    return 'other';
+}
+
+function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onPreview: (a: Attachment) => void }) {
+    const kind = attachmentKind(attachment.mime_type);
+    const Icon = kind === 'pdf' ? FileText : kind === 'image' ? FileImage : FileIcon;
+    const typeLabel = kind === 'pdf' ? 'PDF' : kind === 'image' ? 'Image' : (attachment.mime_type.split('/')[1] ?? 'File').toUpperCase();
+
+    return (
+        <div className="hover:border-foreground/30 group flex w-44 flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-all hover:shadow-md">
+            <button
+                type="button"
+                onClick={() => onPreview(attachment)}
+                className="bg-muted/40 relative flex h-32 items-center justify-center overflow-hidden border-b"
+            >
+                {kind === 'image' ? (
+                    <img src={attachment.url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                    <Icon className="text-muted-foreground h-12 w-12" />
+                )}
+                <div className="absolute inset-0 bg-foreground/0 transition-colors group-hover:bg-foreground/5" />
+            </button>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <Icon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                <button
+                    type="button"
+                    onClick={() => onPreview(attachment)}
+                    className="min-w-0 flex-1 text-left"
+                >
+                    <div className="truncate text-xs font-medium leading-tight">{attachment.file_name}</div>
+                    <div className="text-muted-foreground text-[9px] uppercase tracking-wide">{typeLabel}</div>
+                </button>
+                <a
+                    href={attachment.url}
+                    download={attachment.file_name}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded p-1 transition-colors"
+                    aria-label={`Download ${attachment.file_name}`}
+                    title="Download"
+                >
+                    <Download className="h-3.5 w-3.5" />
+                </a>
+            </div>
+        </div>
+    );
+}
+
+function AttachmentList({ attachments, onPreview }: { attachments: Attachment[]; onPreview: (a: Attachment) => void }) {
+    if (attachments.length === 0) return null;
+    return (
+        <div className="mt-2 flex flex-wrap gap-2">
+            {attachments.map((att) => (
+                <AttachmentCard key={att.id} attachment={att} onPreview={onPreview} />
+            ))}
+        </div>
+    );
+}
+
+function AttachmentPreviewDialog({ attachment, onClose }: { attachment: Attachment | null; onClose: () => void }) {
+    const open = attachment !== null;
+    const kind = attachment ? attachmentKind(attachment.mime_type) : 'other';
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+            <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+                <DialogHeader className="space-y-0 border-b px-4 py-3 pr-12">
+                    <DialogTitle className="truncate text-sm font-medium">{attachment?.file_name}</DialogTitle>
+                </DialogHeader>
+                <div className="bg-muted/30 flex-1 overflow-auto">
+                    {attachment && kind === 'pdf' && (
+                        <iframe src={attachment.url} title={attachment.file_name} className="h-full w-full bg-white" />
+                    )}
+                    {attachment && kind === 'image' && (
+                        <div className="flex h-full items-center justify-center p-4">
+                            <img src={attachment.url} alt={attachment.file_name} className="max-h-full max-w-full object-contain" />
+                        </div>
+                    )}
+                    {attachment && kind === 'other' && (
+                        <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">
+                            <FileIcon className="h-12 w-12 opacity-50" />
+                            <p>No preview available for this file type.</p>
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={attachment.url} target="_blank" rel="noopener noreferrer" download={attachment.file_name}>
+                                    <Download className="mr-1 h-3.5 w-3.5" /> Download
+                                </a>
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment }: {
+    comment: CommentData;
+    currentUserId?: number;
+    onEdit?: (comment: CommentData) => void;
+    onDelete?: (commentId: number) => void;
+    onPreviewAttachment: (a: Attachment) => void;
+}) {
+    const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
+    const hasAttachments = comment.attachments.length > 0;
+
+    return (
+        <div className="flex gap-3">
+            {comment.user ? (
+                <UserAvatar name={comment.user.name} />
+            ) : (
+                <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs">S</div>
+            )}
+            <div className={`min-w-0 flex-1 ${hasAttachments ? 'border-muted-foreground/30 border-l pl-3' : ''}`}>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{comment.user?.name ?? 'System'}</span>
+                    <span className="text-muted-foreground text-xs">{new Date(comment.created_at).toLocaleString('en-AU')}</span>
+                    {comment.attachments.length > 0 && (
+                        <span className="text-muted-foreground inline-flex items-center gap-0.5 text-[10px]">
+                            <Paperclip className="h-2.5 w-2.5" />
+                            {comment.attachments.length}
+                        </span>
+                    )}
+                    {isOwner && (
+                        <div className="ml-auto flex gap-1">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onEdit?.(comment)}>
+                                <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => onDelete?.(comment.id)}>
+                                <Trash2 className="h-3 w-3" />
+                            </Button>
+                        </div>
+                    )}
+                </div>
+                {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
+                <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} />
+            </div>
+        </div>
+    );
 }
 
 const DAILY_CHECKLIST = [
@@ -82,10 +250,63 @@ const DAILY_CHECKLIST = [
     'Current Licences & Qualifications are relevant to work tasks',
 ];
 
-export default function DailyPrestartShow({ prestart, unsignedEmployees, trainings, reasonOptions }: Props) {
-    const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
+export default function DailyPrestartShow({ prestart, unsignedEmployees, trainings, reasonOptions, comments }: Props) {
+    const { auth } = usePage<{ auth: { user?: { id: number }; permissions?: string[] } }>().props as { auth: { user?: { id: number }; permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
+    const currentUserId = auth?.user?.id;
     const can = (p: string) => permissions.includes(p);
+
+    const [commentBody, setCommentBody] = useState('');
+    const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
+    const [postingComment, setPostingComment] = useState(false);
+    const commentFileInputRef = useRef<HTMLInputElement>(null);
+
+    const [editingComment, setEditingComment] = useState<CommentData | null>(null);
+    const [editCommentBody, setEditCommentBody] = useState('');
+    const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+
+    const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
+    const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+
+    const sortedComments = useMemo(() => {
+        return commentSort === 'newest' ? [...comments].reverse() : comments;
+    }, [comments, commentSort]);
+
+    function handlePostComment() {
+        if (!commentBody.trim() && commentAttachments.length === 0) return;
+        setPostingComment(true);
+        const formData = new FormData();
+        formData.append('commentable_type', 'daily_prestart');
+        formData.append('commentable_id', String(prestart.id));
+        formData.append('body', commentBody);
+        commentAttachments.forEach((f) => formData.append('attachments[]', f));
+        router.post(route('comments.store'), formData, {
+            preserveScroll: true,
+            onSuccess: () => { setCommentBody(''); setCommentAttachments([]); },
+            onFinish: () => setPostingComment(false),
+        });
+    }
+
+    function handleEditComment(comment: CommentData) {
+        setEditingComment(comment);
+        setEditCommentBody(comment.body);
+    }
+
+    function submitEditComment() {
+        if (!editingComment || !editCommentBody.trim()) return;
+        router.patch(route('comments.update', editingComment.id), { body: editCommentBody }, {
+            preserveScroll: true,
+            onSuccess: () => setEditingComment(null),
+        });
+    }
+
+    function confirmDeleteComment() {
+        if (deletingCommentId === null) return;
+        router.delete(route('comments.destroy', deletingCommentId), {
+            preserveScroll: true,
+            onSuccess: () => setDeletingCommentId(null),
+        });
+    }
 
     const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
     const [noteText, setNoteText] = useState('');
@@ -283,6 +504,109 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
                 {/* Weather */}
                 <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} />
+
+                {/* Comments / Activity */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="flex items-center gap-2">
+                            <MessageSquare className="h-5 w-5" />
+                            Comments
+                        </CardTitle>
+                        {comments.length > 0 && (
+                            <button
+                                type="button"
+                                className="text-primary flex items-center gap-1 text-xs font-medium"
+                                onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
+                            >
+                                {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
+                                <ArrowRight className={`h-3 w-3 transition-transform ${commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90'}`} />
+                            </button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Comment Input — above activity, like injuries */}
+                        <div>
+                            {commentAttachments.length > 0 && (
+                                <div className="mb-2 flex flex-wrap gap-2">
+                                    {commentAttachments.map((file, i) => (
+                                        <div key={i} className="bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs">
+                                            <FileText className="h-3 w-3" />
+                                            <span className="max-w-[120px] truncate">{file.name}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCommentAttachments(commentAttachments.filter((_, j) => j !== i))}
+                                                className="text-muted-foreground hover:text-foreground"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex items-end gap-2">
+                                <input
+                                    ref={commentFileInputRef}
+                                    type="file"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        setCommentAttachments([...commentAttachments, ...Array.from(e.target.files ?? [])]);
+                                        e.target.value = '';
+                                    }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    type="button"
+                                    onClick={() => commentFileInputRef.current?.click()}
+                                >
+                                    <Paperclip className="h-4 w-4" />
+                                </Button>
+                                <Textarea
+                                    placeholder="Enter message here..."
+                                    className="min-h-[40px] flex-1 resize-none"
+                                    rows={1}
+                                    value={commentBody}
+                                    onChange={(e) => setCommentBody(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                            e.preventDefault();
+                                            handlePostComment();
+                                        }
+                                    }}
+                                />
+                                <Button
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={handlePostComment}
+                                    disabled={postingComment || (!commentBody.trim() && commentAttachments.length === 0)}
+                                >
+                                    <Send className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {comments.length === 0 ? (
+                            <p className="text-muted-foreground py-4 text-center text-sm italic">
+                                No comments yet.
+                            </p>
+                        ) : (
+                            <div className="space-y-4 border-t pt-4">
+                                {sortedComments.map((comment) => (
+                                    <CommentBubble
+                                        key={comment.id}
+                                        comment={comment}
+                                        currentUserId={currentUserId}
+                                        onEdit={handleEditComment}
+                                        onDelete={(id) => setDeletingCommentId(id)}
+                                        onPreviewAttachment={setPreviewAttachment}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Activities */}
                 {prestart.activities && prestart.activities.length > 0 && (
@@ -496,25 +820,17 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                         <div className="flex items-start justify-between gap-2">
                                                             <div className="flex flex-wrap items-center gap-1.5">
                                                                 {emp.is_present_at_site ? (
-                                                                    <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-                                                                        Present - Not Signed
-                                                                    </Badge>
-                                                                ) : emp.absence_reason ? (
-                                                                    <Badge variant="outline" className="bg-blue-50 text-blue-900 border-blue-200">
-                                                                        {emp.absence_reason}
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <Badge variant="outline" className="bg-gray-50 text-gray-900 border-gray-200">
-                                                                        No Record
-                                                                    </Badge>
-                                                                )}
+                                                                    <Badge variant="outline">Present - Not Signed</Badge>
+                                                                ) : emp.absence_reason && !(emp.reason_label && emp.absence_reason === 'Absent (Unexplained)') ? (
+                                                                    <Badge variant="outline">{emp.absence_reason}</Badge>
+                                                                ) : !emp.reason_label ? (
+                                                                    <Badge variant="outline">No Record</Badge>
+                                                                ) : null}
                                                                 {emp.clock_in_time && (
-                                                                    <span className="text-xs text-slate-500">at {emp.clock_in_time}</span>
+                                                                    <span className="text-muted-foreground text-xs">at {emp.clock_in_time}</span>
                                                                 )}
                                                                 {emp.reason_label && (
-                                                                    <Badge variant="outline" className="bg-violet-50 text-violet-900 border-violet-200">
-                                                                        {emp.reason_label}
-                                                                    </Badge>
+                                                                    <Badge variant="secondary">{emp.reason_label}</Badge>
                                                                 )}
                                                             </div>
                                                             {editingEmployeeId === emp.id && (
@@ -651,38 +967,99 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                     </DialogContent>
                 </Dialog>
 
+                {/* Edit comment dialog */}
+                <Dialog open={editingComment !== null} onOpenChange={(o) => { if (!o) setEditingComment(null); }}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Edit comment</DialogTitle>
+                        </DialogHeader>
+                        <Textarea
+                            value={editCommentBody}
+                            onChange={(e) => setEditCommentBody(e.target.value)}
+                            className="min-h-24"
+                        />
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setEditingComment(null)}>Cancel</Button>
+                            <Button onClick={submitEditComment} disabled={!editCommentBody.trim()}>Save</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Delete comment confirm */}
+                <Dialog open={deletingCommentId !== null} onOpenChange={(o) => { if (!o) setDeletingCommentId(null); }}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete comment</DialogTitle>
+                        </DialogHeader>
+                        <p>Are you sure you want to delete this comment? This cannot be undone.</p>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeletingCommentId(null)}>Cancel</Button>
+                            <Button variant="destructive" onClick={confirmDeleteComment}>Delete</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Attachment preview */}
+                <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+
                 {/* Signatures */}
                 <div className="space-y-3">
                     <h2 className="text-base font-semibold">Signatures ({prestart.signatures.length})</h2>
                     {prestart.signatures.length === 0 ? (
                         <p className="text-muted-foreground text-sm">No signatures yet.</p>
                     ) : (
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>Signed At</TableHead>
-                                        <TableHead>Signature</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {prestart.signatures.map((sig) => (
-                                        <TableRow key={sig.id}>
-                                            <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
-                                            <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
-                                            <TableCell>
-                                                <img
-                                                    src={sig.signature}
-                                                    alt="Signature"
-                                                    className="h-10 max-w-[200px] object-contain dark:invert"
-                                                />
-                                            </TableCell>
+                        <>
+                            {/* Desktop / tablet: full 3-column table */}
+                            <div className="hidden rounded-md border sm:block">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Employee</TableHead>
+                                            <TableHead>Signed At</TableHead>
+                                            <TableHead>Signature</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {prestart.signatures.map((sig) => (
+                                            <TableRow key={sig.id}>
+                                                <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
+                                                <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
+                                                <TableCell>
+                                                    <img
+                                                        src={sig.signature}
+                                                        alt="Signature"
+                                                        className="h-10 max-w-[200px] object-contain dark:invert"
+                                                    />
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Mobile: 2-column collapsed view (name+time / signature) */}
+                            <div className="divide-y rounded-md border sm:hidden">
+                                {prestart.signatures.map((sig) => (
+                                    <div key={sig.id} className="grid grid-cols-2 items-center gap-2 p-2">
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-medium">
+                                                {sig.employee?.preferred_name || sig.employee?.name || '-'}
+                                            </div>
+                                            <div className="text-muted-foreground text-xs">
+                                                {new Date(sig.signed_at).toLocaleString('en-AU')}
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <img
+                                                src={sig.signature}
+                                                alt="Signature"
+                                                className="h-10 max-w-full object-contain dark:invert"
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
             </div>

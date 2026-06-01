@@ -38,7 +38,14 @@ class Employee extends Model implements ProvidesSigningPlaceholders
 
     public function getDisplayNameAttribute(): string
     {
-        return $this->preferred_name ?: ($this->name ?? '');
+        if (! $this->preferred_name) {
+            return $this->name ?? '';
+        }
+
+        $parts = preg_split('/\s+/', trim($this->name ?? ''));
+        $surname = count($parts) > 1 ? end($parts) : '';
+
+        return trim($this->preferred_name.' '.$surname);
     }
 
     public function kiosks()

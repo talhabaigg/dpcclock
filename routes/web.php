@@ -461,12 +461,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/signing-requests/bulk-resend', [SigningRequestController::class, 'bulkResend'])->name('signing-requests.bulk-resend');
     Route::post('/signing-requests/bulk-download', [SigningRequestController::class, 'bulkDownload'])->name('signing-requests.bulk-download');
 
-    // Comments (generic — currently only employment applications use comments)
-    Route::middleware('permission:employment-applications.view')->group(function () {
-        Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
-        Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
-        Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
-    });
+    // Comments (generic — gate is enforced in CommentController via allowed-models list)
+    Route::post('/comments', [CommentController::class, 'store'])->name('comments.store');
+    Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
     Route::get('/comments/{comment}/attachments/{media}', [CommentController::class, 'streamAttachment'])->name('comments.attachment');
 
     // ============================================
