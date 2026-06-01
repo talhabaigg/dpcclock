@@ -40,6 +40,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Custom guard registered in AppServiceProvider::boot() that resolves an
+        // identity from kiosk_device_token / kiosk_worker_token cookies or the
+        // kiosk_access session. Used only by broadcasting auth on kiosk channels
+        // so device-token iPads can subscribe without a logged-in web user.
+        'kiosk' => [
+            'driver' => 'kiosk',
+        ],
     ],
 
     /*

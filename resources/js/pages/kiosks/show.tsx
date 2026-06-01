@@ -48,23 +48,19 @@ export default function Kiosk() {
     const [flashMessage, setFlashMessage] = useState(flash);
     const [isVisible, setIsVisible] = useState(true);
 
-    const { auth } = usePage().props as unknown as { auth: { user: any } };
-
     useEffect(() => {
-        let channel: any = null;
-
-        // Only subscribe to private channel if user is authenticated
-        // (device-token iPads have no auth user, so broadcasting/auth would 403)
-        if (auth?.user) {
-            channel = window.Echo.private(`kiosk.${kiosk.id}`);
-            channel.listen('.employee.clocked', (data: any) => {
-                const clockedEmployees: Employee[] = data.employees;
-                setEmployees(clockedEmployees);
-            });
-            channel.listen('.guest.prestart.signed', (data: any) => {
-                setGuestSigners(data.guests ?? []);
-            });
-        }
+        // Subscribe to the private kiosk channel from every session — authenticated
+        // web users (admins/managers) and device-token / worker-token / kiosk-session
+        // iPads. The server-side `kiosk` guard (App\Auth\KioskGuard) authorises the
+        // latter against the channel's kiosk id.
+        const channel = window.Echo.private(`kiosk.${kiosk.id}`);
+        channel.listen('.employee.clocked', (data: any) => {
+            const clockedEmployees: Employee[] = data.employees;
+            setEmployees(clockedEmployees);
+        });
+        channel.listen('.guest.prestart.signed', (data: any) => {
+            setGuestSigners(data.guests ?? []);
+        });
 
         const timer =
             (flash.success || flash.error) &&
@@ -74,9 +70,7 @@ export default function Kiosk() {
             }, 3000);
 
         return () => {
-            if (channel) {
-                window.Echo.leave(`private-kiosk.${kiosk.id}`);
-            }
+            window.Echo.leave(`private-kiosk.${kiosk.id}`);
             if (timer) clearTimeout(timer);
         };
     }, [flash, kiosk.id]);

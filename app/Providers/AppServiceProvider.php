@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Auth\KioskGuard;
 use App\Events\DocumentSigned;
 use App\Events\FormSubmitted;
 use App\Listeners\BroadcastQueueJobEvents;
@@ -11,6 +12,7 @@ use App\Support\FeatureFlags;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use App\Contracts\RendersPdf;
 use App\Contracts\StampsPdfOverlay;
@@ -36,6 +38,12 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         FeatureFlags::defineAll();
+
+        // Custom guard that authenticates device-token / worker-token / kiosk-session
+        // iPads so they can subscribe to private broadcast channels. The synthetic
+        // identity is keyed by kiosk id and is only consulted by the channel callback
+        // in routes/channels.php — it grants no other authorization.
+        Auth::extend('kiosk', fn ($app) => new KioskGuard($app['request']));
 
         // Disable SSL verification in local development
         if ($this->app->environment('local')) {
