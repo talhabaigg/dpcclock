@@ -398,7 +398,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                             {/* Column header row */}
                             <TableRow>
                                 <TableHead className="sticky left-0 z-20 bg-background min-w-[100px]">Job #</TableHead>
-                                <TableHead className="sticky left-[100px] z-20 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]">Job Name</TableHead>
+                                <TableHead className="hidden md:table-cell sticky left-[100px] z-20 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]">Job Name</TableHead>
                                 <TableHead className="text-right border-r min-w-[140px]">Total Contract</TableHead>
                                 <TableHead className="text-right min-w-[100px]">Pending</TableHead>
                                 <TableHead className="text-right min-w-[100px]">Approved</TableHead>
@@ -430,7 +430,7 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                         return (
                                             <TableRow key={row.id} className="hover:bg-muted/30">
                                                 <TableCell className="sticky left-0 z-10 bg-background font-semibold min-w-[100px]">{row.job_number}</TableCell>
-                                                <TableCell className="sticky left-[100px] z-10 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]" title={row.job_name}>
+                                                <TableCell className="hidden md:table-cell sticky left-[100px] z-10 bg-background border-r w-[150px] min-w-[150px] max-w-[150px]" title={row.job_name}>
                                                     <div className="truncate">{row.job_name}</div>
                                                 </TableCell>
                                                 <TableCell className="text-right border-r">{formatCurrency(row.total_contract_value)}</TableCell>
@@ -453,8 +453,10 @@ export default function WipReport({ wipData, filters, availableLocations, monthE
                                     {/* Totals row */}
                                     {totals && (
                                         <TableRow className="bg-muted/50 font-bold border-t-2">
-                                            <TableCell className="sticky left-0 z-10 bg-muted/50 min-w-[100px]" />
-                                            <TableCell className="sticky left-[100px] z-10 bg-muted/50 border-r w-[150px] min-w-[150px] max-w-[150px]">GRAND TOTAL</TableCell>
+                                            <TableCell className="sticky left-0 z-10 bg-muted/50 min-w-[100px] whitespace-nowrap">
+                                                <span className="md:hidden">GRAND TOTAL</span>
+                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell sticky left-[100px] z-10 bg-muted/50 border-r w-[150px] min-w-[150px] max-w-[150px]">GRAND TOTAL</TableCell>
                                             <TableCell className="text-right border-r">{formatCurrency(totals.total_contract_value)}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(totals.pending_variations)}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(totals.approved_variations)}</TableCell>
