@@ -168,6 +168,15 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers, defaultStar
         if (!lockDeviceName.trim()) return;
         setIsLocking(true);
         router.post(route('kiosk-devices.lock-device', kioskId), { device_name: lockDeviceName.trim() }, {
+            onSuccess: () => {
+                // Hard reload — the manager was just logged out and the device
+                // cookie is now the auth source. Inertia's XHR redirect-follow
+                // lands back on this same page component, which preserves React
+                // state (dialog stays "Locking..."). A full navigation wipes
+                // client state and re-establishes the Echo subscription under
+                // the new identity.
+                window.location.href = route('kiosks.show', kioskId);
+            },
             onError: () => setIsLocking(false),
         });
     };
