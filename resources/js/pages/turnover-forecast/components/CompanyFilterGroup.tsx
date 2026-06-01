@@ -18,6 +18,15 @@ interface CompanyFilterGroupProps {
     search?: string;
 }
 
+// Forecast projects always belong to the Forecast bucket, regardless of the
+// parent project's company code — mirroring the grid's grouping in
+// data-transformer.ts so the filter sheet and the grid stay in sync.
+function rowMatchesCompany(row: TurnoverRow, company: TurnoverRow['company']): boolean {
+    if (row.type === 'forecast_project') return company === 'Forecast';
+    if (company === 'Forecast') return false;
+    return row.company === company;
+}
+
 export function CompanyFilterGroup({
     label,
     company,
@@ -29,7 +38,7 @@ export function CompanyFilterGroup({
     defaultOpen = true,
     search = '',
 }: CompanyFilterGroupProps) {
-    const companyRows = useMemo(() => data.filter((row) => row.company === company), [data, company]);
+    const companyRows = useMemo(() => data.filter((row) => rowMatchesCompany(row, company)), [data, company]);
 
     const visibleRows = useMemo(() => {
         if (!search) return companyRows;

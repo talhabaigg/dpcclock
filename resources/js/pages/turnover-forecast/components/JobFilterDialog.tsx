@@ -27,12 +27,20 @@ const companyOnlyFilters: { company: CompanyKey; label: string }[] = [
     { company: 'Forecast', label: 'Forecast Only' },
 ];
 
+// Mirror the grid's bucketing: forecast_project rows belong to the Forecast
+// group regardless of the underlying project.company value.
+function rowMatchesCompany(row: TurnoverRow, company: CompanyKey): boolean {
+    if (row.type === 'forecast_project') return company === 'Forecast';
+    if (company === 'Forecast') return false;
+    return row.company === company;
+}
+
 function isCompanyOnlyActive(data: TurnoverRow[], company: CompanyKey, excludedJobIds: Set<string>): boolean {
-    const companyRows = data.filter((r) => r.company === company);
+    const companyRows = data.filter((r) => rowMatchesCompany(r, company));
     if (companyRows.length === 0) return false;
     return (
         companyRows.every((r) => !excludedJobIds.has(`${r.type}-${r.id}`)) &&
-        data.filter((r) => r.company !== company).every((r) => excludedJobIds.has(`${r.type}-${r.id}`))
+        data.filter((r) => !rowMatchesCompany(r, company)).every((r) => excludedJobIds.has(`${r.type}-${r.id}`))
     );
 }
 
@@ -71,7 +79,7 @@ export function JobFilterDialog({
     );
 
     const showOnlyCompany = (company: CompanyKey) => {
-        const nonCompanyIds = data.filter((r) => r.company !== company).map((r) => `${r.type}-${r.id}`);
+        const nonCompanyIds = data.filter((r) => !rowMatchesCompany(r, company)).map((r) => `${r.type}-${r.id}`);
         setBulk(new Set(nonCompanyIds), `Showing ${company} only`);
     };
 

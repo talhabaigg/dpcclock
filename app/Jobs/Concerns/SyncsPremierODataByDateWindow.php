@@ -4,6 +4,7 @@ namespace App\Jobs\Concerns;
 
 use App\Models\DataSyncLog;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -31,6 +32,7 @@ trait SyncsPremierODataByDateWindow
         $startTime = now();
         $jobName = $this->jobName();
         $modelClass = $this->modelClass();
+        $liveTable = (new $modelClass)->getTable();
         $dbDateColumn = $this->dbDateColumn();
         $logPrefix = class_basename(static::class);
 
@@ -45,29 +47,29 @@ trait SyncsPremierODataByDateWindow
             'last_filter_value' => $lastFilterValue,
         ]);
 
-        try {
-            $totalProcessed = 0;
-            $maxDate = $lastFilterValue;
-            $tableCleared = false;
+        $stagingTable = $this->createStagingTable($liveTable, $logPrefix);
+        $totalProcessed = 0;
+        $maxDate = $lastFilterValue;
 
-            if ($this->mode === 'full') {
-                // Defer the truncate until first window returns data so an API failure
-                // on early windows doesn't leave the table empty.
-                $windows = $this->buildMonthlyWindows($cutoffDate, now());
-                Log::info("{$logPrefix}: Full reset window plan", ['windows' => count($windows)]);
-            } else {
-                $deleted = $modelClass::where($dbDateColumn, '>=', $cutoffDate)->delete();
-                Log::info("{$logPrefix}: Deleted overlap records", ['from' => $cutoffDate, 'deleted' => $deleted]);
-                $tableCleared = true;
-                $windows = $this->buildMonthlyWindows($cutoffDate, now());
-            }
+        try {
+            $windows = $this->buildMonthlyWindows($cutoffDate, now());
+            Log::info("{$logPrefix}: Window plan", ['windows' => count($windows)]);
 
             foreach ($windows as [$start, $end]) {
-                $this->fetchWindow($start, $end, $totalProcessed, $maxDate, $tableCleared, $logPrefix);
+                $this->fetchWindow($start, $end, $stagingTable, $totalProcessed, $maxDate, $logPrefix);
             }
 
-            if ($this->mode === 'full' && ! $tableCleared) {
-                Log::warning("{$logPrefix}: ERP returned 0 rows across all windows, table left untouched");
+            if ($totalProcessed === 0) {
+                if ($this->mode === 'full') {
+                    Log::warning("{$logPrefix}: ERP returned 0 rows across all windows, live table left untouched");
+                } else {
+                    Log::info("{$logPrefix}: No rows returned, live table left untouched");
+                }
+                DB::statement("DROP TABLE IF EXISTS `{$stagingTable}`");
+            } elseif ($this->mode === 'full') {
+                $this->swapFull($liveTable, $stagingTable, $logPrefix);
+            } else {
+                $this->swapIncremental($liveTable, $stagingTable, $dbDateColumn, $cutoffDate, $logPrefix);
             }
 
             $syncLog->last_successful_sync = now();
@@ -84,6 +86,8 @@ trait SyncsPremierODataByDateWindow
             ]);
 
         } catch (Throwable $e) {
+            DB::statement("DROP TABLE IF EXISTS `{$stagingTable}`");
+
             Log::error("{$logPrefix}: Job failed", [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
@@ -92,6 +96,35 @@ trait SyncsPremierODataByDateWindow
 
             throw $e;
         }
+    }
+
+    private function createStagingTable(string $liveTable, string $logPrefix): string
+    {
+        $staging = $liveTable.'__staging';
+        DB::statement("DROP TABLE IF EXISTS `{$staging}`");
+        DB::statement("CREATE TABLE `{$staging}` LIKE `{$liveTable}`");
+        Log::info("{$logPrefix}: Staging table prepared", ['table' => $staging]);
+
+        return $staging;
+    }
+
+    private function swapFull(string $liveTable, string $stagingTable, string $logPrefix): void
+    {
+        $oldTable = $liveTable.'__old';
+        DB::statement("DROP TABLE IF EXISTS `{$oldTable}`");
+        DB::statement("RENAME TABLE `{$liveTable}` TO `{$oldTable}`, `{$stagingTable}` TO `{$liveTable}`");
+        DB::statement("DROP TABLE `{$oldTable}`");
+        Log::info("{$logPrefix}: Atomic rename swap completed");
+    }
+
+    private function swapIncremental(string $liveTable, string $stagingTable, string $dbDateColumn, string $cutoffDate, string $logPrefix): void
+    {
+        DB::transaction(function () use ($liveTable, $stagingTable, $dbDateColumn, $cutoffDate) {
+            DB::table($liveTable)->where($dbDateColumn, '>=', $cutoffDate)->delete();
+            DB::statement("INSERT INTO `{$liveTable}` SELECT * FROM `{$stagingTable}`");
+        });
+        DB::statement("DROP TABLE `{$stagingTable}`");
+        Log::info("{$logPrefix}: Incremental delete+copy swap completed", ['from' => $cutoffDate]);
     }
 
     private function resolveCutoffDate(?string $lastFilterValue, string $logPrefix): string
@@ -112,10 +145,9 @@ trait SyncsPremierODataByDateWindow
         };
     }
 
-    private function fetchWindow(?string $start, ?string $end, int &$totalProcessed, ?string &$maxDate, bool &$tableCleared, string $logPrefix): void
+    private function fetchWindow(?string $start, ?string $end, string $stagingTable, int &$totalProcessed, ?string &$maxDate, string $logPrefix): void
     {
         $baseUrl = config('premier.api.base_url').config('premier.endpoints.'.$this->endpointConfigKey());
-        $modelClass = $this->modelClass();
         $dbDateColumn = $this->dbDateColumn();
         $oDataDateColumn = $this->oDataDateColumn();
         $insertBatchSize = 100;
@@ -197,12 +229,6 @@ trait SyncsPremierODataByDateWindow
                 break;
             }
 
-            if (! $tableCleared) {
-                $modelClass::query()->delete();
-                $tableCleared = true;
-                Log::info("{$logPrefix}: Cleared table prior to full sync insert");
-            }
-
             foreach (array_chunk($rows, $insertBatchSize) as $chunk) {
                 $data = [];
                 foreach ($chunk as $r) {
@@ -214,7 +240,7 @@ trait SyncsPremierODataByDateWindow
 
                     $data[] = $record;
                 }
-                $modelClass::insert($data);
+                DB::table($stagingTable)->insert($data);
                 unset($data);
             }
 
