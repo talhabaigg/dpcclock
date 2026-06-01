@@ -34,6 +34,7 @@ return [
         'ap_posted_invoice_lines' => '/APPostedInvoiceLines',
         'job_vendor_commitments' => '/JobVendorsCommitments',
         'ap_purchase_orders' => '/APPurchaseOrders',
+        'gl_transaction_details' => '/GLTransactionDetails',
     ],
 
     'jobs' => [
