@@ -18,20 +18,33 @@ interface Kiosk {
     eh_kiosk_id: string;
 }
 
+interface GuestSigner {
+    id: number;
+    guest_name: string;
+    guest_company: string;
+    signed_at: string;
+    signed_at_formatted: string;
+}
+
 export default function Kiosk() {
     const {
         employees: initialEmployees,
         flash,
         kiosk,
         adminMode,
+        guestSigners: initialGuestSigners,
+        hasTodayPrestart,
     } = usePage<{
         employees: Employee[];
         flash: { success?: string; error?: string };
         kiosk: Kiosk;
         adminMode: boolean;
+        guestSigners: GuestSigner[];
+        hasTodayPrestart: boolean;
     }>().props;
 
     const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+    const [guestSigners, setGuestSigners] = useState<GuestSigner[]>(initialGuestSigners ?? []);
     const [flashMessage, setFlashMessage] = useState(flash);
     const [isVisible, setIsVisible] = useState(true);
 
@@ -47,6 +60,9 @@ export default function Kiosk() {
             channel.listen('.employee.clocked', (data: any) => {
                 const clockedEmployees: Employee[] = data.employees;
                 setEmployees(clockedEmployees);
+            });
+            channel.listen('.guest.prestart.signed', (data: any) => {
+                setGuestSigners(data.guests ?? []);
             });
         }
 
@@ -73,7 +89,7 @@ export default function Kiosk() {
     }, [flash]);
 
     return (
-        <KioskLayout employees={employees} kiosk={kiosk} adminMode={adminMode}>
+        <KioskLayout employees={employees} kiosk={kiosk} adminMode={adminMode} guestSigners={guestSigners} hasTodayPrestart={hasTodayPrestart}>
             <Head title={kiosk.name ?? 'Kiosk'} />
             <div className="flex flex-col items-center justify-center gap-8 p-6 text-center">
                 {/* Flash Messages */}

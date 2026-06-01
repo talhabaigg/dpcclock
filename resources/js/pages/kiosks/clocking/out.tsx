@@ -58,8 +58,16 @@ interface SilicaFormData {
     respirator_type: string;
 }
 
+interface GuestSigner {
+    id: number;
+    guest_name: string;
+    guest_company: string;
+    signed_at: string;
+    signed_at_formatted: string;
+}
+
 export default function Clockout() {
-    const { employees, kiosk, employee, locations, clockedIn, adminMode, silicaOptions, silicaQuestionEnabled } = usePage<{
+    const { employees, kiosk, employee, locations, clockedIn, adminMode, silicaOptions, silicaQuestionEnabled, guestSigners, hasTodayPrestart } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
@@ -68,6 +76,8 @@ export default function Clockout() {
         adminMode: boolean;
         silicaOptions: SilicaOptions;
         silicaQuestionEnabled: boolean;
+        guestSigners?: GuestSigner[];
+        hasTodayPrestart?: boolean;
     }>().props;
 
     const { setData, data, post, processing } = useForm<{
@@ -891,7 +901,14 @@ export default function Clockout() {
             {content}
         </>
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={adminMode}>
+        <KioskLayout
+            employees={employees}
+            kiosk={kiosk}
+            selectedEmployee={employee}
+            adminMode={adminMode}
+            guestSigners={guestSigners ?? []}
+            hasTodayPrestart={hasTodayPrestart ?? false}
+        >
             <Head title="Clock Out" />
             {content}
         </KioskLayout>

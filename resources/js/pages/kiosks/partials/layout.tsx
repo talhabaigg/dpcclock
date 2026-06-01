@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
-import { LogOut, Monitor, ShieldCheck, Users, X } from 'lucide-react';
+import { LogOut, Monitor, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskSettingMenu from './KioskSettingMenu';
 import EmployeeList from './employeeList';
@@ -19,15 +19,25 @@ interface Kiosk {
     related_kiosks?: Array<{ id: number; name: string }>;
 }
 
+interface GuestSigner {
+    id: number;
+    guest_name: string;
+    guest_company: string;
+    signed_at: string;
+    signed_at_formatted: string;
+}
+
 interface KioskLayoutProps {
     children: React.ReactNode;
     employees: Array<any>;
     kiosk: Kiosk;
     selectedEmployee?: any;
     adminMode: boolean | undefined;
+    guestSigners?: GuestSigner[];
+    hasTodayPrestart?: boolean;
 }
 
-export default function KioskLayout({ children, employees, kiosk, selectedEmployee, adminMode }: KioskLayoutProps) {
+export default function KioskLayout({ children, employees, kiosk, selectedEmployee, adminMode, guestSigners = [], hasTodayPrestart = false }: KioskLayoutProps) {
     const [search, setSearch] = useState<string>('');
     const [exitAdminDialogOpen, setExitAdminDialogOpen] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
@@ -183,8 +193,33 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
 
                     {/* Employee List */}
                     <div className="flex-1 overflow-y-auto">
-                        <EmployeeList employees={filteredEmployees} selectedEmployee={selectedEmployee} kioskId={kiosk.eh_kiosk_id} />
+                        <EmployeeList
+                            employees={filteredEmployees}
+                            selectedEmployee={selectedEmployee}
+                            kioskId={kiosk.eh_kiosk_id}
+                            guestSigners={guestSigners}
+                        />
                     </div>
+
+                    {/* Guest Sign In */}
+                    {hasTodayPrestart && (
+                        <div className="bg-card/60 border-t p-3">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                className={cn(
+                                    'h-12 w-full justify-center gap-2 border-sky-500/30 bg-sky-500/10 text-sky-700 shadow-none',
+                                    'hover:border-sky-500/50 hover:bg-sky-500/15 hover:text-sky-800',
+                                    'focus-visible:ring-sky-500/40',
+                                    'dark:text-sky-300 dark:hover:text-sky-200',
+                                )}
+                                onClick={() => router.visit(route('kiosk.prestart.guest', { kioskId: kiosk.eh_kiosk_id }))}
+                            >
+                                <UserPlus className="h-4 w-4" />
+                                Guest Sign In
+                            </Button>
+                        </div>
+                    )}
                 </aside>
 
                 {/* Main content */}

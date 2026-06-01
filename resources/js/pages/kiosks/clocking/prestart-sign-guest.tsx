@@ -1,31 +1,16 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import WeatherWidget from '@/components/weather-widget';
-import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Clock, FileText, GraduationCap, LogIn, MapPin, Users } from 'lucide-react';
+import { ArrowLeft, Building2, Clock, FileText, GraduationCap, MapPin, PenLine, UserPlus, Users } from 'lucide-react';
 import SignaturePad from 'signature_pad';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
-
-interface Employee {
-    id: number;
-    name: string;
-    preferred_name: string | null;
-    display_name: string;
-}
-
-interface GuestSigner {
-    id: number;
-    guest_name: string;
-    guest_company: string;
-    signed_at: string;
-    signed_at_formatted: string;
-}
 
 interface Kiosk {
     id: number;
@@ -69,28 +54,43 @@ const DAILY_CHECKLIST = [
     'Current Licences & Qualifications are relevant to work tasks',
 ];
 
-export default function PrestartSign() {
-    const { kiosk, employee, prestart, employees, adminMode, trainings, guestSigners, hasTodayPrestart } = usePage<{
+interface GuestSigner {
+    id: number;
+    guest_name: string;
+    guest_company: string;
+    signed_at: string;
+    signed_at_formatted: string;
+}
+
+export default function PrestartSignGuest() {
+    const { kiosk, prestart, employees, adminMode, trainings, guestSigners } = usePage<{
         kiosk: Kiosk;
-        employee: Employee;
         prestart: Prestart;
-        employees: Employee[];
+        employees?: any[];
         adminMode: boolean;
         trainings: TrainingItem[];
         guestSigners?: GuestSigner[];
-        hasTodayPrestart?: boolean;
     }>().props;
 
-    const getInitials = useInitials();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const padRef = useRef<SignaturePad | null>(null);
     const [showProcessing, setShowProcessing] = useState(false);
     const [success, setSuccess] = useState(false);
     const [sigError, setSigError] = useState('');
 
+    const [guestName, setGuestName] = useState('');
+    const [guestCompany, setGuestCompany] = useState('');
     const [allAcknowledged, setAllAcknowledged] = useState(false);
-    const allAccepted = allAcknowledged;
 
+    const detailsComplete = guestName.trim().length > 0 && guestCompany.trim().length > 0;
+    const allAccepted = detailsComplete && allAcknowledged;
+
+    // Clear stale error once the gating issue is resolved.
+    useEffect(() => {
+        if (sigError && detailsComplete && allAcknowledged) {
+            setSigError('');
+        }
+    }, [sigError, detailsComplete, allAcknowledged]);
 
     const initPad = useCallback(() => {
         if (!canvasRef.current || padRef.current) return;
@@ -115,13 +115,17 @@ export default function PrestartSign() {
         setSigError('');
     };
 
-    const handleSignAndClockIn = () => {
-        if (!allAccepted) {
-            setSigError('Please accept all activities and safety concerns before signing.');
+    const handleSign = () => {
+        if (!detailsComplete) {
+            setSigError('Please enter your name and company.');
+            return;
+        }
+        if (!allAcknowledged) {
+            setSigError('Please acknowledge the prestart items before signing.');
             return;
         }
         if (!padRef.current || padRef.current.isEmpty()) {
-            setSigError('Please sign before clocking in.');
+            setSigError('Please sign before submitting.');
             return;
         }
         setSigError('');
@@ -130,9 +134,11 @@ export default function PrestartSign() {
         const signatureData = padRef.current.toDataURL('image/png');
 
         router.post(
-            route('kiosk.prestart.sign', { kioskId: kiosk.eh_kiosk_id, employeeId: employee.id }),
+            route('kiosk.prestart.guest.sign', { kioskId: kiosk.eh_kiosk_id }),
             {
                 prestart_id: prestart.id,
+                guest_name: guestName.trim(),
+                guest_company: guestCompany.trim(),
                 signature: signatureData,
             },
             {
@@ -160,21 +166,18 @@ export default function PrestartSign() {
 
     const content = (
         <div className="relative flex h-full w-full flex-col items-center overflow-y-auto px-4 py-6">
-            {/* Processing Dialog */}
-            <KioskDialogBox isOpen={showProcessing} onClose={() => {}} title="Signing & Clocking In" description="Please wait..." variant="loading" />
+            <KioskDialogBox isOpen={showProcessing} onClose={() => {}} title="Signing Prestart" description="Please wait..." variant="loading" />
 
-            {/* Success Dialog */}
             <KioskDialogBox
                 isOpen={success}
                 onClose={() => {
                     window.location.href = route('kiosks.show', { kiosk: kiosk.id });
                 }}
-                title="Signed & Clocked In"
-                description="Your prestart signature and clock in have been recorded."
+                title="Prestart Signed"
+                description="Thanks! Your signature has been recorded."
                 variant="success"
             />
 
-            {/* Back Button */}
             <div className="absolute top-4 left-4">
                 <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
                     <Button variant="ghost" size="icon" className="h-12 w-12 rounded-full hover:bg-accent touch-manipulation">
@@ -184,19 +187,58 @@ export default function PrestartSign() {
             </div>
 
             <div className="w-full max-w-2xl space-y-4 pt-12">
-                {/* Employee Header */}
+                {/* Guest Header */}
                 <div className="flex flex-col items-center">
-                    <Avatar className="border-primary/20 mb-2 h-16 w-16 border-4 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
-                            {getInitials(employee.display_name)}
-                        </AvatarFallback>
-                    </Avatar>
-                    <h2 className="text-xl font-bold">{employee.display_name}</h2>
-                    <div className="mt-1 flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-blue-600">
+                    <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full border-4 border-sky-500/20 bg-sky-500/10 text-sky-600 shadow-lg dark:text-sky-400">
+                        <UserPlus className="h-7 w-7" />
+                    </div>
+                    <h2 className="text-xl font-bold">Guest Sign-In</h2>
+                    <div className="mt-1 flex items-center gap-2 rounded-full bg-sky-500/10 px-3 py-1 text-sky-700 dark:text-sky-300">
                         <FileText className="h-4 w-4" />
-                        <span className="text-sm font-medium">Daily Prestart - {prestart.work_date_formatted}</span>
+                        <span className="text-sm font-medium">Daily Prestart &middot; {prestart.work_date_formatted}</span>
                     </div>
                 </div>
+
+                {/* Guest Details Form */}
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Your Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="guest_name">Name</Label>
+                            <Input
+                                id="guest_name"
+                                autoFocus
+                                value={guestName}
+                                onChange={(e) => setGuestName(e.target.value)}
+                                placeholder="Your full name"
+                                autoComplete="name"
+                                autoCapitalize="words"
+                                spellCheck={false}
+                                enterKeyHint="next"
+                                className="h-11 text-base"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="guest_company" className="flex items-center gap-1.5">
+                                <Building2 className="h-3.5 w-3.5" />
+                                Company
+                            </Label>
+                            <Input
+                                id="guest_company"
+                                value={guestCompany}
+                                onChange={(e) => setGuestCompany(e.target.value)}
+                                placeholder="Your company or trade"
+                                autoComplete="organization"
+                                autoCapitalize="words"
+                                spellCheck={false}
+                                enterKeyHint="done"
+                                className="h-11 text-base"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {/* Prestart Content */}
                 <Card>
@@ -293,18 +335,6 @@ export default function PrestartSign() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {t.employees.length > 0 && (
-                                                        <div className="mt-2 flex flex-wrap gap-1">
-                                                            {t.employees.map((e) => (
-                                                                <span
-                                                                    key={e.id}
-                                                                    className="rounded-full bg-white/70 px-2 py-0.5 text-xs text-indigo-900 dark:bg-white/10 dark:text-indigo-200"
-                                                                >
-                                                                    {e.display_name || e.preferred_name || e.name}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    )}
                                                     {t.notes && (
                                                         <p className="mt-2 border-t border-indigo-200/50 pt-2 text-xs italic text-muted-foreground dark:border-indigo-900/50">
                                                             {t.notes}
@@ -318,9 +348,16 @@ export default function PrestartSign() {
                             </div>
                         )}
 
-                        <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', allAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
+                        <label
+                            className={cn(
+                                'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation',
+                                allAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border',
+                            )}
+                        >
                             <Checkbox checked={allAcknowledged} onCheckedChange={() => setAllAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
-                            <span className={cn('flex-1 font-medium', allAcknowledged && 'text-emerald-800')}>I acknowledge and confirm all of the above activities, safety concerns, and checklist items</span>
+                            <span className={cn('flex-1 font-medium', allAcknowledged && 'text-emerald-800')}>
+                                I acknowledge and confirm all of the above activities, safety concerns, and checklist items
+                            </span>
                         </label>
                     </CardContent>
                 </Card>
@@ -330,7 +367,7 @@ export default function PrestartSign() {
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base">Sign Below</CardTitle>
                         <p className="text-xs text-muted-foreground">
-                            By signing, you confirm you have read and understood today's prestart and that you are required to attend the prestart meeting in person.
+                            By signing, you confirm you have read and understood today's prestart.
                         </p>
                     </CardHeader>
                     <CardContent>
@@ -346,26 +383,29 @@ export default function PrestartSign() {
                     </CardContent>
                 </Card>
 
-                {/* Sign & Clock In Button */}
+                {/* Sign Button */}
                 <div className="flex flex-col items-center gap-3 pb-6">
-                    {!allAccepted && (
-                        <p className="text-sm text-muted-foreground">Accept all items above to enable signing</p>
+                    {!detailsComplete && (
+                        <p className="text-muted-foreground text-sm">Enter your name and company to continue</p>
+                    )}
+                    {detailsComplete && !allAcknowledged && (
+                        <p className="text-muted-foreground text-sm">Tick the acknowledgement above to continue</p>
                     )}
                     <Button
-                        onClick={handleSignAndClockIn}
+                        onClick={handleSign}
                         disabled={showProcessing || !allAccepted}
                         className={cn(
                             'h-16 w-64 gap-3 rounded-2xl text-lg font-bold',
-                            'bg-emerald-500 text-white shadow-lg',
-                            'hover:bg-emerald-600 hover:shadow-xl',
+                            'bg-sky-600 text-white shadow-lg',
+                            'hover:bg-sky-700 hover:shadow-xl',
                             'active:scale-[0.98]',
                             'touch-manipulation transition-all duration-200',
                         )}
                     >
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-                            <LogIn className="h-4 w-4" />
+                            <PenLine className="h-4 w-4" />
                         </div>
-                        Sign & Clock In
+                        Sign Prestart
                     </Button>
                 </div>
             </div>
@@ -374,19 +414,18 @@ export default function PrestartSign() {
 
     return isMobile ? (
         <div className="bg-background min-h-screen">
-            <Head title="Prestart Sign" />
+            <Head title="Guest Prestart Sign" />
             {content}
         </div>
     ) : (
         <KioskLayout
             employees={employees ?? []}
             kiosk={kiosk}
-            selectedEmployee={employee}
             adminMode={adminMode}
             guestSigners={guestSigners ?? []}
-            hasTodayPrestart={hasTodayPrestart ?? false}
+            hasTodayPrestart
         >
-            <Head title="Prestart Sign" />
+            <Head title="Guest Prestart Sign" />
             {content}
         </KioskLayout>
     );

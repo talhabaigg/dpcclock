@@ -1581,6 +1581,10 @@ Route::middleware('kiosk.access')->group(function () {
     // Daily prestart signing (kiosk context)
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/prestart', [DailyPrestartController::class, 'showKioskPrestart'])->name('kiosk.prestart');
     Route::post('/kiosk/{kioskId}/employee/{employeeId}/prestart/sign', [DailyPrestartController::class, 'signKioskPrestart'])->name('kiosk.prestart.sign');
+
+    // Guest prestart signing (kiosk context, no employee)
+    Route::get('/kiosk/{kioskId}/prestart/guest', [DailyPrestartController::class, 'showKioskGuestPrestart'])->name('kiosk.prestart.guest');
+    Route::post('/kiosk/{kioskId}/prestart/guest/sign', [DailyPrestartController::class, 'signKioskGuestPrestart'])->name('kiosk.prestart.guest.sign');
 });
 
 Route::get('/kiosk', function () {

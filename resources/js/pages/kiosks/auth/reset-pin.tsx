@@ -23,12 +23,22 @@ interface Kiosk {
     eh_kiosk_id: string;
 }
 
+interface GuestSigner {
+    id: number;
+    guest_name: string;
+    guest_company: string;
+    signed_at: string;
+    signed_at_formatted: string;
+}
+
 export default function ResetPin() {
-    const { employees, kiosk, employee, flash } = usePage<{
+    const { employees, kiosk, employee, flash, guestSigners, hasTodayPrestart } = usePage<{
         employees: Employee[];
         kiosk: Kiosk;
         employee: Employee;
         flash: { success?: string; error?: string };
+        guestSigners?: GuestSigner[];
+        hasTodayPrestart?: boolean;
     }>().props;
 
     const getInitials = useInitials();
@@ -283,7 +293,14 @@ export default function ResetPin() {
     return isMobile ? (
         <div className="bg-background min-h-screen">{content}</div>
     ) : (
-        <KioskLayout employees={employees} kiosk={kiosk} selectedEmployee={employee} adminMode={false}>
+        <KioskLayout
+            employees={employees}
+            kiosk={kiosk}
+            selectedEmployee={employee}
+            adminMode={false}
+            guestSigners={guestSigners ?? []}
+            hasTodayPrestart={hasTodayPrestart ?? false}
+        >
             {content}
         </KioskLayout>
     );

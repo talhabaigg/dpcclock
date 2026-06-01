@@ -254,7 +254,17 @@
             @foreach($signatures as $index => $sig)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td>{{ $sig->employee->preferred_name ?? $sig->employee->name ?? '—' }}</td>
+                    <td>
+                        @if($sig->is_guest)
+                            {{ $sig->guest_name ?? '—' }}
+                            @if($sig->guest_company)
+                                <br><span style="color: #6b7280; font-size: 10px;">{{ $sig->guest_company }}</span>
+                            @endif
+                            <span style="display:inline-block; margin-left:4px; padding:1px 5px; font-size:9px; border:1px solid #7dd3fc; background:#f0f9ff; color:#0369a1; border-radius:3px; vertical-align:middle; text-transform:uppercase; letter-spacing:0.04em;">Guest</span>
+                        @else
+                            {{ $sig->employee->preferred_name ?? $sig->employee->name ?? '—' }}
+                        @endif
+                    </td>
                     <td>
                         @if($sig->signature)
                             <img src="{{ $sig->signature }}" class="sig-img" alt="Signature" />

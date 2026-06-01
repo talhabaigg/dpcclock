@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Clock;
+use App\Models\DailyPrestart;
+use App\Models\DailyPrestartSignature;
 use App\Models\Kiosk;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -31,6 +33,95 @@ class KioskService
 
             return $employee;
         });
+    }
+
+    /**
+     * Get today's guest prestart signers for a kiosk's location.
+     */
+    public function getTodayGuestSigners(Kiosk $kiosk): Collection
+    {
+        $location = $kiosk->location;
+
+        if (! $location) {
+            return collect();
+        }
+
+        $prestart = DailyPrestart::active()
+            ->forLocation($location->id)
+            ->forDate(today('Australia/Brisbane')->toDateString())
+            ->first();
+
+        if (! $prestart) {
+            return collect();
+        }
+
+        return DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+            ->whereNull('employee_id')
+            ->orderBy('signed_at', 'desc')
+            ->get()
+            ->map(fn ($sig) => [
+                'id' => $sig->id,
+                'guest_name' => $sig->guest_name,
+                'guest_company' => $sig->guest_company,
+                'signed_at' => $sig->signed_at,
+                'signed_at_formatted' => Carbon::parse($sig->signed_at)->format('h:i A'),
+            ]);
+    }
+
+    /**
+     * Check whether an active prestart exists for the kiosk's location today.
+     */
+    public function hasTodayPrestart(Kiosk $kiosk): bool
+    {
+        if (! $kiosk->location) {
+            return false;
+        }
+
+        return DailyPrestart::active()
+            ->forLocation($kiosk->location->id)
+            ->forDate(today('Australia/Brisbane')->toDateString())
+            ->exists();
+    }
+
+    /**
+     * Build the props every page that uses <KioskLayout> needs in the sidebar:
+     * employees (with clocked-in state), today's guest signers, and whether a
+     * prestart exists for today. Use this from every controller that renders
+     * a kiosks/* Inertia page so the sidebar is consistent everywhere.
+     */
+    public function getKioskLayoutProps(Kiosk $kiosk): array
+    {
+        // Ensure relationships are loaded without re-querying if they already are.
+        $kiosk->loadMissing(['employees', 'location']);
+
+        $employees = $this->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
+
+        $location = $kiosk->location;
+        $today = today('Australia/Brisbane')->toDateString();
+
+        $prestart = $location
+            ? DailyPrestart::active()->forLocation($location->id)->forDate($today)->first()
+            : null;
+
+        $guestSigners = $prestart
+            ? DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+                ->whereNull('employee_id')
+                ->orderBy('signed_at', 'desc')
+                ->get()
+                ->map(fn ($sig) => [
+                    'id' => $sig->id,
+                    'guest_name' => $sig->guest_name,
+                    'guest_company' => $sig->guest_company,
+                    'signed_at' => $sig->signed_at,
+                    'signed_at_formatted' => Carbon::parse($sig->signed_at)->format('h:i A'),
+                ])
+            : collect();
+
+        return [
+            'employees' => $employees,
+            'guestSigners' => $guestSigners,
+            'hasTodayPrestart' => $prestart !== null,
+        ];
     }
 
     public function isAdminModeActive(): bool

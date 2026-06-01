@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\GuestPrestartSignedEvent;
 use App\Models\Clock;
 use App\Models\DailyPrestart;
 use App\Models\DailyPrestartSignature;
@@ -10,6 +11,7 @@ use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\PrestartAbsentee;
 use App\Models\Training;
+use App\Services\KioskService;
 use App\Services\WeatherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -622,7 +624,7 @@ class DailyPrestartController extends Controller
 
     public function showKioskPrestart($kioskId, $employeeId)
     {
-        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->with('relatedKiosks')->firstOrFail();
         $employee = Employee::findOrFail($employeeId);
         $location = $kiosk->location;
 
@@ -637,11 +639,14 @@ class DailyPrestartController extends Controller
             ->with('media')
             ->first();
 
+        $kioskService = app(KioskService::class);
+
         if (! $prestart) {
             // No prestart today — proceed to clock in directly
             return Inertia::render('kiosks/clocking/in', [
                 'kiosk' => $kiosk->load('location'),
                 'employee' => $employee,
+                ...$kioskService->getKioskLayoutProps($kiosk),
             ]);
         }
 
@@ -654,6 +659,7 @@ class DailyPrestartController extends Controller
             return Inertia::render('kiosks/clocking/in', [
                 'kiosk' => $kiosk->load('location'),
                 'employee' => $employee,
+                ...$kioskService->getKioskLayoutProps($kiosk),
             ]);
         }
 
@@ -686,6 +692,7 @@ class DailyPrestartController extends Controller
             'employee' => $employee,
             'prestart' => $prestart,
             'trainings' => $trainings,
+            ...$kioskService->getKioskLayoutProps($kiosk),
         ]);
     }
 
@@ -771,6 +778,106 @@ class DailyPrestartController extends Controller
         return redirect()
             ->route('kiosks.show', $kiosk->id)
             ->with('success', 'Prestart signed & clocked in at ' . $clock->clock_in->format('g:i A'));
+    }
+
+    public function showKioskGuestPrestart($kioskId)
+    {
+        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->with('relatedKiosks')->firstOrFail();
+        $location = $kiosk->location;
+
+        if (! $location) {
+            return redirect()->route('kiosks.show', $kiosk->id)
+                ->with('info', 'No location linked to this kiosk.');
+        }
+
+        $prestart = DailyPrestart::active()
+            ->forLocation($location->id)
+            ->forDate(now('Australia/Brisbane')->toDateString())
+            ->with('media')
+            ->first();
+
+        if (! $prestart) {
+            return redirect()->route('kiosks.show', $kiosk->id)
+                ->with('info', 'No prestart available for today.');
+        }
+
+        $prestart->ensureFreshWeatherQueued();
+
+        $trainings = Training::with('employees')
+            ->forLocation($location->id)
+            ->forDate(now('Australia/Brisbane')->toDateString())
+            ->get()
+            ->map(function ($training) {
+                return [
+                    'id' => $training->id,
+                    'title' => $training->title,
+                    'time' => $training->time,
+                    'room' => $training->room,
+                    'notes' => $training->notes,
+                    'employees' => $training->employees->map(fn ($e) => [
+                        'id' => $e->id,
+                        'name' => $e->name,
+                        'preferred_name' => $e->preferred_name,
+                        'display_name' => $e->display_name,
+                    ])->toArray(),
+                ];
+            });
+
+        return Inertia::render('kiosks/clocking/prestart-sign-guest', [
+            'kiosk' => $kiosk,
+            'prestart' => $prestart,
+            'trainings' => $trainings,
+            ...app(KioskService::class)->getKioskLayoutProps($kiosk),
+        ]);
+    }
+
+    public function signKioskGuestPrestart(Request $request, $kioskId)
+    {
+        $data = $request->validate([
+            'prestart_id' => 'required|exists:daily_prestarts,id',
+            'guest_name' => 'required|string|max:255',
+            'guest_company' => 'required|string|max:255',
+            'signature' => 'required|string',
+        ]);
+
+        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $prestart = DailyPrestart::findOrFail($data['prestart_id']);
+
+        $prestart->ensureFreshWeatherQueued();
+
+        $trainings = Training::with('employees:employees.id,employees.name,employees.preferred_name')
+            ->forLocation($prestart->location_id)
+            ->forDate($prestart->work_date)
+            ->get();
+
+        $snapshot = $prestart->getContentSnapshot();
+        $snapshot['trainings'] = $trainings->map(fn ($t) => [
+            'title' => $t->title,
+            'time' => $t->time,
+            'room' => $t->room,
+            'notes' => $t->notes,
+            'employees' => $t->employees->map(fn ($e) => [
+                'id' => $e->id,
+                'name' => $e->display_name,
+            ])->values(),
+        ])->toArray();
+
+        DailyPrestartSignature::create([
+            'daily_prestart_id' => $prestart->id,
+            'employee_id' => null,
+            'guest_name' => trim($data['guest_name']),
+            'guest_company' => trim($data['guest_company']),
+            'signature' => $data['signature'],
+            'content_snapshot' => $snapshot,
+            'signed_at' => now(),
+        ]);
+
+        $guests = app(KioskService::class)->getTodayGuestSigners($kiosk);
+        broadcast(new GuestPrestartSignedEvent($kiosk->id, $guests))->toOthers();
+
+        return redirect()
+            ->route('kiosks.show', $kiosk->id)
+            ->with('success', 'Guest prestart signed. Thanks, ' . trim($data['guest_name']) . '!');
     }
 
     private function fetchWeatherForLocation(int $locationId): ?array

@@ -11,6 +11,7 @@ use App\Models\Kiosk;
 use App\Models\Location;
 use App\Models\SilicaEntry;
 use App\Models\Worktype;
+use App\Services\KioskService;
 use App\Support\FeatureFlags;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -65,6 +66,7 @@ class ClockController extends Controller
         return Inertia::render('kiosks/clocking/in', [
             'kiosk' => $kiosk,
             'employee' => $employee,
+            ...app(KioskService::class)->getKioskLayoutProps($kiosk),
         ]);
     }
 

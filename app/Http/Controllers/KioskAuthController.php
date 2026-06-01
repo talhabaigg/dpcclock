@@ -34,29 +34,26 @@ class KioskAuthController extends Controller
         $adminMode = $this->kioskService->isAdminModeActive();
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
-        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
-        $employees = $this->kioskService->mapEmployeesClockedInState(collect($kiosk->employees), $kiosk);
+        $layoutProps = $this->kioskService->getKioskLayoutProps($kiosk);
 
         if ($adminMode) {
-            // dd('admin mode active');
-            return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
+            return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $layoutProps, $clockedIn);
         }
 
-        // dd('reached');
         return Inertia::render('kiosks/auth/pin', [
             'kioskId' => $kioskId,
             'employeeId' => $employeeId,
             'employee' => $employee,
             'kiosk' => $kiosk,
-            'employees' => $employees,
             'adminMode' => $adminMode,
+            ...$layoutProps,
         ]);
     }
 
-    private function renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn)
+    private function renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, array $layoutProps, $clockedIn)
     {
-
         $adminMode = $this->kioskService->isAdminModeActive();
         $silicaQuestionEnabled = FeatureFlags::active(FeatureFlags::KIOSK_SILICA_QUESTION);
 
@@ -80,12 +77,12 @@ class KioskAuthController extends Controller
                 'employeeId' => $employeeId,
                 'employee' => $employee,
                 'kiosk' => $kiosk,
-                'employees' => $employees,
                 'locations' => $locations,
                 'clockedIn' => $clockedIn,
                 'adminMode' => $adminMode,
                 'silicaOptions' => $silicaOptions,
                 'silicaQuestionEnabled' => $silicaQuestionEnabled,
+                ...$layoutProps,
             ]);
         }
 
@@ -127,9 +124,9 @@ class KioskAuthController extends Controller
                         'kiosk' => $kiosk,
                         'employee' => $employee,
                         'prestart' => $prestart,
-                        'employees' => $employees,
                         'adminMode' => $adminMode,
                         'trainings' => $trainings,
+                        ...$layoutProps,
                     ]);
                 }
             }
@@ -142,9 +139,9 @@ class KioskAuthController extends Controller
             'employeeId' => $employeeId,
             'employee' => $employee,
             'kiosk' => $kiosk,
-            'employees' => $employees,
             'locations' => $locations,
             'adminMode' => $adminMode,
+            ...$layoutProps,
         ]);
     }
 
@@ -152,9 +149,9 @@ class KioskAuthController extends Controller
     {
         // Frontend sends database IDs for this route
         $employee = Employee::findOrFail($employeeId);
-        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->findOrFail($kioskId);
+        $kiosk = Kiosk::with('relatedKiosks', 'managers')->findOrFail($kioskId);
 
-        $employees = $this->kioskService->mapEmployeesClockedInState($kiosk->employees, $kiosk);
+        $layoutProps = $this->kioskService->getKioskLayoutProps($kiosk);
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
 
         if (env('APP_ENV') === 'local') {
@@ -172,15 +169,7 @@ class KioskAuthController extends Controller
             }
         }
 
-        if ($clockedIn) {
-            $locations = Location::where('eh_parent_id', $kiosk->location->eh_location_id)->pluck('external_id')->toArray();
-
-            return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
-        }
-
-        return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $employees, $clockedIn);
-        // If employee is not clocked in, show the clock-in page
-
+        return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $layoutProps, $clockedIn);
     }
 
     private function verifyLocalPin($kioskId, $employeeId, $pin)
@@ -253,13 +242,11 @@ class KioskAuthController extends Controller
 
     public function showResetPinPage($kioskId, $employeeId): Response
     {
-
         $response = $this->resetPinRequest($employeeId, $kioskId);
         $user = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
 
-        $kiosk = Kiosk::with('employees', 'relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+        $kiosk = Kiosk::with('relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
 
-        $employees = $this->getKioskEmployeesWithClockedInState($kiosk->eh_kiosk_id);
         if ($response == 'Pin reset email sent successfully.') {
             session()->flash('success', 'Pin reset email sent successfully.');
         } else {
@@ -271,7 +258,7 @@ class KioskAuthController extends Controller
             'employeeId' => $employeeId,
             'employee' => $user,
             'kiosk' => $kiosk,
-            'employees' => $employees,
+            ...$this->kioskService->getKioskLayoutProps($kiosk),
         ]);
     }
 

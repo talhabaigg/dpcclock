@@ -26,6 +26,9 @@ interface Signature {
     signature: string;
     signed_at: string;
     employee: { id: number; name: string; preferred_name: string | null } | null;
+    guest_name: string | null;
+    guest_company: string | null;
+    is_guest: boolean;
 }
 
 interface UnsignedEmployee {
@@ -1014,7 +1017,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Employee</TableHead>
+                                            <TableHead>Name</TableHead>
                                             <TableHead>Signed At</TableHead>
                                             <TableHead>Signature</TableHead>
                                         </TableRow>
@@ -1022,7 +1025,23 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                     <TableBody>
                                         {prestart.signatures.map((sig) => (
                                             <TableRow key={sig.id}>
-                                                <TableCell>{sig.employee?.preferred_name || sig.employee?.name || '-'}</TableCell>
+                                                <TableCell>
+                                                    {sig.is_guest ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="min-w-0">
+                                                                <div className="truncate font-medium">{sig.guest_name || '—'}</div>
+                                                                {sig.guest_company && (
+                                                                    <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
+                                                                )}
+                                                            </div>
+                                                            <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                                                                Guest
+                                                            </Badge>
+                                                        </div>
+                                                    ) : (
+                                                        sig.employee?.preferred_name || sig.employee?.name || '—'
+                                                    )}
+                                                </TableCell>
                                                 <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
                                                 <TableCell>
                                                     <img
@@ -1042,9 +1061,21 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                 {prestart.signatures.map((sig) => (
                                     <div key={sig.id} className="grid grid-cols-2 items-center gap-2 p-2">
                                         <div className="min-w-0">
-                                            <div className="truncate text-sm font-medium">
-                                                {sig.employee?.preferred_name || sig.employee?.name || '-'}
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="truncate text-sm font-medium">
+                                                    {sig.is_guest
+                                                        ? sig.guest_name || '—'
+                                                        : sig.employee?.preferred_name || sig.employee?.name || '—'}
+                                                </div>
+                                                {sig.is_guest && (
+                                                    <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-xs leading-4 text-sky-700 dark:text-sky-300">
+                                                        Guest
+                                                    </Badge>
+                                                )}
                                             </div>
+                                            {sig.is_guest && sig.guest_company && (
+                                                <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
+                                            )}
                                             <div className="text-muted-foreground text-xs">
                                                 {new Date(sig.signed_at).toLocaleString('en-AU')}
                                             </div>

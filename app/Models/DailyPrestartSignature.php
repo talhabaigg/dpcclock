@@ -10,6 +10,8 @@ class DailyPrestartSignature extends Model
     protected $fillable = [
         'daily_prestart_id',
         'employee_id',
+        'guest_name',
+        'guest_company',
         'signature',
         'content_snapshot',
         'signed_at',
@@ -21,7 +23,7 @@ class DailyPrestartSignature extends Model
         'signed_at' => 'datetime',
     ];
 
-    // --- Relationships ---
+    protected $appends = ['is_guest', 'display_name'];
 
     public function prestart(): BelongsTo
     {
@@ -36,5 +38,19 @@ class DailyPrestartSignature extends Model
     public function clock(): BelongsTo
     {
         return $this->belongsTo(Clock::class);
+    }
+
+    public function getIsGuestAttribute(): bool
+    {
+        return $this->employee_id === null;
+    }
+
+    public function getDisplayNameAttribute(): ?string
+    {
+        if ($this->is_guest) {
+            return $this->guest_name;
+        }
+
+        return $this->employee?->display_name ?? $this->employee?->name;
     }
 }
