@@ -1,11 +1,11 @@
 import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
+import InjuryFiltersSheet from '@/components/injury-register/InjuryFiltersSheet';
+import InjuryImportDialog from '@/components/injury-register/InjuryImportDialog';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -13,11 +13,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { DatePicker } from '@/components/ui/date-picker';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, Download, EllipsisVertical, ListFilter, Loader2, Lock, Menu, Plus, Search, SlidersHorizontal, Trash2, Upload, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Download, EllipsisVertical, ListFilter, Lock, Menu, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
@@ -59,12 +55,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
     const permissions: string[] = auth?.permissions ?? [];
     const can = (p: string) => permissions.includes(p);
 
-    const [locationOpen, setLocationOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
-    const [importing, setImporting] = useState(false);
-    const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
-    const [importFlash, setImportFlash] = useState<{ success?: string; error?: string }>({});
-    const importFileRef = useRef<HTMLInputElement>(null);
     const [searchValue, setSearchValue] = useState(filters.search ?? '');
     const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
@@ -78,67 +69,6 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
         }, 400);
         return () => clearTimeout(searchTimeout.current);
     }, [searchValue]);
-
-    const [classifyInjury, setClassifyInjury] = useState<Injury | null>(null);
-    const [classForm, setClassForm] = useState({ work_cover_claim: false, work_days_missed: 0, report_type: '' });
-    const [classSaving, setClassSaving] = useState(false);
-
-    const openClassifyDialog = (injury: Injury) => {
-        setClassForm({
-            work_cover_claim: injury.work_cover_claim,
-            work_days_missed: injury.work_days_missed,
-            report_type: injury.report_type ?? '',
-        });
-        setClassifyInjury(injury);
-    };
-
-    const submitClassification = () => {
-        if (!classifyInjury) return;
-        setClassSaving(true);
-        router.put(`/injury-register/${classifyInjury.id}/classification`, classForm, {
-            preserveScroll: true,
-            preserveState: true,
-            onFinish: () => {
-                setClassSaving(false);
-                setClassifyInjury(null);
-            },
-        });
-    };
-
-    const handleImport = async () => {
-        const file = importFileRef.current?.files?.[0];
-        if (!file) {
-            setImportFlash({ error: 'Please select a file first' });
-            return;
-        }
-        setImporting(true);
-        setImportResult(null);
-        setImportFlash({});
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-            const res = await fetch('/injury-register/import', {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
-                body: formData,
-            });
-            const data = await res.json();
-            if (data.success) {
-                setImportFlash({ success: `Imported ${data.imported} records` + (data.skipped > 0 ? `, ${data.skipped} skipped` : '') });
-                setImportResult({ imported: data.imported, skipped: data.skipped, errors: data.errors || [] });
-                if (data.imported > 0) {
-                    router.reload({ only: ['injuries'] });
-                }
-            } else {
-                setImportFlash({ error: 'Import failed' });
-            }
-        } catch {
-            setImportFlash({ error: 'Import failed — network error' });
-        } finally {
-            setImporting(false);
-            if (importFileRef.current) importFileRef.current.value = '';
-        }
-    };
 
     const setFilter = (key: string, value: string | undefined) => {
         router.get(
@@ -159,6 +89,14 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
     const resetFilters = () => {
         setSearchValue('');
         router.get('/injury-register', {}, { preserveState: true });
+    };
+
+    const clearDateRange = () => {
+        router.get(
+            '/injury-register',
+            { ...filters, date_from: undefined, date_to: undefined, page: undefined },
+            { preserveState: true, preserveScroll: true },
+        );
     };
 
     const totalActiveFilters = [filters.location_id, filters.incident, filters.report_type, filters.work_cover_claim, filters.status, filters.date_from, filters.date_to].filter(Boolean).length;
@@ -191,203 +129,16 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                         )}
                     </div>
 
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline" size="sm" className="gap-2">
-                                <SlidersHorizontal className="h-4 w-4" />
-                                Filters
-                                {totalActiveFilters > 0 && (
-                                    <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-[10px]">
-                                        {totalActiveFilters}
-                                    </Badge>
-                                )}
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent className="w-full overflow-y-auto sm:max-w-sm">
-                            <SheetHeader>
-                                <div className="flex items-center justify-between">
-                                    <SheetTitle>Filters</SheetTitle>
-                                    {totalActiveFilters > 0 && (
-                                        <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground h-auto px-2 py-1 text-xs">
-                                            Clear all
-                                        </Button>
-                                    )}
-                                </div>
-                            </SheetHeader>
-
-                            <div className="flex flex-col gap-5 px-4 pb-6">
-                                {/* Location */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">Location</Label>
-                                        {filters.location_id && (
-                                            <button onClick={() => setFilter('location_id', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
-                                        )}
-                                    </div>
-                                    <Popover open={locationOpen} onOpenChange={setLocationOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" role="combobox" aria-expanded={locationOpen} className="w-full justify-between font-normal">
-                                                <span className="truncate">
-                                                    {filters.location_id
-                                                        ? locations.find((l) => String(l.id) === filters.location_id)?.name ?? 'All'
-                                                        : 'All'}
-                                                </span>
-                                                <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-56 p-0" align="start">
-                                            <Command>
-                                                <CommandInput placeholder="Search locations..." />
-                                                <CommandList>
-                                                    <CommandEmpty>No location found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                        <CommandItem onSelect={() => { setFilter('location_id', 'all'); setLocationOpen(false); }}>
-                                                            <Check className={`mr-2 h-3.5 w-3.5 ${!filters.location_id ? 'opacity-100' : 'opacity-0'}`} />
-                                                            All
-                                                        </CommandItem>
-                                                        {locations.map((loc) => (
-                                                            <CommandItem key={loc.id} onSelect={() => { setFilter('location_id', String(loc.id)); setLocationOpen(false); }}>
-                                                                <Check className={`mr-2 h-3.5 w-3.5 ${filters.location_id === String(loc.id) ? 'opacity-100' : 'opacity-0'}`} />
-                                                                {loc.name}
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-
-                                {/* Incident */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">Incident</Label>
-                                        {filters.incident && (
-                                            <button onClick={() => setFilter('incident', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
-                                        )}
-                                    </div>
-                                    <Select value={filters.incident ?? 'all'} onValueChange={(v) => setFilter('incident', v)}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="All" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            {Object.entries(incidentOptions).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>{label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Report Type */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">Report Type</Label>
-                                        {filters.report_type && (
-                                            <button onClick={() => setFilter('report_type', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
-                                        )}
-                                    </div>
-                                    <Select value={filters.report_type ?? 'all'} onValueChange={(v) => setFilter('report_type', v)}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="All" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            {Object.entries(reportTypeOptions).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>{label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* WorkCover */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">WorkCover</Label>
-                                        {filters.work_cover_claim && (
-                                            <button onClick={() => setFilter('work_cover_claim', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
-                                        )}
-                                    </div>
-                                    <Select
-                                        value={filters.work_cover_claim === '1' ? 'yes' : filters.work_cover_claim === '0' ? 'no' : 'all'}
-                                        onValueChange={(v) => setFilter('work_cover_claim', v === 'yes' ? '1' : v === 'no' ? '0' : 'all')}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="All" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="yes">Yes</SelectItem>
-                                            <SelectItem value="no">No</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Status */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">Status</Label>
-                                        {filters.status && (
-                                            <button onClick={() => setFilter('status', 'all')} className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">Clear</button>
-                                        )}
-                                    </div>
-                                    <Select value={filters.status ?? 'all'} onValueChange={(v) => setFilter('status', v)}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="All" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All</SelectItem>
-                                            <SelectItem value="active">Active</SelectItem>
-                                            <SelectItem value="locked">Locked</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Occurred Date Range */}
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-medium">Occurred Date</Label>
-                                        {(filters.date_from || filters.date_to) && (
-                                            <button
-                                                onClick={() => {
-                                                    router.get(
-                                                        '/injury-register',
-                                                        { ...filters, date_from: undefined, date_to: undefined, page: undefined },
-                                                        { preserveState: true, preserveScroll: true },
-                                                    );
-                                                }}
-                                                className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-                                            >
-                                                Clear
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <Label className="text-muted-foreground text-xs">From</Label>
-                                            <DatePicker
-                                                value={filters.date_from ?? ''}
-                                                onChange={(v) => setFilter('date_from', v || undefined)}
-                                                max={filters.date_to || undefined}
-                                                clearable
-                                                placeholder="From"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-muted-foreground text-xs">To</Label>
-                                            <DatePicker
-                                                value={filters.date_to ?? ''}
-                                                onChange={(v) => setFilter('date_to', v || undefined)}
-                                                min={filters.date_from || undefined}
-                                                clearable
-                                                placeholder="To"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                    <InjuryFiltersSheet
+                        filters={filters}
+                        locations={locations}
+                        incidentOptions={incidentOptions}
+                        reportTypeOptions={reportTypeOptions}
+                        activeCount={totalActiveFilters}
+                        onFilterChange={setFilter}
+                        onReset={resetFilters}
+                        onClearDateRange={clearDateRange}
+                    />
 
                     {/* Active filter badges */}
                     {totalActiveFilters > 0 && (
@@ -468,7 +219,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                     </a>
                                 </DropdownMenuItem>
                                 {can('injury-register.create') && (
-                                    <DropdownMenuItem onClick={() => { setImportOpen(true); setImportResult(null); }}>
+                                    <DropdownMenuItem onClick={() => setImportOpen(true)}>
                                         <Upload className="mr-2 h-4 w-4" />
                                         Import Legacy
                                     </DropdownMenuItem>
@@ -566,11 +317,6 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                                 {can('injury-register.edit') && !injury.locked_at && (
                                                     <DropdownMenuItem asChild>
                                                         <Link href={`/injury-register/${injury.id}/edit`}>Edit</Link>
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can('injury-register.edit') && (
-                                                    <DropdownMenuItem onClick={() => openClassifyDialog(injury)}>
-                                                        Work cover / days lost / report type
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can('injury-register.lock') && (
@@ -725,109 +471,9 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                 })()}
             </div>
 
-            {/* Import Legacy Dialog */}
-            <Dialog open={importOpen} onOpenChange={setImportOpen}>
-                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle>Import Legacy Injury Records</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        {importFlash.success && <SuccessAlertFlash message={importFlash.success} />}
-                        {importFlash.error && <ErrorAlertFlash error={{ message: importFlash.error }} />}
-                        <p className="text-muted-foreground text-sm">
-                            Upload an exported Injury Register Excel file (.xlsx). Existing records (matched by ID) will be skipped.
-                        </p>
-                        <div className="space-y-2">
-                            <Label>Excel File (.xlsx)</Label>
-                            <Input ref={importFileRef} type="file" accept=".xlsx,.xls" />
-                        </div>
-                        {importResult && (
-                            <div className="space-y-2 rounded-md border p-3">
-                                <div className="flex gap-6 text-sm">
-                                    <span>Imported: <strong className="text-green-600">{importResult.imported}</strong></span>
-                                    <span>Skipped: <strong className="text-yellow-600">{importResult.skipped}</strong></span>
-                                </div>
-                                {importResult.errors.length > 0 && (
-                                    <div>
-                                        <p className="text-destructive mb-1 text-sm font-medium">Errors:</p>
-                                        <ul className="max-h-40 overflow-y-auto text-sm text-muted-foreground">
-                                            {importResult.errors.map((err, i) => (
-                                                <li key={i}>{err}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
-                        <Button onClick={handleImport} disabled={importing}>
-                            {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                            {importing ? 'Importing...' : 'Import'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <InjuryImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
-            {/* Classification Dialog */}
-            <Dialog open={!!classifyInjury} onOpenChange={(open) => !open && setClassifyInjury(null)}>
-                <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    <DialogHeader>
-                        <DialogTitle>Classification — {classifyInjury?.id_formal}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label>Was a WorkCover claim submitted?</Label>
-                            <Select
-                                value={classForm.work_cover_claim ? 'yes' : 'no'}
-                                onValueChange={(v) => setClassForm({ ...classForm, work_cover_claim: v === 'yes' })}
-                            >
-                                <SelectTrigger className="w-32">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="yes">Yes</SelectItem>
-                                    <SelectItem value="no">No</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Number of Days Lost</Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                value={classForm.work_days_missed}
-                                onChange={(e) => setClassForm({ ...classForm, work_days_missed: parseInt(e.target.value) || 0 })}
-                                className="w-32"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Report Type</Label>
-                            <Select value={classForm.report_type} onValueChange={(v) => setClassForm({ ...classForm, report_type: v })}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select report type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(reportTypeOptions).map(([key, label]) => (
-                                        <SelectItem key={key} value={key}>
-                                            {label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setClassifyInjury(null)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={submitClassification} disabled={classSaving}>
-                            {classSaving ? 'Saving...' : 'Save'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            
         </AppLayout>
     );
 }
