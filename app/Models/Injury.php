@@ -16,23 +16,63 @@ class Injury extends Model implements HasMedia
     use HasComments, HasFormRequests, InteractsWithMedia, LogsActivity;
 
     protected $fillable = [
-        'id_formal', 'external_id', 'location_id', 'employee_id', 'employee_name', 'employee_address',
-        'incident', 'incident_other', 'occurred_at', 'reported_by',
-        'reported_at', 'reported_to', 'location_of_incident', 'description',
-        'emergency_services', 'emergency_services_details', 'work_cover_claim',
-        'claim_active', 'claim_type', 'claim_status', 'capacity', 'employment_status', 'claim_cost',
-        'treatment', 'treatment_type', 'treatment_at', 'treatment_details', 'no_treatment_reason',
-        'follow_up', 'follow_up_notes',
-        'work_days_missed', 'days_suitable_duties', 'suitable_duties_from', 'suitable_duties_to', 'medical_expenses',
-        'report_type', 'witnesses', 'witness_details',
-        'natures', 'natures_comments',
-        'mechanisms', 'mechanisms_comments',
-        'agencies', 'agencies_comments',
-        'contributions', 'contributions_comments',
-        'corrective_actions', 'corrective_actions_comments',
-        'worker_signature', 'worker_signed_at',
-        'representative_signature', 'representative_signed_at', 'representative_id',
-        'body_location_image', 'locked_at', 'created_by', 'updated_by',
+        'id_formal',
+        'external_id',
+        'location_id',
+        'employee_id',
+        'employee_name',
+        'employee_address',
+        'incident',
+        'incident_other',
+        'occurred_at',
+        'reported_by',
+        'reported_at',
+        'reported_to',
+        'location_of_incident',
+        'description',
+        'emergency_services',
+        'emergency_services_details',
+        'work_cover_claim',
+        'claim_active',
+        'claim_type',
+        'claim_status',
+        'capacity',
+        'employment_status',
+        'claim_cost',
+        'treatment',
+        'treatment_type',
+        'treatment_at',
+        'treatment_details',
+        'no_treatment_reason',
+        'follow_up',
+        'follow_up_notes',
+        'work_days_missed',
+        'days_suitable_duties',
+        'suitable_duties_from',
+        'suitable_duties_to',
+        'medical_expenses',
+        'report_type',
+        'witnesses',
+        'witness_details',
+        'natures',
+        'natures_comments',
+        'mechanisms',
+        'mechanisms_comments',
+        'agencies',
+        'agencies_comments',
+        'contributions',
+        'contributions_comments',
+        'corrective_actions',
+        'corrective_actions_comments',
+        'worker_signature',
+        'worker_signed_at',
+        'representative_signature',
+        'representative_signed_at',
+        'representative_id',
+        'body_location_image',
+        'locked_at',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -95,49 +135,91 @@ class Injury extends Model implements HasMedia
     ];
 
     public const NATURE_OPTIONS = [
-        'abrasion' => 'Abrasion', 'cut' => 'Cut or open wound', 'laceration' => 'Laceration',
-        'puncture_wound' => 'Puncture wound', 'sprain' => 'Sprain / strain', 'dislocation' => 'Dislocation',
-        'fracture' => 'Fracture / break', 'bruising' => 'Bruising / swelling', 'heart' => 'Heart / circulatory',
-        'loss_of_consciousness' => 'Loss of consciousness / fainting', 'inhalation' => 'Inhalation',
-        'internal_injury' => 'Internal injury', 'infectious_disease' => 'Infectious disease',
-        'psychological_disorder' => 'Psychological disorder', 'foreign_body' => 'Foreign body',
-        'needle_stick' => 'Needle stick', 'amputation' => 'Amputation', 'electric_shock' => 'Electric shock',
-        'traumatic_shock' => 'Traumatic shock', 'respiratory' => 'Respiratory', 'poisoning' => 'Poisoning',
-        'exposure' => 'Exposure', 'allergy' => 'Allergy', 'nervous_system' => 'Nervous system injury',
-        'skin_disorder' => 'Skin disorder', 'insect_bite' => 'Insect sting / bite',
-        'burn' => 'Burn / scald', 'hearing_loss' => 'Hearing loss', 'other' => 'Other',
+        'abrasion' => 'Abrasion',
+        'cut' => 'Cut or open wound',
+        'laceration' => 'Laceration',
+        'puncture_wound' => 'Puncture wound',
+        'sprain' => 'Sprain / strain',
+        'dislocation' => 'Dislocation',
+        'fracture' => 'Fracture / break',
+        'bruising' => 'Bruising / swelling',
+        'heart' => 'Heart / circulatory',
+        'loss_of_consciousness' => 'Loss of consciousness / fainting',
+        'inhalation' => 'Inhalation',
+        'internal_injury' => 'Internal injury',
+        'infectious_disease' => 'Infectious disease',
+        'psychological_disorder' => 'Psychological disorder',
+        'foreign_body' => 'Foreign body',
+        'needle_stick' => 'Needle stick',
+        'amputation' => 'Amputation',
+        'electric_shock' => 'Electric shock',
+        'traumatic_shock' => 'Traumatic shock',
+        'respiratory' => 'Respiratory',
+        'poisoning' => 'Poisoning',
+        'exposure' => 'Exposure',
+        'allergy' => 'Allergy',
+        'nervous_system' => 'Nervous system injury',
+        'skin_disorder' => 'Skin disorder',
+        'insect_bite' => 'Insect sting / bite',
+        'burn' => 'Burn / scald',
+        'hearing_loss' => 'Hearing loss',
+        'other' => 'Other',
     ];
 
     public const MECHANISM_OPTIONS = [
-        'slip' => 'Slip / trip / fall', 'plant_damage' => 'Property / plant damage',
-        'flying_material' => 'Flying material', 'mental_stress' => 'Mental stress',
-        'fall_from_height' => 'Fall from height', 'lifting' => 'Lifting / bending / twisting',
-        'foreign_object' => 'Foreign object', 'harassment' => 'Harassment',
-        'caught_by' => 'Caught by / against', 'sharp_object' => 'Contact with sharp object',
-        'body_stressing' => 'Body stressing', 'biological_agent' => 'Biological agent',
-        'struck_by' => 'Struck by / against', 'chemicals' => 'Chemical or substances',
-        'pushing_pulling' => 'Pushing / pulling', 'environmental' => 'Environmental',
-        'noise_vibration' => 'Noise / vibration', 'occupational_overuse' => 'Occupational overuse',
-        'electricity' => 'Electricity', 'heat_cold_fire' => 'Heat / cold / fire', 'other' => 'Other',
+        'slip' => 'Slip / trip / fall',
+        'plant_damage' => 'Property / plant damage',
+        'flying_material' => 'Flying material',
+        'mental_stress' => 'Mental stress',
+        'fall_from_height' => 'Fall from height',
+        'lifting' => 'Lifting / bending / twisting',
+        'foreign_object' => 'Foreign object',
+        'harassment' => 'Harassment',
+        'caught_by' => 'Caught by / against',
+        'sharp_object' => 'Contact with sharp object',
+        'body_stressing' => 'Body stressing',
+        'biological_agent' => 'Biological agent',
+        'struck_by' => 'Struck by / against',
+        'chemicals' => 'Chemical or substances',
+        'pushing_pulling' => 'Pushing / pulling',
+        'environmental' => 'Environmental',
+        'noise_vibration' => 'Noise / vibration',
+        'occupational_overuse' => 'Occupational overuse',
+        'electricity' => 'Electricity',
+        'heat_cold_fire' => 'Heat / cold / fire',
+        'other' => 'Other',
     ];
 
     public const AGENCY_OPTIONS = [
-        'tools_powered' => 'Tools (powered)', 'materials' => 'Materials (list)',
-        'animal' => 'Animal / insect', 'vehicle' => 'Vehicle / transport',
-        'tools_non_powered' => 'Tools (non-powered)', 'buildings' => 'Buildings / structures',
-        'biological_agent' => 'Biological agent', 'another_person' => 'Another person',
-        'mobile_plant' => 'Mobile plant', 'equipment' => 'Equipment (other than tools)',
-        'environment' => 'Environment', 'chemicals' => 'Chemicals / substance', 'other' => 'Other',
+        'tools_powered' => 'Tools (powered)',
+        'materials' => 'Materials (list)',
+        'animal' => 'Animal / insect',
+        'vehicle' => 'Vehicle / transport',
+        'tools_non_powered' => 'Tools (non-powered)',
+        'buildings' => 'Buildings / structures',
+        'biological_agent' => 'Biological agent',
+        'another_person' => 'Another person',
+        'mobile_plant' => 'Mobile plant',
+        'equipment' => 'Equipment (other than tools)',
+        'environment' => 'Environment',
+        'chemicals' => 'Chemicals / substance',
+        'other' => 'Other',
     ];
 
     public const CONTRIBUTION_OPTIONS = [
-        'drugs_or_alcohol' => 'Drugs or alcohol', 'equipment_defects' => 'Equipment defects',
-        'improper_use_of_equipment' => 'Improper use of equipment', 'inappropriate_ppe' => 'Inappropriate PPE',
-        'incorrect_manual_handling' => 'Incorrect manual handling', 'lack_of_ppe' => 'Lack of PPE',
+        'drugs_or_alcohol' => 'Drugs or alcohol',
+        'equipment_defects' => 'Equipment defects',
+        'improper_use_of_equipment' => 'Improper use of equipment',
+        'inappropriate_ppe' => 'Inappropriate PPE',
+        'incorrect_manual_handling' => 'Incorrect manual handling',
+        'lack_of_ppe' => 'Lack of PPE',
         'lack_of_protective_devices' => 'Lack of protective devices (guarding, handles etc.)',
-        'lack_of_supervision' => 'Lack of supervision', 'lack_of_training' => 'Lack of training',
-        'poor_housekeeping' => 'Poor housekeeping', 'safety_procedures_not_followed' => 'Safety procedures not followed',
-        'unauthorised_equipment_use' => 'Unauthorised equipment use', 'other' => 'Other',
+        'lack_of_supervision' => 'Lack of supervision',
+        'lack_of_training' => 'Lack of training',
+        'poor_housekeeping' => 'Poor housekeeping',
+        'safety_procedures_not_followed' => 'Safety procedures not followed',
+        'unauthorised_equipment_use' => 'Unauthorised equipment use',
+        'other' => 'Other',
     ];
 
     public const CLAIM_TYPE_OPTIONS = [
@@ -207,13 +289,25 @@ class Injury extends Model implements HasMedia
     ];
 
     protected static array $ignoredFields = [
-        'id_formal', 'created_by', 'updated_by', 'updated_at',
-        'worker_signature', 'worker_signed_at',
-        'representative_signature', 'representative_signed_at',
+        'id_formal',
+        'created_by',
+        'updated_by',
+        'updated_at',
+        'worker_signature',
+        'worker_signed_at',
+        'representative_signature',
+        'representative_signed_at',
         'body_location_image',
-        'natures', 'natures_comments', 'mechanisms', 'mechanisms_comments',
-        'agencies', 'agencies_comments', 'contributions', 'contributions_comments',
-        'corrective_actions', 'corrective_actions_comments',
+        'natures',
+        'natures_comments',
+        'mechanisms',
+        'mechanisms_comments',
+        'agencies',
+        'agencies_comments',
+        'contributions',
+        'contributions_comments',
+        'corrective_actions',
+        'corrective_actions_comments',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -274,7 +368,7 @@ class Injury extends Model implements HasMedia
 
             $body = count($lines) === 1
                 ? 'Updated ' . $lines[0]
-                : "Updated record:\n" . implode("\n", array_map(fn ($l) => "- {$l}", $lines));
+                : "Updated record:\n" . implode("\n", array_map(fn($l) => "- {$l}", $lines));
 
             $injury->addSystemComment(
                 $body,
@@ -291,8 +385,10 @@ class Injury extends Model implements HasMedia
         }
 
         if (is_bool($value) || $value === '0' || $value === '1') {
-            if ($field === 'work_cover_claim' || $field === 'emergency_services'
-                || $field === 'treatment' || $field === 'follow_up' || $field === 'witnesses') {
+            if (
+                $field === 'work_cover_claim' || $field === 'emergency_services'
+                || $field === 'treatment' || $field === 'follow_up' || $field === 'witnesses'
+            ) {
                 return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'Yes' : 'No';
             }
         }
@@ -330,7 +426,7 @@ class Injury extends Model implements HasMedia
 
     public function getComputedSuitableDutiesDaysAttribute(): int
     {
-        if (! $this->suitable_duties_from) {
+        if (!$this->suitable_duties_from) {
             return $this->days_suitable_duties ?? 0;
         }
 

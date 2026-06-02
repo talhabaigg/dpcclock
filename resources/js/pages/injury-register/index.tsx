@@ -546,7 +546,7 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                             '—'
                                         )}
                                     </TableCell>
-                                    <TableCell><Badge variant="secondary" className="text-xs">{injury.incident_label}</Badge></TableCell>
+                                    <TableCell><Badge variant="secondary" className="inline-block text-xs max-w-[100px] truncate">{injury.incident_label}</Badge></TableCell>
                                     <TableCell className="text-sm">{injury.work_cover_claim ? 'Yes' : 'No'}</TableCell>
                                     <TableCell className="text-sm">{injury.work_days_missed}</TableCell>
                                     <TableCell>

@@ -8,6 +8,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 trait SyncsPremierODataByDateWindow
@@ -132,9 +133,16 @@ trait SyncsPremierODataByDateWindow
 
     private function swapIncremental(string $liveTable, string $stagingTable, string $dbDateColumn, string $cutoffDate, string $logPrefix): void
     {
-        DB::transaction(function () use ($liveTable, $stagingTable, $dbDateColumn, $cutoffDate) {
+        // Copy explicit columns excluding `id`: staging's auto-increment restarts at 1,
+        // so `SELECT *` would carry ids that collide with retained rows < cutoff in live.
+        $columnList = collect(Schema::getColumnListing($stagingTable))
+            ->reject(fn (string $col) => $col === 'id')
+            ->map(fn (string $col) => "`{$col}`")
+            ->implode(', ');
+
+        DB::transaction(function () use ($liveTable, $stagingTable, $dbDateColumn, $cutoffDate, $columnList) {
             DB::table($liveTable)->where($dbDateColumn, '>=', $cutoffDate)->delete();
-            DB::statement("INSERT INTO `{$liveTable}` SELECT * FROM `{$stagingTable}`");
+            DB::statement("INSERT INTO `{$liveTable}` ({$columnList}) SELECT {$columnList} FROM `{$stagingTable}`");
         });
         DB::statement("DROP TABLE `{$stagingTable}`");
         Log::info("{$logPrefix}: Incremental delete+copy swap completed", ['from' => $cutoffDate]);
