@@ -2,6 +2,7 @@ import { ErrorAlertFlash, SuccessAlertFlash } from '@/components/alert-flash';
 import InjuryFiltersSheet from '@/components/injury-register/InjuryFiltersSheet';
 import InjuryImportDialog from '@/components/injury-register/InjuryImportDialog';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
+import InjuryWorkerCell from '@/components/injury-register/InjuryWorkerCell';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryEmployee, InjuryFilters, InjuryLocation } from '@/types/injury';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ChevronsLeft, ChevronsRight, Download, EllipsisVertical, ListFilter, Lock, Menu, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, EllipsisVertical, ListFilter, Lock, Menu, Plus, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Injury Register', href: '/injury-register' }];
@@ -211,16 +212,14 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                     <Menu className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className='w-full'>
                                 <DropdownMenuItem asChild>
                                     <a href={`/injury-register/export?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString()}`}>
-                                        <Download className="mr-2 h-4 w-4" />
                                         Export
                                     </a>
                                 </DropdownMenuItem>
                                 {can('injury-register.create') && (
                                     <DropdownMenuItem onClick={() => setImportOpen(true)}>
-                                        <Upload className="mr-2 h-4 w-4" />
                                         Import Legacy
                                     </DropdownMenuItem>
                                 )}
@@ -235,7 +234,6 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                                 }
                                             }}
                                         >
-                                            <Trash2 className="mr-2 h-4 w-4" />
                                             Drop All
                                         </DropdownMenuItem>
                                     </>
@@ -279,14 +277,11 @@ export default function InjuryRegisterIndex({ injuries, filters, locations, inci
                                             </Badge>
                                         </Link>
                                     </TableCell>
-                                    <TableCell className="text-sm">
+                                    <TableCell className="text-xs">
                                         {injury.occurred_at ? new Date(injury.occurred_at).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                     </TableCell>
                                     <TableCell>
-                                        <div className="text-sm font-medium">{injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name ?? '—'}</div>
-                                        {injury.employee?.employment_type && (
-                                            <div className="text-muted-foreground text-xs">{injury.employee.employment_type}</div>
-                                        )}
+                                        <InjuryWorkerCell employee={injury.employee} fallbackName={injury.employee_name} />
                                     </TableCell>
                                     <TableCell>
                                         {injury.location ? (
