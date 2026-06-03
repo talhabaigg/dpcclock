@@ -7,12 +7,10 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
@@ -25,13 +23,10 @@ import {
     ArrowRight,
     Calendar,
     Check,
-    CheckCircle2,
     CheckSquare,
     ChevronDown,
-    ChevronLeft,
     ChevronRight,
     Clipboard,
-    ClipboardList,
     Download,
     ExternalLink,
     FileIcon,
@@ -56,7 +51,7 @@ import {
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import {
     FormFillPane,
     FormResponsePane,
@@ -73,36 +68,6 @@ interface Skill {
     is_custom: boolean;
 }
 
-interface ReferenceCheckData {
-    id: number;
-    referee_current_job_title: string | null;
-    referee_current_employer: string | null;
-    telephone: string | null;
-    email: string | null;
-    prepared_to_provide_reference: boolean | null;
-    employment_from: string | null;
-    employment_to: string | null;
-    dates_align: boolean | null;
-    relationship: string | null;
-    relationship_duration: string | null;
-    company_at_time: string | null;
-    applicant_job_title: string | null;
-    applicant_job_title_other: string | null;
-    duties: string[] | null;
-    performance_rating: string | null;
-    honest_work_ethic: string | null;
-    punctual: string | null;
-    sick_days: string | null;
-    reason_for_leaving: string | null;
-    greatest_strengths: string | null;
-    would_rehire: string | null;
-    completed_by_name: string | null;
-    completed_by_position: string | null;
-    completed_date: string | null;
-    completed_at: string | null;
-    completed_by_user: { id: number; name: string } | null;
-}
-
 interface Reference {
     id: number;
     sort_order: number;
@@ -111,7 +76,6 @@ interface Reference {
     employment_period: string;
     contact_person: string;
     phone_number: string;
-    reference_check: ReferenceCheckData | null;
 }
 
 interface UserModel {
@@ -289,6 +253,14 @@ interface InjuryHistory {
     injuries: InjuryHistoryItem[];
 }
 
+interface AvailableOnDemandForm {
+    id: number;
+    form_template_id: number;
+    form_template_name: string | null;
+    subject_source: string | null;
+    min_submissions: number;
+}
+
 interface PageProps {
     application: Application;
     comments: CommentData[];
@@ -300,6 +272,7 @@ interface PageProps {
     documentTemplates: DocumentTemplateOption[];
     formTemplates: FormTemplateOption[];
     formRequests: FormRequestData[];
+    availableOnDemandForms?: AvailableOnDemandForm[];
     onboardingLocations: Record<string, OnboardingLocation[]>;
     statuses: Record<string, string>;
     screeningAlert?: boolean;
@@ -364,12 +337,11 @@ function UserAvatar({ name, className }: { name: string; className?: string }) {
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onOpenFormResponse, onReply, isReply, statusLabels }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormResponse, onReply, isReply, statusLabels }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
-    onOpenRefCheck?: (referenceId: number) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
     onReply?: (commentId: number, userName: string) => void;
     isReply?: boolean;
@@ -378,7 +350,6 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     const [showReplies, setShowReplies] = useState(false);
     const isSystem = comment.metadata !== null;
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
-    const refCheckMeta = comment.metadata?.reference_check as { id: number; reference_id: number; referee_name: string } | undefined;
     const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
     const formSubmittedMeta = comment.metadata?.type === 'form_submitted' ? comment.metadata as { type: string; form_request_id: number; form_name: string } : undefined;
     const onboardedMeta = comment.metadata?.type === 'onboarded' ? comment.metadata as { type: string; eh_employee_id: number; location_name: string; company_code: string } : undefined;
@@ -445,32 +416,6 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                     >
                         <Clipboard className="h-3.5 w-3.5" />
                         View response
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    if (isSystem && refCheckMeta) {
-        return (
-            <div className="flex gap-3">
-                <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-                    <ClipboardList className="text-muted-foreground h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1 pt-1">
-                    <p className="text-sm">
-                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
-                        <span className="text-muted-foreground"> completed reference check for </span>
-                        <span className="font-medium">{refCheckMeta.referee_name}</span>
-                    </p>
-                    <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
-                    <button
-                        type="button"
-                        onClick={() => onOpenRefCheck?.(refCheckMeta.reference_id)}
-                        className="bg-background text-foreground hover:bg-muted mt-1.5 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
-                    >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        View Reference Check
                     </button>
                 </div>
             </div>
@@ -1152,597 +1097,6 @@ function formatActivityValue(key: string, value: unknown): string {
     return String(value);
 }
 
-// ─── Reference Check Dialog ───────────────────────────────────────────────────
-
-const REF_CHECK_DUTIES = [
-    'Erecting Framework', 'Concealed Grid', 'Setting', 'Set Out',
-    'Fix Plasterboard', 'Exposed Grid', 'Cornice', 'Other',
-];
-
-const PERF_OPTIONS = [
-    { value: 'excellent', label: 'Excellent' },
-    { value: 'very_good', label: 'Very Good' },
-    { value: 'good', label: 'Good' },
-    { value: 'average', label: 'Average' },
-    { value: 'poor', label: 'Poor' },
-];
-
-const YES_NO_SOMETIMES = [
-    { value: 'yes', label: 'Yes' },
-    { value: 'no', label: 'No' },
-    { value: 'sometimes', label: 'Sometimes' },
-];
-
-function blankForm(ref: Reference | null) {
-    return {
-        referee_current_job_title: '',
-        referee_current_employer: '',
-        telephone: ref?.phone_number ?? '',
-        email: '',
-        prepared_to_provide_reference: '' as string,
-        employment_from: '',
-        employment_to: '',
-        dates_align: '' as string,
-        relationship: '',
-        relationship_duration: '',
-        company_at_time: ref?.company_name ?? '',
-        applicant_job_title: '',
-        applicant_job_title_other: '',
-        duties: [] as string[],
-        performance_rating: '',
-        honest_work_ethic: '',
-        punctual: '',
-        sick_days: '',
-        reason_for_leaving: '',
-        greatest_strengths: '',
-        would_rehire: '',
-    };
-}
-
-function RCField({ label, value }: { label: string; value: string | boolean | null | undefined }) {
-    const display = value === null || value === undefined || value === '' ? '—' : String(value);
-    return (
-        <div className="grid gap-1">
-            <span className="text-muted-foreground text-xs font-medium">{label}</span>
-            <span className="text-sm">{display}</span>
-        </div>
-    );
-}
-
-function RCStepIndicator({ step, total }: { step: number; total: number }) {
-    return (
-        <div className="flex items-center gap-1.5">
-            {Array.from({ length: total }, (_, i) => (
-                <div
-                    key={i}
-                    className={cn(
-                        'h-1.5 flex-1 rounded-full transition-colors',
-                        i < step ? 'bg-primary' : 'bg-muted',
-                    )}
-                />
-            ))}
-        </div>
-    );
-}
-
-function ReferenceCheckDialog({
-    open,
-    onClose,
-    application,
-    initialReferenceId,
-    authUserName,
-}: {
-    open: boolean;
-    onClose: () => void;
-    application: Application;
-    initialReferenceId?: number | null;
-    authUserName: string;
-}) {
-    const [selectedRefId, setSelectedRefId] = useState<number | null>(initialReferenceId ?? null);
-    const [step, setStep] = useState(1);
-    const [form, setForm] = useState(() => blankForm(null));
-    const [submitting, setSubmitting] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
-    const selectedRef = application.references.find((r) => r.id === selectedRefId) ?? null;
-
-    // When dialog opens or initialReferenceId changes, sync selection
-    useEffect(() => {
-        if (open) {
-            const refId = initialReferenceId ?? null;
-            setSelectedRefId(refId);
-            const ref = application.references.find((r) => r.id === refId) ?? null;
-            if (ref && !ref.reference_check) {
-                setForm(blankForm(ref));
-                setStep(1);
-            }
-        }
-    }, [open, initialReferenceId]);
-
-    // When user picks a different ref, reset form if it has no check yet
-    function selectRef(refId: number) {
-        setSelectedRefId(refId);
-        const ref = application.references.find((r) => r.id === refId) ?? null;
-        if (ref && !ref.reference_check) {
-            setForm(blankForm(ref));
-            setStep(1);
-        }
-    }
-
-    function set(key: string, value: unknown) {
-        setForm((prev) => ({ ...prev, [key]: value }));
-    }
-
-    function toggleDuty(duty: string) {
-        setForm((prev) => ({
-            ...prev,
-            duties: prev.duties.includes(duty)
-                ? prev.duties.filter((d) => d !== duty)
-                : [...prev.duties, duty],
-        }));
-    }
-
-    function validate(): Record<string, string> {
-        const errs: Record<string, string> = {};
-        if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-            errs.email = 'Please enter a valid email address.';
-        }
-        if (!form.would_rehire) {
-            errs.would_rehire = 'Please indicate whether you would re-hire the candidate.';
-        }
-        return errs;
-    }
-
-    function handleSubmit() {
-        if (!selectedRef) return;
-        const errs = validate();
-        if (Object.keys(errs).length > 0) {
-            setErrors(errs);
-            // Jump to the step containing the first error
-            if (errs.email) setStep(1);
-            else if (errs.would_rehire) setStep(4);
-            return;
-        }
-        setErrors({});
-        setSubmitting(true);
-        const payload = {
-            ...form,
-            prepared_to_provide_reference:
-                form.prepared_to_provide_reference === 'true' ? true
-                : form.prepared_to_provide_reference === 'false' ? false
-                : null,
-            dates_align:
-                form.dates_align === 'true' ? true
-                : form.dates_align === 'false' ? false
-                : null,
-        };
-        router.post(`/employment-applications/references/${selectedRef.id}/check`, payload, {
-            preserveScroll: true,
-            onSuccess: () => { onClose(); },
-            onError: (serverErrors) => {
-                const mapped: Record<string, string> = {};
-                Object.entries(serverErrors).forEach(([k, v]) => { mapped[k] = v; });
-                setErrors(mapped);
-                if (mapped.email) setStep(1);
-            },
-            onFinish: () => setSubmitting(false),
-        });
-    }
-
-    const occupationDisplay =
-        application.occupation === 'other' && application.occupation_other
-            ? application.occupation_other
-            : application.occupation.charAt(0).toUpperCase() + application.occupation.slice(1);
-
-    const TOTAL_STEPS = 4;
-
-    return (
-        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
-                <DialogHeader className="px-6 pt-5 pb-4 border-b">
-                    {selectedRef ? (
-                        <button
-                            type="button"
-                            onClick={() => setSelectedRefId(null)}
-                            className="text-muted-foreground hover:text-foreground mb-1 flex items-center gap-1 text-xs transition-colors"
-                        >
-                            <ChevronLeft className="h-3.5 w-3.5" /> All references
-                        </button>
-                    ) : null}
-                    <DialogTitle>Reference Check</DialogTitle>
-                    <DialogDescription>
-                        {selectedRef ? selectedRef.contact_person : `${application.first_name} ${application.surname}`}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <ScrollArea className="max-h-[70vh]">
-                <div className="p-6">
-                    {/* ── Selection screen ── */}
-                    {!selectedRef ? (
-                        <div className="space-y-3">
-                            {application.references.map((ref) => (
-                                <button
-                                    key={ref.id}
-                                    type="button"
-                                    onClick={() => selectRef(ref.id)}
-                                    className="hover:bg-muted w-full rounded-lg border bg-card p-4 text-left transition-colors"
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium">{ref.contact_person}</p>
-                                            <p className="text-muted-foreground text-xs">{ref.company_name}</p>
-                                            {ref.phone_number && (
-                                                <p className="text-muted-foreground text-xs">{ref.phone_number}</p>
-                                            )}
-                                        </div>
-                                        <div className="shrink-0">
-                                            {ref.reference_check ? (
-                                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
-                                                    <CheckCircle2 className="h-3.5 w-3.5" /> Completed
-                                                </span>
-                                            ) : (
-                                                <ChevronRight className="text-muted-foreground h-4 w-4" />
-                                            )}
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    ) : selectedRef.reference_check ? (
-                        // ── Read-only view ──
-                        <ReadOnlyRefCheck check={selectedRef.reference_check} ref_={selectedRef} occupationDisplay={occupationDisplay} />
-                    ) : (
-                        // ── Multi-step form ──
-                        <div className="space-y-6">
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-muted-foreground text-xs">Step {step} of {TOTAL_STEPS}</p>
-                                        <p className="text-sm font-medium">
-                                            {step === 1 && 'Introduction & Contact'}
-                                            {step === 2 && 'Employment Details'}
-                                            {step === 3 && 'Performance Assessment'}
-                                            {step === 4 && 'Closing Questions'}
-                                        </p>
-                                    </div>
-                                    <RCStepIndicator step={step} total={TOTAL_STEPS} />
-                                </div>
-
-                                {step === 1 && (
-                                    <div className="space-y-4">
-                                        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm leading-relaxed space-y-2">
-                                            <p>
-                                                "My name is <strong>{authUserName}</strong> and I'm calling to conduct a reference check for{' '}
-                                                <strong>{application.first_name} {application.surname}</strong>{' '}
-                                                who is being considered for a position with Superior Walls &amp; Ceilings.
-                                                Your details have been provided to me by <strong>{application.first_name} {application.surname}</strong>.
-                                                Are you prepared to provide a reference? This discussion should take approximately 5 minutes."
-                                            </p>
-                                            <p className="text-muted-foreground italic">Is this the right time to call to have this discussion?</p>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <Label>Prepared to provide a reference?</Label>
-                                            <RadioGroup
-                                                value={form.prepared_to_provide_reference}
-                                                onValueChange={(v) => set('prepared_to_provide_reference', v)}
-                                                className="flex gap-4"
-                                            >
-                                                {[['true', 'Yes'], ['false', 'No']].map(([v, l]) => (
-                                                    <div key={v} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={v} id={`prep_${v}`} />
-                                                        <Label htmlFor={`prep_${v}`}>{l}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-4">
-                                            <div className="grid gap-1.5">
-                                                <Label htmlFor="rc_job_title">Referee's Current Job Title</Label>
-                                                <Input id="rc_job_title" value={form.referee_current_job_title} onChange={(e) => set('referee_current_job_title', e.target.value)} />
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                                <Label htmlFor="rc_employer">Referee's Current Employer</Label>
-                                                <Input id="rc_employer" value={form.referee_current_employer} onChange={(e) => set('referee_current_employer', e.target.value)} />
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                                <Label htmlFor="rc_tel">Telephone</Label>
-                                                <Input id="rc_tel" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} />
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                                <Label htmlFor="rc_email">Email</Label>
-                                                <Input
-                                                    id="rc_email"
-                                                    type="email"
-                                                    value={form.email}
-                                                    onChange={(e) => { set('email', e.target.value); setErrors((p) => ({ ...p, email: '' })); }}
-                                                    className={errors.email ? 'border-destructive' : ''}
-                                                />
-                                                {errors.email && <p className="text-destructive text-xs">{errors.email}</p>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {step === 2 && (
-                                    <div className="space-y-4">
-                                        <div className="rounded-md bg-muted/50 border px-4 py-3 text-sm leading-relaxed space-y-1">
-                                            <p>If the referee is happy to proceed, confirm the candidate's employment details and general information by asking the following questions.</p>
-                                            <p className="text-muted-foreground italic">
-                                                "This reference will be used in the overall evaluation of the candidate and will affect whether they are selected for the job.
-                                                The Candidate is being considered for the position of <strong>{occupationDisplay}</strong>.
-                                                Could you please keep this in mind when answering the following questions?"
-                                            </p>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Can you confirm the Candidate's dates of employment?</p>
-                                            <Label htmlFor="rc_from">Employment From</Label>
-                                            <Input id="rc_from" type="date" value={form.employment_from} onChange={(e) => set('employment_from', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <Label htmlFor="rc_to">Employment To</Label>
-                                            <Input id="rc_to" type="date" value={form.employment_to} onChange={(e) => set('employment_to', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Do the dates align with the Job Enquiry?</p>
-                                            <Label>Dates align with job enquiry?</Label>
-                                            <RadioGroup value={form.dates_align} onValueChange={(v) => set('dates_align', v)} className="flex gap-4">
-                                                {[['true', 'Yes'], ['false', 'No']].map(([v, l]) => (
-                                                    <div key={v} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={v} id={`align_${v}`} />
-                                                        <Label htmlFor={`align_${v}`}>{l}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What is your relationship with the Candidate? <span className="font-medium">(Answer should be Supervisor or Manager)</span></p>
-                                            <Label htmlFor="rc_rel">Relationship to Candidate</Label>
-                                            <Input id="rc_rel" placeholder="e.g. Supervisor or Manager" value={form.relationship} onChange={(e) => set('relationship', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">For how long? <span className="font-medium">☑ Check against candidate's history</span></p>
-                                            <Label htmlFor="rc_dur">For How Long?</Label>
-                                            <Input id="rc_dur" value={form.relationship_duration} onChange={(e) => set('relationship_duration', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What Company were you working for at the time? <span className="font-medium">(If company is not familiar, ask: "Are you Brisbane/Gold Coast based?", "Small commercial fit out?")</span></p>
-                                            <Label htmlFor="rc_company">Company at the Time</Label>
-                                            <Input id="rc_company" value={form.company_at_time} onChange={(e) => set('company_at_time', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What was the Candidate's job title?</p>
-                                            <Label>Candidate's Job Title</Label>
-                                            <RadioGroup value={form.applicant_job_title} onValueChange={(v) => set('applicant_job_title', v)} className="flex flex-wrap gap-4">
-                                                {['plasterer', 'carpenter', 'labourer', 'other'].map((t) => (
-                                                    <div key={t} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={t} id={`jt_${t}`} />
-                                                        <Label htmlFor={`jt_${t}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                            {form.applicant_job_title === 'other' && (
-                                                <Input placeholder="e.g. Apprentice" value={form.applicant_job_title_other} onChange={(e) => set('applicant_job_title_other', e.target.value)} />
-                                            )}
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <p className="text-muted-foreground text-xs italic">What were the Candidate's main duties/responsibilities?</p>
-                                            <Label>Main Duties / Responsibilities</Label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {REF_CHECK_DUTIES.map((duty) => (
-                                                    <div key={duty} className="flex items-center gap-2">
-                                                        <Checkbox id={`duty_${duty}`} checked={form.duties.includes(duty)} onCheckedChange={() => toggleDuty(duty)} />
-                                                        <Label htmlFor={`duty_${duty}`} className="font-normal">{duty}</Label>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {step === 3 && (
-                                    <div className="space-y-4">
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Overall, how would you describe the Candidate's performance in the role?</p>
-                                            <Label>Overall Performance</Label>
-                                            <RadioGroup value={form.performance_rating} onValueChange={(v) => set('performance_rating', v)} className="flex flex-wrap gap-4">
-                                                {PERF_OPTIONS.map((o) => (
-                                                    <div key={o.value} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={o.value} id={`perf_${o.value}`} />
-                                                        <Label htmlFor={`perf_${o.value}`}>{o.label}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Are they honest and do they have good work ethic?</p>
-                                            <Label>Honest &amp; Good Work Ethic?</Label>
-                                            <RadioGroup value={form.honest_work_ethic} onValueChange={(v) => set('honest_work_ethic', v)} className="flex flex-wrap gap-4">
-                                                {PERF_OPTIONS.map((o) => (
-                                                    <div key={o.value} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={o.value} id={`ethic_${o.value}`} />
-                                                        <Label htmlFor={`ethic_${o.value}`}>{o.label}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Are they punctual? What was their attendance onsite like?</p>
-                                            <Label>Punctual / Attendance?</Label>
-                                            <RadioGroup value={form.punctual} onValueChange={(v) => set('punctual', v)} className="flex gap-4">
-                                                {YES_NO_SOMETIMES.map((o) => (
-                                                    <div key={o.value} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={o.value} id={`punc_${o.value}`} />
-                                                        <Label htmlFor={`punc_${o.value}`}>{o.label}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Do they take many sick days off for any other reasons?</p>
-                                            <Label>Takes Many Sick Days / Absences?</Label>
-                                            <RadioGroup value={form.sick_days} onValueChange={(v) => set('sick_days', v)} className="flex gap-4">
-                                                {YES_NO_SOMETIMES.map((o) => (
-                                                    <div key={o.value} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={o.value} id={`sick_${o.value}`} />
-                                                        <Label htmlFor={`sick_${o.value}`}>{o.label}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Do you know what was or is their reason for wanting to leave?</p>
-                                            <Label htmlFor="rc_reason">Reason for Wanting to Leave</Label>
-                                            <Textarea id="rc_reason" rows={3} value={form.reason_for_leaving} onChange={(e) => set('reason_for_leaving', e.target.value)} />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {step === 4 && (
-                                    <div className="space-y-4">
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">What do you believe the Candidate's greatest strengths are? <span className="font-medium">"Are they better at framing, sheeting, or setting?"</span></p>
-                                            <Label htmlFor="rc_strengths">Greatest Strengths</Label>
-                                            <Textarea id="rc_strengths" rows={3} value={form.greatest_strengths} onChange={(e) => set('greatest_strengths', e.target.value)} />
-                                        </div>
-                                        <div className="grid gap-1.5">
-                                            <p className="text-muted-foreground text-xs italic">Would you re-hire the Candidate?</p>
-                                            <Label>Would You Re-hire the Candidate? <span className="text-destructive">*</span></Label>
-                                            <RadioGroup
-                                                value={form.would_rehire}
-                                                onValueChange={(v) => { set('would_rehire', v); setErrors((p) => ({ ...p, would_rehire: '' })); }}
-                                                className="flex gap-4"
-                                            >
-                                                {[['yes', 'Yes'], ['no', 'No']].map(([v, l]) => (
-                                                    <div key={v} className="flex items-center gap-2">
-                                                        <RadioGroupItem value={v} id={`rehire_${v}`} />
-                                                        <Label htmlFor={`rehire_${v}`}>{l}</Label>
-                                                    </div>
-                                                ))}
-                                            </RadioGroup>
-                                            {errors.would_rehire && <p className="text-destructive text-xs">{errors.would_rehire}</p>}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Step nav */}
-                                <div className="flex items-center justify-between border-t pt-4">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={step === 1}
-                                        onClick={() => setStep((s) => s - 1)}
-                                        className="gap-1"
-                                    >
-                                        <ChevronLeft className="h-4 w-4" /> Back
-                                    </Button>
-                                    {step < TOTAL_STEPS ? (
-                                        <Button type="button" size="sm" onClick={() => setStep((s) => s + 1)} className="gap-1">
-                                            Next <ChevronRight className="h-4 w-4" />
-                                        </Button>
-                                    ) : (
-                                        <Button type="button" size="sm" disabled={submitting} onClick={handleSubmit}>
-                                            {submitting ? 'Submitting…' : 'Submit Reference Check'}
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                </div>
-                </ScrollArea>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function ReadOnlyRefCheck({
-    check,
-    ref_,
-    occupationDisplay,
-}: {
-    check: ReferenceCheckData;
-    ref_: Reference;
-    occupationDisplay: string;
-}) {
-    const perfLabel = (v: string | null) => PERF_OPTIONS.find((o) => o.value === v)?.label ?? v ?? '—';
-    const capitalize = (v: string | null) => v ? v.charAt(0).toUpperCase() + v.slice(1) : '—';
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span className="text-sm font-medium text-emerald-700">Reference check completed</span>
-                {check.completed_at && (
-                    <span className="text-muted-foreground text-xs ml-auto">
-                        {new Date(check.completed_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {check.completed_by_user && ` · ${check.completed_by_user.name}`}
-                    </span>
-                )}
-            </div>
-
-            <div className="grid gap-4">
-                <RCField label="Referee" value={ref_.contact_person} />
-                <RCField label="Position Applied For" value={occupationDisplay} />
-                <RCField label="Current Job Title" value={check.referee_current_job_title} />
-                <RCField label="Current Employer" value={check.referee_current_employer} />
-                <RCField label="Telephone" value={check.telephone} />
-                <RCField label="Email" value={check.email} />
-                <RCField label="Prepared to Provide Reference" value={check.prepared_to_provide_reference === null ? '—' : check.prepared_to_provide_reference ? 'Yes' : 'No'} />
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4">
-                <RCField label="Employed From" value={check.employment_from ? new Date(check.employment_from).toLocaleDateString('en-AU') : null} />
-                <RCField label="Employed To" value={check.employment_to ? new Date(check.employment_to).toLocaleDateString('en-AU') : null} />
-                <RCField label="Dates Align with Job Enquiry" value={check.dates_align === null ? '—' : check.dates_align ? 'Yes' : 'No'} />
-                <RCField label="Relationship to Candidate" value={check.relationship} />
-                <RCField label="Duration" value={check.relationship_duration} />
-                <RCField label="Company at Time" value={check.company_at_time} />
-                <RCField label="Job Title" value={
-                    check.applicant_job_title === 'other' && check.applicant_job_title_other
-                        ? check.applicant_job_title_other
-                        : check.applicant_job_title ? capitalize(check.applicant_job_title) : null
-                } />
-            </div>
-
-            {check.duties && check.duties.length > 0 && (
-                <div className="grid gap-1">
-                    <span className="text-muted-foreground text-xs font-medium">Duties</span>
-                    <div className="flex flex-wrap gap-1.5">
-                        {check.duties.map((d) => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
-                    </div>
-                </div>
-            )}
-
-            <Separator />
-
-            <div className="grid gap-4">
-                <RCField label="Overall Performance" value={perfLabel(check.performance_rating)} />
-                <RCField label="Honest &amp; Good Work Ethic" value={perfLabel(check.honest_work_ethic)} />
-                <RCField label="Punctual / Attendance" value={capitalize(check.punctual)} />
-                <RCField label="Takes Many Sick Days" value={capitalize(check.sick_days)} />
-                <RCField label="Reason for Leaving" value={check.reason_for_leaving} />
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4">
-                <RCField label="Greatest Strengths" value={check.greatest_strengths} />
-                <RCField label="Would Re-hire" value={capitalize(check.would_rehire)} />
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4">
-                <RCField label="Completed By" value={check.completed_by_name} />
-                <RCField label="Position" value={check.completed_by_position} />
-                <RCField label="Date" value={check.completed_date ? new Date(check.completed_date).toLocaleDateString('en-AU') : null} />
-            </div>
-        </div>
-    );
-}
-
-// ─── Send to Payroll Modal ──────────────────────────────────────────────────────
 
 function SendToPayrollModal({ open, onOpenChange, application, locations }: {
     open: boolean;
@@ -1882,7 +1236,7 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, statuses, screeningAlert, injuryHistory }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, availableOnDemandForms, onboardingLocations, statuses, screeningAlert, injuryHistory }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
@@ -1911,14 +1265,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
     const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
 
-    // Reference check dialog
-    const [refCheckOpen, setRefCheckOpen] = useState(false);
-    const [refCheckInitialRefId, setRefCheckInitialRefId] = useState<number | null>(null);
-
-    function openRefCheckDialog(referenceId?: number | null) {
-        setRefCheckInitialRefId(referenceId ?? null);
-        setRefCheckOpen(true);
-    }
     const [commentBody, setCommentBody] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -1938,12 +1284,11 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     // Comment filter & sort
-    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
+    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('messages');
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
 
     const currentUser = (usePage().props.auth as { user?: { id: number; name: string } })?.user;
     const currentUserId = currentUser?.id;
-    const currentUserName = currentUser?.name ?? '';
 
     const declineForm = useForm({ reason: '', add_to_screening: false });
 
@@ -2054,7 +1399,16 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${app.first_name} ${app.surname} — Enquiry`} />
 
-            <div className={cn('transition-[padding] duration-200', (showSubmissionPane || fillingFormRequest || viewingFormRequest) && 'xl:pr-[520px]')}>
+            <div
+                className={cn(
+                    'transition-[padding] duration-200',
+                    // Side-by-side: form pane docked at right-0, submission shifted to right-[520px].
+                    // Main content reserves space for both at xl+. Below xl the panes overlap as before.
+                    showSubmissionPane && (fillingFormRequest || viewingFormRequest)
+                        ? 'xl:pr-[1040px]'
+                        : (showSubmissionPane || fillingFormRequest || viewingFormRequest) && 'xl:pr-[520px]',
+                )}
+            >
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-4">
                 {alertMessage && (
                     <Alert variant="destructive">
@@ -2252,7 +1606,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 currentUserId={currentUserId}
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
-                                                onOpenRefCheck={openRefCheckDialog}
                                                 onOpenFormResponse={(id) => {
                                                     const fr = formRequests?.find((f) => f.id === id);
                                                     if (fr) setViewingFormRequest(fr);
@@ -2298,36 +1651,16 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                             className="hidden"
                                             onChange={handleFileSelect}
                                         />
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" type="button">
-                                                    <Paperclip className="h-4 w-4" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-44 p-1.5" side="top" align="start">
-                                                <button
-                                                    type="button"
-                                                    className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm"
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                >
-                                                    <Paperclip className="h-3.5 w-3.5" />
-                                                    Attach file
-                                                </button>
-                                                {app.references.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        className="hover:bg-muted flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm"
-                                                        onClick={() => openRefCheckDialog()}
-                                                    >
-                                                        <ClipboardList className="h-3.5 w-3.5" />
-                                                        Reference check
-                                                    </button>
-                                                )}
-                                                {/* Face-to-Face Screening hidden — superseded by the form template
-                                                    flow (sendable as a Form Request). Restore from git if the
-                                                    standalone screening-interview page is brought back. */}
-                                            </PopoverContent>
-                                        </Popover>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-10 w-10 shrink-0"
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            aria-label="Attach file"
+                                        >
+                                            <Paperclip className="h-4 w-4" />
+                                        </Button>
                                         <Textarea
                                             placeholder="Enter message here..."
                                             className="min-h-[40px] flex-1 resize-none"
@@ -2473,12 +1806,162 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </div>
                                 )}
 
-                                {/* Pending Form Requests — only show unsubmitted forms */}
-                                {formRequests.filter((fr) => fr.status !== 'submitted').length > 0 && (
+                                {/* Per-reference form status — surfaces the on-demand
+                                    Reference Check mapping for the current trigger stage.
+                                    Hidden unless the application is in a status where an
+                                    on-demand mapping with subject_source='references' exists. */}
+                                {(() => {
+                                    const refMapping = (availableOnDemandForms ?? []).find(
+                                        (m) => m.subject_source === 'references',
+                                    );
+                                    if (!refMapping || app.references.length === 0) return null;
+
+                                    const referenceFormFor = (refId: number): FormRequestData | undefined =>
+                                        formRequests.find(
+                                            (fr) =>
+                                                fr.subject_type === 'App\\Models\\EmploymentApplicationReference' &&
+                                                fr.subject_id === refId &&
+                                                fr.form_template?.id === refMapping.form_template_id,
+                                        );
+
+                                    const submittedCount = app.references.filter(
+                                        (r) => referenceFormFor(r.id)?.status === 'submitted',
+                                    ).length;
+                                    const minRequired = refMapping.min_submissions;
+                                    const goalMet = submittedCount >= minRequired;
+
+                                    return (
+                                        <div className="mb-4 rounded-lg border bg-background p-3">
+                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                                <span className="text-xs font-medium text-muted-foreground">
+                                                    {refMapping.form_template_name ?? 'Reference Checks'}
+                                                </span>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={cn(
+                                                        'shrink-0 text-[10px]',
+                                                        goalMet && 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700',
+                                                    )}
+                                                >
+                                                    {submittedCount} of {minRequired} completed
+                                                </Badge>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {app.references.map((ref) => {
+                                                    const fr = referenceFormFor(ref.id);
+                                                    const status = fr?.status;
+                                                    const label = ref.contact_person?.trim() || ref.company_name || `Reference #${ref.id}`;
+                                                    const subLabel = ref.contact_person && ref.company_name
+                                                        ? ref.company_name
+                                                        : ref.phone_number ?? null;
+                                                    const isPending = status === 'pending' || status === 'sent' || status === 'opened';
+                                                    return (
+                                                        <div key={ref.id} className="rounded-md border p-2.5">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate text-sm font-medium">{label}</p>
+                                                                    {subLabel && (
+                                                                        <p className="truncate text-xs text-muted-foreground">{subLabel}</p>
+                                                                    )}
+                                                                </div>
+                                                                <Badge
+                                                                    variant="secondary"
+                                                                    className={cn(
+                                                                        'shrink-0 text-[10px]',
+                                                                        status === 'submitted' && 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700',
+                                                                        isPending && 'border-amber-500/20 bg-amber-500/10 text-amber-700',
+                                                                    )}
+                                                                >
+                                                                    {status === 'submitted'
+                                                                        ? 'Completed'
+                                                                        : isPending
+                                                                          ? 'In progress'
+                                                                          : status === 'cancelled'
+                                                                            ? 'Skipped'
+                                                                            : 'Not started'}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                                                {!fr && canScreen && (
+                                                                    <Button
+                                                                        variant="default"
+                                                                        size="sm"
+                                                                        className="h-7 text-xs"
+                                                                        onClick={() =>
+                                                                            router.post(
+                                                                                route(
+                                                                                    'employment-applications.references.start-form',
+                                                                                    [app.id, ref.id, refMapping.id],
+                                                                                ),
+                                                                                {},
+                                                                                { preserveScroll: true },
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Pencil className="mr-1 h-3 w-3" />
+                                                                        Start reference check
+                                                                    </Button>
+                                                                )}
+                                                                {fr && isPending && canFillFormRequest(fr) && (
+                                                                    <Button
+                                                                        variant="default"
+                                                                        size="sm"
+                                                                        className="h-7 flex-1 text-xs"
+                                                                        onClick={() => setFillingFormRequest(fr)}
+                                                                        disabled={!fr.form_template?.fields?.length}
+                                                                    >
+                                                                        <Pencil className="mr-1 h-3 w-3" /> Continue
+                                                                    </Button>
+                                                                )}
+                                                                {fr && isPending && canScreen && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 text-xs text-destructive"
+                                                                        onClick={() =>
+                                                                            router.post(
+                                                                                route('form-requests.cancel', fr.id),
+                                                                                {},
+                                                                                { preserveScroll: true },
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        Skip
+                                                                    </Button>
+                                                                )}
+                                                                {fr && status === 'submitted' && (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 text-xs"
+                                                                        onClick={() => setViewingFormRequest(fr)}
+                                                                    >
+                                                                        View
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Pending Form Requests — only show unsubmitted forms.
+                                    Subject-scoped forms (e.g. reference checks) live in
+                                    their own contextual card above; excluded here to
+                                    avoid showing the same form twice. */}
+                                {(() => {
+                                    const pendingGeneric = formRequests.filter(
+                                        (fr) => fr.status !== 'submitted' && !fr.subject_id,
+                                    );
+                                    if (pendingGeneric.length === 0) return null;
+                                    return (
                                     <div className="mb-4 rounded-lg border bg-background p-3">
                                         <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Forms</span>
                                         <div className="space-y-2">
-                                            {formRequests.filter((fr) => fr.status !== 'submitted').map((fr) => {
+                                            {pendingGeneric.map((fr) => {
                                                 const isPermissionAssigned = fr.assignee_strategy === 'permission' && !!fr.assignee_permission;
                                                 const isInApp = fr.delivery_method === 'in_app';
                                                 const fillable = canFillFormRequest(fr);
@@ -2531,7 +2014,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                             })}
                                         </div>
                                     </div>
-                                )}
+                                    );
+                                })()}
 
                                 {app.employees.length > 0 && (
                                     <>
@@ -2672,7 +2156,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             {/* Full Submission Side Pane — non-modal, leaves main content interactive */}
             {showSubmissionPane && (
                 <aside
-                    className="bg-background fixed inset-y-0 right-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
+                    className={cn(
+                        'bg-background fixed inset-y-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200',
+                        // Sit beside the form pane (form on far right, submission to its left) at xl+
+                        // so both are visible. Below xl, dock right-0 same as before — the most
+                        // recently opened pane sits on top.
+                        fillingFormRequest || viewingFormRequest ? 'right-0 xl:right-[520px]' : 'right-0',
+                    )}
                     aria-label="Full submission"
                 >
                     <div className="bg-background flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
@@ -2715,15 +2205,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     </div>
                 </aside>
             )}
-
-            {/* Reference Check Dialog */}
-            <ReferenceCheckDialog
-                open={refCheckOpen}
-                onClose={() => setRefCheckOpen(false)}
-                application={app}
-                initialReferenceId={refCheckInitialRefId}
-                authUserName={currentUserName}
-            />
 
             {/* Decline Dialog */}
             <Dialog open={showDeclineDialog} onOpenChange={setShowDeclineDialog}>

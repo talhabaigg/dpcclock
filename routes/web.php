@@ -74,7 +74,6 @@ use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
-use App\Http\Controllers\ReferenceCheckController;
 use App\Http\Controllers\ScreeningInterviewController;
 use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
@@ -346,10 +345,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employment-applications/{employmentApplication}/link-employee', [EmploymentApplicationController::class, 'linkToEmployee'])->name('employment-applications.link-employee');
         Route::delete('/employment-applications/{employmentApplication}/unlink-employee', [EmploymentApplicationController::class, 'unlinkEmployee'])->name('employment-applications.unlink-employee');
 
-        // Reference Checks
-        Route::get('/employment-applications/references/{reference}/check/create', [ReferenceCheckController::class, 'create'])->name('reference-checks.create');
-        Route::post('/employment-applications/references/{reference}/check', [ReferenceCheckController::class, 'store'])->name('reference-checks.store');
-        Route::get('/employment-applications/reference-checks/{referenceCheck}', [ReferenceCheckController::class, 'show'])->name('reference-checks.show');
+        // Form-template-driven reference checks. Starts an on-demand FormRequest
+        // scoped to the referee chosen on the application show page.
+        Route::post(
+            '/employment-applications/{employmentApplication}/references/{reference}/start-form/{mapping}',
+            [EmploymentApplicationController::class, 'startReferenceForm'],
+        )->name('employment-applications.references.start-form');
 
         // Face-to-Face Screening Interview
         Route::get('/employment-applications/{employmentApplication}/screening-interview/create', [ScreeningInterviewController::class, 'create'])->name('screening-interviews.create');

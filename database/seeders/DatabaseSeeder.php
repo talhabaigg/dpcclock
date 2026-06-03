@@ -29,6 +29,8 @@ class DatabaseSeeder extends Seeder
             EmployeeSeeder::class,
             RolesAndPermissionsSeeder::class,
             OncostSeeder::class,
+            ReferenceCheckFormTemplateSeeder::class,
+            ReferenceCheckTriggerFormSeeder::class,
         ]);
 
         $admin->assignRole('admin');

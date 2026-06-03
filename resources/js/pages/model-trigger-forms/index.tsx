@@ -49,6 +49,9 @@ interface Mapping {
     trigger_key: string;
     form_template_id: number;
     form_template: { id: number; name: string; model_type: string | null; is_sendable: boolean };
+    subject_source: string | null;
+    dispatch_mode: 'auto' | 'on_demand';
+    min_submissions: number;
     assignee_strategy: 'permission' | 'user';
     assignee_value: string;
     is_required: boolean;
@@ -60,6 +63,7 @@ interface PageProps {
     mappings: Mapping[];
     modelTypes: ModelType[];
     triggerKeysByModel: Record<string, string[]>;
+    subjectSourcesByModel: Record<string, Record<string, string>>;
     formTemplates: FormTemplateOption[];
     permissions: { id: number; name: string }[];
     users: { id: number; name: string }[];
@@ -91,6 +95,9 @@ interface FormState {
     model_type: string;
     trigger_key: string;
     form_template_id: number | '';
+    subject_source: string;
+    dispatch_mode: 'auto' | 'on_demand';
+    min_submissions: number;
     assignee_strategy: 'permission' | 'user';
     assignee_value: string;
     is_required: boolean;
@@ -106,6 +113,9 @@ function emptyForm(modelTypes: ModelType[], triggerKeysByModel: Record<string, s
         model_type: firstModel,
         trigger_key: firstTrigger,
         form_template_id: '',
+        subject_source: '',
+        dispatch_mode: 'auto',
+        min_submissions: 1,
         assignee_strategy: 'permission',
         assignee_value: '',
         is_required: true,
@@ -118,6 +128,7 @@ export default function ModelTriggerFormsIndex({
     mappings,
     modelTypes,
     triggerKeysByModel,
+    subjectSourcesByModel,
     formTemplates,
     permissions,
     users,
@@ -139,6 +150,9 @@ export default function ModelTriggerFormsIndex({
             model_type: m.model_type,
             trigger_key: m.trigger_key,
             form_template_id: m.form_template_id,
+            subject_source: m.subject_source ?? '',
+            dispatch_mode: m.dispatch_mode,
+            min_submissions: m.min_submissions,
             assignee_strategy: m.assignee_strategy,
             assignee_value: m.assignee_value,
             is_required: m.is_required,
@@ -166,6 +180,9 @@ export default function ModelTriggerFormsIndex({
             model_type: form.model_type,
             trigger_key: form.trigger_key,
             form_template_id: form.form_template_id,
+            subject_source: form.subject_source || null,
+            dispatch_mode: form.dispatch_mode,
+            min_submissions: form.min_submissions,
             assignee_strategy: form.assignee_strategy,
             assignee_value: form.assignee_value,
             is_required: form.is_required,
@@ -219,11 +236,24 @@ export default function ModelTriggerFormsIndex({
     }
 
     const triggersForCurrentModel = triggerKeysByModel[form.model_type] ?? [];
+    const subjectSourceOptions = subjectSourcesByModel[form.model_type] ?? {};
+    const subjectSourceKeys = Object.keys(subjectSourceOptions);
+    const modelHasSubjectSources = subjectSourceKeys.length > 0;
 
     // Filter form templates to those matching the selected model (or model-agnostic)
     const eligibleTemplates = formTemplates.filter(
         (t) => !t.model_type || t.model_type === form.model_type,
     );
+
+    function subjectSourceLabel(key: string | null): string | null {
+        if (!key) return null;
+        // Look across all models so the listing table can label rows whose
+        // model isn't currently selected in the form.
+        for (const sources of Object.values(subjectSourcesByModel)) {
+            if (sources[key]) return sources[key];
+        }
+        return key;
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -262,6 +292,7 @@ export default function ModelTriggerFormsIndex({
                                         <TableHead className="pl-4">Model</TableHead>
                                         <TableHead>Trigger</TableHead>
                                         <TableHead>Form Template</TableHead>
+                                        <TableHead>Behavior</TableHead>
                                         <TableHead>Assignee</TableHead>
                                         <TableHead className="text-center">Required</TableHead>
                                         <TableHead className="text-center">Active</TableHead>
@@ -285,7 +316,22 @@ export default function ModelTriggerFormsIndex({
                                                     </Badge>
                                                 )}
                                             </TableCell>
-                                            <TableCell>{renderAssignee(m)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-0.5 text-muted-foreground">
+                                                    <span>
+                                                        {m.subject_source
+                                                            ? subjectSourceLabel(m.subject_source)
+                                                            : 'Single form'}
+                                                    </span>
+                                                    <span className="text-[10px] uppercase tracking-wide ">
+                                                        {m.dispatch_mode === 'auto' ? 'Auto' : 'On demand'}
+                                                        {m.subject_source && m.min_submissions > 1 && (
+                                                            <> · min {m.min_submissions}</>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className='truncate max-w-[100px]'>{renderAssignee(m)}</TableCell>
                                             <TableCell className="text-center">
                                                 {m.is_required ? (
                                                     <Badge className="border-amber-500/20 bg-amber-500/10 text-amber-700 shadow-none hover:bg-amber-500/10">
@@ -357,7 +403,15 @@ export default function ModelTriggerFormsIndex({
                                 value={form.model_type}
                                 onValueChange={(v) => {
                                     const firstTrigger = triggerKeysByModel[v]?.[0] ?? '';
-                                    setForm({ ...form, model_type: v, trigger_key: firstTrigger, form_template_id: '' });
+                                    setForm({
+                                        ...form,
+                                        model_type: v,
+                                        trigger_key: firstTrigger,
+                                        form_template_id: '',
+                                        subject_source: '',
+                                        dispatch_mode: 'auto',
+                                        min_submissions: 1,
+                                    });
                                 }}
                             >
                                 <SelectTrigger className="h-9">
@@ -408,6 +462,70 @@ export default function ModelTriggerFormsIndex({
                                 </SelectContent>
                             </Select>
                             {errors.form_template_id && <p className="mt-1 text-xs text-red-500">{errors.form_template_id}</p>}
+                        </div>
+
+                        {modelHasSubjectSources && (
+                            <div>
+                                <Label className="mb-1 text-xs text-muted-foreground">Subject (fan out over)</Label>
+                                <Select
+                                    value={form.subject_source || '__none__'}
+                                    onValueChange={(v) => {
+                                        const next = v === '__none__' ? '' : v;
+                                        setForm({
+                                            ...form,
+                                            subject_source: next,
+                                            // Reset min_submissions when fan-out is turned off — it's
+                                            // only meaningful when multiple forms can exist per mapping.
+                                            min_submissions: next ? form.min_submissions : 1,
+                                        });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">None (single form)</SelectItem>
+                                        {subjectSourceKeys.map((key) => (
+                                            <SelectItem key={key} value={key}>
+                                                {subjectSourceOptions[key]}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.subject_source && <p className="mt-1 text-xs text-red-500">{errors.subject_source}</p>}
+                            </div>
+                        )}
+
+                        <div className={form.subject_source ? 'grid grid-cols-2 gap-3' : ''}>
+                            <div>
+                                <Label className="mb-1 text-xs text-muted-foreground">Dispatch mode</Label>
+                                <Select
+                                    value={form.dispatch_mode}
+                                    onValueChange={(v: 'auto' | 'on_demand') => setForm({ ...form, dispatch_mode: v })}
+                                >
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="auto">Auto (fire when trigger hits)</SelectItem>
+                                        <SelectItem value="on_demand">On demand (start manually)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {form.subject_source && (
+                                <div>
+                                    <Label className="mb-1 text-xs text-muted-foreground">Min submissions required</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={form.min_submissions}
+                                        onChange={(e) =>
+                                            setForm({ ...form, min_submissions: Math.max(1, Number(e.target.value) || 1) })
+                                        }
+                                        className="h-9 text-sm"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">

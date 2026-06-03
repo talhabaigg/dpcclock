@@ -81,6 +81,7 @@ class FormRequestController extends Controller
         $fields = $this->resolveFieldPlaceholders(
             $formRequest->formTemplate->fields,
             $formRequest->formable,
+            $formRequest->subject,
         );
 
         return view('forms.fill', [
@@ -98,12 +99,15 @@ class FormRequestController extends Controller
      * its current option set. The Blade renderer downstream treats both static
      * and dynamic options as a normalised list of {value, label} pairs.
      */
-    private function resolveFieldPlaceholders($fields, ?\Illuminate\Database\Eloquent\Model $formable)
-    {
-        return $fields->each(function ($field) use ($formable) {
-            $field->label = $this->placeholderResolver->interpolate($field->label, $formable);
-            $field->placeholder = $this->placeholderResolver->interpolate($field->placeholder, $formable);
-            $field->default_value = $this->placeholderResolver->interpolate($field->default_value, $formable);
+    private function resolveFieldPlaceholders(
+        $fields,
+        ?\Illuminate\Database\Eloquent\Model $formable,
+        ?\Illuminate\Database\Eloquent\Model $subject = null,
+    ) {
+        return $fields->each(function ($field) use ($formable, $subject) {
+            $field->label = $this->placeholderResolver->interpolate($field->label, $formable, $subject);
+            $field->placeholder = $this->placeholderResolver->interpolate($field->placeholder, $formable, $subject);
+            $field->default_value = $this->placeholderResolver->interpolate($field->default_value, $formable, $subject);
 
             if ($field->hasDynamicOptions()) {
                 $field->options = $this->resolverRegistry

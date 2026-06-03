@@ -12,6 +12,9 @@ class ModelTriggerForm extends Model
         'model_type',
         'trigger_key',
         'form_template_id',
+        'subject_source',
+        'dispatch_mode',
+        'min_submissions',
         'assignee_strategy',
         'assignee_value',
         'is_required',
@@ -24,6 +27,7 @@ class ModelTriggerForm extends Model
         return [
             'is_required' => 'boolean',
             'is_active' => 'boolean',
+            'min_submissions' => 'integer',
         ];
     }
 

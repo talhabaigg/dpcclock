@@ -244,7 +244,6 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
             $this->formRequests()->get()->each->delete();
             $this->signingRequests()->get()->each->delete();
 
-            EmploymentApplicationReferenceCheck::where('employment_application_id', $this->id)->delete();
             $this->screeningInterview()->delete();
 
             $this->employees()->detach();

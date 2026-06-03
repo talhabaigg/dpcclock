@@ -45,6 +45,8 @@ export interface FormRequestData {
     assignee_strategy: string | null;
     assignee_permission: string | null;
     assignee_user_id?: number | null;
+    subject_type?: string | null;
+    subject_id?: number | null;
     submitted_at: string | null;
     opened_at?: string | null;
     expires_at?: string | null;

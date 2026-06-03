@@ -10,7 +10,9 @@ use App\Jobs\GeocodeEmploymentApplication;
 use App\Models\ChecklistTemplate;
 use App\Models\Employee;
 use App\Models\EmploymentApplication;
+use App\Models\EmploymentApplicationReference;
 use App\Models\Location;
+use App\Models\ModelTriggerForm;
 use App\Models\Skill;
 use App\Models\WorkerScreening;
 use App\Services\ModelTriggerFormService;
@@ -232,9 +234,15 @@ class EmploymentApplicationController extends Controller
     /**
      * Admin detail view.
      */
-    public function show(EmploymentApplication $employmentApplication): Response
+    public function show(EmploymentApplication $employmentApplication, ModelTriggerFormService $triggerFormService): Response
     {
-        $employmentApplication->load(['references.referenceCheck.completedByUser', 'skills', 'declinedByUser', 'employees:id,name,eh_employee_id', 'screeningInterview']);
+        $employmentApplication->load([
+            'references.subjectFormRequests',
+            'skills',
+            'declinedByUser',
+            'employees:id,name,eh_employee_id',
+            'screeningInterview',
+        ]);
 
         $employmentApplication->load(['checklists.items.completedByUser']);
 
@@ -454,6 +462,8 @@ class EmploymentApplicationController extends Controller
                 'recipient_email' => $fr->recipient_email,
                 'assignee_strategy' => $fr->assignee_strategy,
                 'assignee_permission' => $fr->assignee_permission,
+                'subject_type' => $fr->subject_type,
+                'subject_id' => $fr->subject_id,
                 'submitted_at' => $fr->submitted_at?->toISOString(),
                 'opened_at' => $fr->opened_at?->toISOString(),
                 'expires_at' => $fr->expires_at?->toISOString(),
@@ -480,6 +490,18 @@ class EmploymentApplicationController extends Controller
                     'name' => $fr->sentBy->name,
                 ] : null,
             ])->values(),
+            // On-demand trigger mappings active for the application's current
+            // status. The show page uses these to render per-subject "Start"
+            // actions (e.g. one per reference for the reference check stage).
+            'availableOnDemandForms' => $triggerFormService
+                ->availableOnDemandForms($employmentApplication, $employmentApplication->status)
+                ->map(fn ($mapping) => [
+                    'id' => $mapping->id,
+                    'form_template_id' => $mapping->form_template_id,
+                    'form_template_name' => $mapping->formTemplate?->name,
+                    'subject_source' => $mapping->subject_source,
+                    'min_submissions' => $mapping->min_submissions,
+                ])->values(),
         ]);
     }
 
@@ -589,7 +611,49 @@ class EmploymentApplicationController extends Controller
             ['status_change' => ['from' => $oldStatus, 'to' => $newStatus]],
         );
 
+        // Sweep any pending forms tied to the trigger stage we just left so HR
+        // doesn't see stranded "in progress" reference checks (etc.) forever.
+        if ($oldStatus !== $newStatus) {
+            $triggerFormService->cancelPendingForTrigger($employmentApplication, $oldStatus, $request->user());
+        }
+
         $triggerFormService->dispatchFormsFor($employmentApplication, $newStatus, $request->user());
+
+        return back();
+    }
+
+    /**
+     * Start an on-demand form for a specific reference under the application's
+     * current trigger stage. Used by the "Start reference check" button per
+     * referee on the application show page. Idempotent — clicking again on a
+     * reference that already has a non-cancelled form returns the existing one.
+     */
+    public function startReferenceForm(
+        Request $request,
+        EmploymentApplication $employmentApplication,
+        EmploymentApplicationReference $reference,
+        ModelTriggerForm $mapping,
+        ModelTriggerFormService $triggerFormService,
+    ): RedirectResponse {
+        // Belt-and-braces: refuse mismatched routes.
+        abort_unless($reference->employment_application_id === $employmentApplication->id, 404);
+        abort_unless($mapping->is_active, 404);
+        abort_unless($mapping->model_type === EmploymentApplication::class, 404);
+        abort_unless($mapping->trigger_key === $employmentApplication->status, 422, 'This form is not available for the current stage.');
+        abort_unless($mapping->dispatch_mode === 'on_demand', 422, 'This mapping is not on-demand.');
+
+        // Permission gate: only users matching the mapping's assignee scope can start it.
+        if ($mapping->assignee_strategy === 'permission'
+            && ! $request->user()->can($mapping->assignee_value)) {
+            return back()->withErrors(['form' => 'You do not have permission to start this form.']);
+        }
+
+        $triggerFormService->startOnDemand(
+            mapping: $mapping,
+            formable: $employmentApplication,
+            subject: $reference,
+            admin: $request->user(),
+        );
 
         return back();
     }

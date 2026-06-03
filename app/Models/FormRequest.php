@@ -16,6 +16,8 @@ class FormRequest extends Model implements HasMedia
         'form_template_id',
         'formable_type',
         'formable_id',
+        'subject_type',
+        'subject_id',
         'token',
         'status',
         'delivery_method',
@@ -54,6 +56,11 @@ class FormRequest extends Model implements HasMedia
     }
 
     public function formable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function subject(): MorphTo
     {
         return $this->morphTo();
     }

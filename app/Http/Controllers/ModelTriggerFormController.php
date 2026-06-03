@@ -26,6 +26,7 @@ class ModelTriggerFormController extends Controller
             'mappings' => $mappings,
             'modelTypes' => $this->modelTypeOptions(),
             'triggerKeysByModel' => $this->triggerKeysByModel(),
+            'subjectSourcesByModel' => $this->subjectSourcesByModel(),
             'formTemplates' => FormTemplate::active()
                 ->orderBy('name')
                 ->get(['id', 'name', 'model_type', 'is_sendable']),
@@ -63,11 +64,24 @@ class ModelTriggerFormController extends Controller
     {
         $modelTypes = array_keys($this->triggerKeysByModel());
         $allTriggerKeys = collect($this->triggerKeysByModel())->flatten()->unique()->all();
+        $subjectSources = $this->subjectSourcesByModel();
 
         return $request->validate([
             'model_type' => ['required', 'string', 'in:' . implode(',', $modelTypes)],
             'trigger_key' => ['required', 'string', 'in:' . implode(',', $allTriggerKeys)],
             'form_template_id' => ['required', 'integer', 'exists:form_templates,id'],
+            'subject_source' => [
+                'nullable',
+                'string',
+                function (string $attr, mixed $value, \Closure $fail) use ($request, $subjectSources) {
+                    $valid = array_keys($subjectSources[$request->input('model_type')] ?? []);
+                    if ($value !== null && $value !== '' && ! in_array($value, $valid, true)) {
+                        $fail("Subject source '{$value}' is not valid for the chosen model type.");
+                    }
+                },
+            ],
+            'dispatch_mode' => ['nullable', 'in:auto,on_demand'],
+            'min_submissions' => ['nullable', 'integer', 'min:1'],
             'assignee_strategy' => ['required', 'in:permission,user'],
             'assignee_value' => ['required', 'string', 'max:255'],
             'is_required' => ['boolean'],
@@ -104,6 +118,26 @@ class ModelTriggerFormController extends Controller
         return [
             EmploymentApplication::class => array_values(array_diff(EmploymentApplication::STATUSES, $appExcluded)),
             Injury::class => ['created'],
+        ];
+    }
+
+    /**
+     * Map of model class → valid subject_source keys. Each key names a relation
+     * on the formable that returns the collection (or single model) the
+     * dispatcher fans out over. The value is the human label for the UI.
+     *
+     * Empty array (or absent model_type) means the model has no fan-out
+     * options — the UI hides the "Subject" field for that model.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function subjectSourcesByModel(): array
+    {
+        return [
+            EmploymentApplication::class => [
+                'references' => 'One form per reference',
+            ],
+            Injury::class => [],
         ];
     }
 }

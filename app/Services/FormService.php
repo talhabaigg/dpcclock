@@ -28,6 +28,7 @@ class FormService
         string $recipientName,
         ?string $recipientEmail,
         ?Model $formable = null,
+        ?Model $subject = null,
         ?string $assigneeStrategy = null,
         ?string $assigneePermission = null,
         ?int $assigneeUserId = null,
@@ -38,12 +39,19 @@ class FormService
             $recipientEmail = null;
         }
 
-        // Cancel any existing pending requests for the same formable + template
+        // Cancel any existing pending requests for the same formable + template.
+        // Scoped by subject so resending for one referee doesn't sweep another's pending form.
         if ($formable) {
             FormRequest::query()
                 ->where('formable_type', get_class($formable))
                 ->where('formable_id', $formable->getKey())
                 ->where('form_template_id', $template->id)
+                ->when($subject,
+                    fn ($q) => $q
+                        ->where('subject_type', get_class($subject))
+                        ->where('subject_id', $subject->getKey()),
+                    fn ($q) => $q->whereNull('subject_id'),
+                )
                 ->whereIn('status', ['pending', 'sent', 'opened'])
                 ->each(function (FormRequest $existing) use ($admin) {
                     $this->cancel($existing, $admin);
@@ -54,6 +62,8 @@ class FormService
             'form_template_id' => $template->id,
             'formable_type' => $formable ? get_class($formable) : null,
             'formable_id' => $formable?->getKey(),
+            'subject_type' => $subject ? get_class($subject) : null,
+            'subject_id' => $subject?->getKey(),
             'delivery_method' => $deliveryMethod,
             'token' => Str::random(64),
             'status' => 'pending',
@@ -78,15 +88,18 @@ class FormService
 
         // Add system comment on formable if it supports comments
         if ($formable && method_exists($formable, 'addSystemComment')) {
+            $subjectSuffix = $subject && method_exists($subject, 'displayLabel')
+                ? " for {$subject->displayLabel()}"
+                : '';
             $body = match (true) {
                 $assigneeStrategy === 'permission' && $assigneePermission !== null
-                    => "Form \"{$template->name}\" available in-app for completion by anyone with permission \"{$assigneePermission}\"",
+                    => "Form \"{$template->name}\"{$subjectSuffix} available in-app for completion by anyone with permission \"{$assigneePermission}\"",
                 $deliveryMethod === 'email'
-                    => "Form \"{$template->name}\" sent via email by {$admin->name}",
+                    => "Form \"{$template->name}\"{$subjectSuffix} sent via email by {$admin->name}",
                 $deliveryMethod === 'in_app'
-                    => "Form \"{$template->name}\" made available in-app by {$admin->name}",
+                    => "Form \"{$template->name}\"{$subjectSuffix} made available in-app by {$admin->name}",
                 default
-                    => "Form \"{$template->name}\" sent in person by {$admin->name}",
+                    => "Form \"{$template->name}\"{$subjectSuffix} sent in person by {$admin->name}",
             };
             $formable->addSystemComment(
                 $body,
@@ -169,12 +182,13 @@ class FormService
         $this->cancel($formRequest, $admin);
 
         return $this->createAndSend(
-            $formRequest->formTemplate,
-            $formRequest->delivery_method,
-            $admin,
-            $formRequest->recipient_name,
-            $formRequest->recipient_email,
-            $formRequest->formable,
+            template: $formRequest->formTemplate,
+            deliveryMethod: $formRequest->delivery_method,
+            admin: $admin,
+            recipientName: $formRequest->recipient_name,
+            recipientEmail: $formRequest->recipient_email,
+            formable: $formRequest->formable,
+            subject: $formRequest->subject,
         );
     }
 
@@ -228,6 +242,7 @@ class FormService
     {
         $fields = $formRequest->formTemplate->fields->sortBy('sort_order')->values();
         $formable = $formRequest->formable;
+        $subject = $formRequest->subject;
         $snapshot = [];
 
         foreach ($fields as $field) {
@@ -241,7 +256,7 @@ class FormService
 
             $snapshot[] = [
                 'field_id' => $field->id,
-                'label' => $this->placeholderResolver->interpolate($field->label, $formable),
+                'label' => $this->placeholderResolver->interpolate($field->label, $formable, $subject),
                 'type' => $field->type,
                 'options' => $field->options,
                 'options_source' => $field->options_source,
