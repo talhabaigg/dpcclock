@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 
 class EmploymentApplication extends Model implements ProvidesFormPlaceholders
 {
@@ -203,6 +205,44 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
                 }
             })
             ->first();
+    }
+
+    /**
+     * Wipe all workflow data attached to this application and re-attach the
+     * current auto-attach checklist templates. Applicant-supplied data
+     * (parent fields, references, skills, geocode) is preserved.
+     */
+    public function resetToFresh(): void
+    {
+        DB::transaction(function () {
+            $checklistIds = $this->checklists()->pluck('id');
+            $itemIds = ChecklistItem::whereIn('checklist_id', $checklistIds)->pluck('id');
+
+            Activity::where('subject_type', ChecklistItem::class)
+                ->whereIn('subject_id', $itemIds)
+                ->delete();
+
+            $this->checklists()->delete();
+
+            $this->comments()->withTrashed()->get()->each->forceDelete();
+
+            $this->formRequests()->get()->each->delete();
+            $this->signingRequests()->get()->each->delete();
+
+            EmploymentApplicationReferenceCheck::where('employment_application_id', $this->id)->delete();
+            $this->screeningInterview()->delete();
+
+            $this->employees()->detach();
+
+            $this->forceFill([
+                'status' => self::STATUS_NEW,
+                'declined_at' => null,
+                'declined_by' => null,
+                'declined_reason' => null,
+            ])->save();
+
+            $this->attachAutoChecklists();
+        });
     }
 
     public function formPlaceholderValues(): array
