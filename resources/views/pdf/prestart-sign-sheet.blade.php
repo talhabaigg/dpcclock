@@ -229,7 +229,7 @@
                     <strong>{{ $training->title }}</strong>@if($training->time) at {{ $training->time }}@endif
                     @if($training->room) — {{ $training->room }}@endif
                     @if($training->employees->count() > 0)
-                        <br><span style="color: #6b7280;">{{ $training->employees->map(fn($e) => $e->preferred_name ?? $e->name)->join(', ') }}</span>
+                        <br><span style="color: #6b7280;">{{ $training->employees->map(fn($e) => $e->name)->join(', ') }}</span>
                     @endif
                     @if($training->notes)
                         <br><em style="color: #6b7280;">{{ $training->notes }}</em>
@@ -262,7 +262,7 @@
                             @endif
                             <span style="display:inline-block; margin-left:4px; padding:1px 5px; font-size:9px; border:1px solid #7dd3fc; background:#f0f9ff; color:#0369a1; border-radius:3px; vertical-align:middle; text-transform:uppercase; letter-spacing:0.04em;">Guest</span>
                         @else
-                            {{ $sig->employee->preferred_name ?? $sig->employee->name ?? '—' }}
+                            {{ $sig->employee->name ?? '—' }}
                         @endif
                     </td>
                     <td>
@@ -278,7 +278,7 @@
             @foreach($absentees as $index => $emp)
                 <tr>
                     <td>{{ $signatures->count() + $index + 1 }}</td>
-                    <td>{{ $emp->preferred_name ?? $emp->name ?? '—' }}</td>
+                    <td>{{ $emp->name ?? '—' }}</td>
                     <td style="color: #9ca3af;">—</td>
                     <td style="color: #6b7280; font-style: italic;">
                         {{ $emp->note ? 'Absent - ' . $emp->note : 'Absent' }}
