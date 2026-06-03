@@ -1,16 +1,15 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import AvatarStack from '@/components/avatar-stack';
+import PersonAvatar from '@/components/person-avatar';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -68,41 +67,6 @@ function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
     return pages;
 }
 
-function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; variant: 'signed' | 'not_signed' }) {
-    const getInitials = useInitials();
-    const maxShow = 5;
-    const shown = employees.slice(0, maxShow);
-    const overflow = employees.length - maxShow;
-
-    if (employees.length === 0) {
-        return <span className="text-muted-foreground text-sm">-</span>;
-    }
-
-    const colorClass = variant === 'signed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200';
-
-    return (
-        <TooltipProvider>
-            <div className="flex -space-x-2">
-                {shown.map((emp) => (
-                    <Tooltip key={emp.id}>
-                        <TooltipTrigger asChild>
-                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
-                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>{getInitials(emp.name)}</AvatarFallback>
-                            </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent>{emp.name}</TooltipContent>
-                    </Tooltip>
-                ))}
-                {overflow > 0 && (
-                    <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
-                        <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>+{overflow}</AvatarFallback>
-                    </Avatar>
-                )}
-            </div>
-        </TooltipProvider>
-    );
-}
-
 export default function DailyPrestartIndex({ prestarts, filters, locations, workDates }: Props) {
     const { flash, auth } = usePage<{ flash: { success?: string; error?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string; error?: string };
@@ -147,13 +111,13 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                     <div className="w-64">
                         <Label>Project</Label>
                         <Popover open={locationOpen} onOpenChange={setLocationOpen}>
-                            <PopoverTrigger asChild>
+                            <PopoverTrigger asChild className='w-full'>
                                 <Button variant="outline" role="combobox" className="w-full justify-between">
                                     {selectedLocation?.name ?? 'All projects'}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-64 p-0">
+                            <PopoverContent className="w-[var(--anchor-width)] p-0">
                                 <Command>
                                     <CommandInput placeholder="Search projects..." />
                                     <CommandList>
@@ -248,12 +212,14 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                         </span>
                                     </TableCell>
                                     <TableCell>{p.location?.name ?? '-'}</TableCell>
-                                    <TableCell>{p.foreman?.name ?? '-'}</TableCell>
                                     <TableCell>
-                                        <AvatarGroup employees={p.signed_employees ?? []} variant="signed" />
+                                        <PersonAvatar name={p.foreman?.name} />
                                     </TableCell>
                                     <TableCell>
-                                        <AvatarGroup employees={p.not_signed_employees ?? []} variant="not_signed" />
+                                        <AvatarStack people={p.signed_employees ?? []} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <AvatarStack people={p.not_signed_employees ?? []} />
                                     </TableCell>
                                     <TableCell>
                                         <DropdownMenu>
@@ -418,23 +384,15 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                     );
                 })()}
 
-                {/* Delete confirmation */}
-                <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Delete Prestart</DialogTitle>
-                        </DialogHeader>
-                        <p>Are you sure you want to delete the prestart for {deleteTarget?.work_date}? This will also delete all signatures.</p>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-                                Cancel
-                            </Button>
-                            <Button variant="destructive" onClick={confirmDelete}>
-                                Delete
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <ConfirmDialog
+                    open={!!deleteTarget}
+                    onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+                    title="Delete Prestart"
+                    description={`Are you sure you want to delete the prestart for ${deleteTarget?.work_date}? This will also delete all signatures.`}
+                    confirmLabel="Delete"
+                    variant="destructive"
+                    onConfirm={confirmDelete}
+                />
             </div>
         </AppLayout>
     );

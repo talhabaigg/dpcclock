@@ -1,6 +1,6 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
+import AvatarStack from '@/components/avatar-stack';
 import AppLayout from '@/layouts/app-layout';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,8 +12,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useInitials } from '@/hooks/use-initials';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Lock, Plus } from 'lucide-react';
@@ -24,55 +22,6 @@ interface EmployeeSummary {
     name: string;
 }
 
-function AvatarGroup({ employees, variant }: { employees: EmployeeSummary[]; variant: 'signed' | 'not_signed' }) {
-    const getInitials = useInitials();
-    const maxShow = 5;
-    const shown = employees.slice(0, maxShow);
-    const overflow = employees.length - maxShow;
-
-    if (employees.length === 0) {
-        return <span className="text-muted-foreground text-sm">-</span>;
-    }
-
-    const colorClass = variant === 'signed'
-        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-        : 'bg-red-50 text-red-600 border-red-200';
-
-    return (
-        <TooltipProvider>
-            <div className="flex -space-x-2">
-                {shown.map((emp) => (
-                    <Tooltip key={emp.id}>
-                        <TooltipTrigger asChild>
-                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
-                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>
-                                    {getInitials(emp.name)}
-                                </AvatarFallback>
-                            </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent>{emp.name}</TooltipContent>
-                    </Tooltip>
-                ))}
-                {overflow > 0 && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Avatar className={`h-7 w-7 border-2 ${colorClass}`}>
-                                <AvatarFallback className={`text-[10px] font-medium ${colorClass}`}>
-                                    +{overflow}
-                                </AvatarFallback>
-                            </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent className="flex max-w-48 flex-col items-start gap-0.5 text-xs">
-                            {employees.slice(maxShow).map((e) => (
-                                <div key={e.id}>{e.name}</div>
-                            ))}
-                        </TooltipContent>
-                    </Tooltip>
-                )}
-            </div>
-        </TooltipProvider>
-    );
-}
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Toolbox Talks', href: '/toolbox-talks' }];
 
@@ -300,10 +249,10 @@ export default function ToolboxTalksIndex({ talks, filters, locations, meetingDa
                                     <TableCell>{subjectOptions[t.meeting_subject] ?? t.meeting_subject}</TableCell>
                                     <TableCell>{t.called_by?.name ?? '-'}</TableCell>
                                     <TableCell>
-                                        <AvatarGroup employees={t.signed_employees ?? []} variant="signed" />
+                                        <AvatarStack people={t.signed_employees ?? []} />
                                     </TableCell>
                                     <TableCell>
-                                        <AvatarGroup employees={t.not_signed_employees ?? []} variant="not_signed" />
+                                        <AvatarStack people={t.not_signed_employees ?? []} />
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <DropdownMenu>
