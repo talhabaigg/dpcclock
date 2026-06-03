@@ -46,6 +46,21 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
         self::STATUS_DECLINED,
     ];
 
+    public const STATUS_LABELS = [
+        self::STATUS_NEW              => 'New',
+        self::STATUS_REVIEWING        => 'Reviewing',
+        self::STATUS_PHONE_INTERVIEW  => 'Phone Interview',
+        self::STATUS_REFERENCE_CHECK  => 'Reference Check',
+        self::STATUS_FACE_TO_FACE     => 'Face to Face',
+        self::STATUS_WHS_REVIEW       => 'WHS Review',
+        self::STATUS_FINAL_REVIEW     => 'Final Review',
+        self::STATUS_APPROVED         => 'Approved',
+        self::STATUS_CONTRACT_SENT    => 'Contract Sent',
+        self::STATUS_CONTRACT_SIGNED  => 'Contract Signed',
+        self::STATUS_ONBOARDED        => 'Onboarded',
+        self::STATUS_DECLINED         => 'Declined',
+    ];
+
     protected $fillable = [
         'surname',
         'first_name',

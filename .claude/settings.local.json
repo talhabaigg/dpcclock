@@ -134,7 +134,9 @@
       "Bash(redis-cli --scan --pattern '*horizon*')",
       "Bash(redis-cli keys *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('count='+str\\(d.get\\('d',{}\\).get\\('__count'\\)\\)\\); print\\('keys='+str\\(list\\(d.get\\('d',{}\\).keys\\(\\)\\)[:5]\\)\\)\")",
-      "Bash(python3 -c \"import json; d=json.load\\(open\\('/tmp/ic.json'\\)\\)['d']; print\\('keys:', list\\(d.keys\\(\\)\\)[:5]\\); print\\('__count:', d.get\\('__count'\\)\\)\")"
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/tmp/ic.json'\\)\\)['d']; print\\('keys:', list\\(d.keys\\(\\)\\)[:5]\\); print\\('__count:', d.get\\('__count'\\)\\)\")",
+      "Bash(awk 'NR<=489 && /^\\(function|const\\) [A-Z]/' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/employment-applications/show.tsx)",
+      "Bash(awk 'NR>=350 && NR<=475 && /^\\(function|const\\) [A-Za-z]|^}/' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/employment-applications/show.tsx)"
     ]
   }
 }

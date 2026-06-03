@@ -301,24 +301,10 @@ interface PageProps {
     formTemplates: FormTemplateOption[];
     formRequests: FormRequestData[];
     onboardingLocations: Record<string, OnboardingLocation[]>;
+    statuses: Record<string, string>;
     screeningAlert?: boolean;
     injuryHistory?: InjuryHistory | null;
 }
-
-const STATUS_LABELS: Record<string, string> = {
-    new: 'New',
-    reviewing: 'Reviewing',
-    phone_interview: 'Phone Interview',
-    reference_check: 'Reference Check',
-    face_to_face: 'Face to Face',
-    whs_review: 'WHS Review',
-    final_review: 'Final Review',
-    approved: 'Approved',
-    contract_sent: 'Contract Sent',
-    contract_signed: 'Contract Signed',
-    onboarded: 'Onboarded',
-    declined: 'Declined',
-};
 
 const PIPELINE_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face', 'whs_review', 'final_review', 'approved', 'contract_sent', 'contract_signed', 'onboarded'];
 
@@ -328,10 +314,10 @@ const SYSTEM_STATUSES = ['contract_sent', 'contract_signed', 'onboarded'];
 /** Statuses that are selectable in the dropdown */
 const SELECTABLE_STATUSES = PIPELINE_STATUSES.filter((s) => !SYSTEM_STATUSES.includes(s));
 
-function StatusBadge({ status, className }: { status: string; className?: string }) {
+function StatusBadge({ status, labels, className }: { status: string; labels: Record<string, string>; className?: string }) {
     return (
         <Badge variant="secondary" className={cn('text-xs', className)}>
-            {STATUS_LABELS[status] ?? status}
+            {labels[status] ?? status}
         </Badge>
     );
 }
@@ -378,7 +364,7 @@ function UserAvatar({ name, className }: { name: string; className?: string }) {
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onOpenFormResponse, onReply, isReply }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefCheck, onOpenFormResponse, onReply, isReply, statusLabels }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
@@ -387,6 +373,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
     onOpenFormResponse?: (formRequestId: number) => void;
     onReply?: (commentId: number, userName: string) => void;
     isReply?: boolean;
+    statusLabels: Record<string, string>;
 }) {
     const [showReplies, setShowReplies] = useState(false);
     const isSystem = comment.metadata !== null;
@@ -500,9 +487,9 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                     <p className="text-sm">
                         <span className="font-medium">{comment.user?.name ?? 'System'}</span>
                         <span className="text-muted-foreground"> changed status </span>
-                        <StatusBadge status={statusChange.from} className="mx-0.5" />
+                        <StatusBadge status={statusChange.from} labels={statusLabels} className="mx-0.5" />
                         <ArrowRight className="mx-0.5 inline h-3 w-3" />
-                        <StatusBadge status={statusChange.to} className="mx-0.5" />
+                        <StatusBadge status={statusChange.to} labels={statusLabels} className="mx-0.5" />
                     </p>
                     <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
                 </div>
@@ -614,7 +601,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenRefChec
                     {showReplies && (
                         <div className="mt-1 space-y-2.5 border-l-2 border-border/50 pl-3">
                             {comment.replies!.map((reply) => (
-                                <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} isReply />
+                                <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} statusLabels={statusLabels} isReply />
                             ))}
                         </div>
                     )}
@@ -1895,7 +1882,7 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, screeningAlert, injuryHistory }: PageProps) {
+export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, onboardingLocations, statuses, screeningAlert, injuryHistory }: PageProps) {
     const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
     const { auth, errors: pageErrors } = pageProps;
     const permissions = auth.permissions ?? [];
@@ -2090,7 +2077,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                             {duplicates.length} other enquiry(ies):
                             {duplicates.map((d) => (
                                 <Link key={d.id} href={`/employment-applications/${d.id}`} className="ml-2 underline">
-                                    {STATUS_LABELS[d.status] ?? d.status} ({formatDate(d.created_at)})
+                                    {statuses[d.status] ?? d.status} ({formatDate(d.created_at)})
                                 </Link>
                             ))}
                         </AlertDescription>
@@ -2271,6 +2258,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                     if (fr) setViewingFormRequest(fr);
                                                 }}
                                                 onReply={(id, userName) => setReplyingTo({ id, userName })}
+                                                statusLabels={statuses}
                                             />
                                         ))}
                                     </div>
@@ -2402,7 +2390,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     <h2 className="text-lg font-semibold">
                                         {app.first_name} {app.surname}
                                     </h2>
-                                    <StatusBadge status={app.status} />
+                                    <StatusBadge status={app.status} labels={statuses} />
                                 </div>
 
                                 {/* Status Controls */}
@@ -2410,7 +2398,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     <div className="mb-4 space-y-2">
                                         {SYSTEM_STATUSES.includes(app.status) ? (
                                             <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                                                <StatusBadge status={app.status} />
+                                                <StatusBadge status={app.status} labels={statuses} />
                                                 <span className="text-xs">(system)</span>
                                             </div>
                                         ) : (
@@ -2426,7 +2414,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         return true;
                                                     }).map((s) => (
                                                         <SelectItem key={s} value={s}>
-                                                            {STATUS_LABELS[s]}
+                                                            {statuses[s]}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>

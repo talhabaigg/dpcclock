@@ -222,7 +222,7 @@ class EmploymentApplicationController extends Controller
         return Inertia::render('employment-applications/index', [
             'applications' => $applications,
             'filters' => $request->only(['status', 'occupation', 'search', 'suburb', 'date_from', 'date_to', 'duplicates_only', 'apprentice', 'apprentice_year', 'per_page']),
-            'statuses' => EmploymentApplication::STATUSES,
+            'statuses' => EmploymentApplication::STATUS_LABELS,
             'occupations' => $occupations,
             'view' => $view,
             'isLocal' => app()->environment('local', 'testing'),
@@ -417,7 +417,7 @@ class EmploymentApplicationController extends Controller
             'checklists' => $checklists,
             'availableTemplates' => $availableTemplates,
             'duplicates' => $duplicates,
-            'statuses' => EmploymentApplication::STATUSES,
+            'statuses' => EmploymentApplication::STATUS_LABELS,
             'onboardingLocations' => $onboardingLocations,
             'signingRequests' => $signingRequests->map(fn ($sr) => [
                 'id' => $sr->id,

@@ -45,21 +45,6 @@ function getStatusColor(status: string): string {
     return '#f59e0b';
 }
 
-const STATUS_LABELS: Record<string, string> = {
-    new: 'New',
-    reviewing: 'Reviewing',
-    phone_interview: 'Phone Interview',
-    reference_check: 'Reference Check',
-    face_to_face: 'Face to Face',
-    whs_review: 'WHS Review',
-    final_review: 'Final Review',
-    approved: 'Approved',
-    contract_sent: 'Contract Sent',
-    contract_signed: 'Contract Signed',
-    onboarded: 'Onboarded',
-    declined: 'Declined',
-};
-
 // ── Marker icons ───────────────────────────────────────────────────────────────
 
 const iconCache = new Map<string, L.DivIcon>();
@@ -155,7 +140,7 @@ function getZone(km: number): { label: string; color: string } {
     return { label: 'Zone 3', color: '#ef4444' };
 }
 
-function popupHtml(app: EmploymentApplication): string {
+function popupHtml(app: EmploymentApplication, statusLabels: Record<string, string>): string {
     const color = getStatusColor(app.status);
     return `<div style="min-width:180px;font-family:system-ui,sans-serif">
         <p style="margin:0 0 2px;font-size:13px;font-weight:600">${esc(app.first_name)} ${esc(app.surname)}</p>
@@ -164,7 +149,7 @@ function popupHtml(app: EmploymentApplication): string {
         <p style="margin:0;font-size:11px;color:#888">${esc(app.email)}</p>
         <p style="margin:0;font-size:11px;color:#888">${esc(app.phone)}</p>
         <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="display:inline-block;border:1px solid ${color};color:${color};border-radius:9999px;padding:1px 8px;font-size:11px;font-weight:500">${STATUS_LABELS[app.status] ?? app.status}</span>
+            <span style="display:inline-block;border:1px solid ${color};color:${color};border-radius:9999px;padding:1px 8px;font-size:11px;font-weight:500">${statusLabels[app.status] ?? app.status}</span>
             <button onclick="window.__mapCrowFly&&window.__mapCrowFly(${app.id})" style="
                 display:inline-flex;align-items:center;gap:3px;
                 border:1px solid #e5e5e5;background:#fff;color:#1a1a1a;
@@ -281,10 +266,12 @@ function ClusterLayer({
     applications,
     jitteredPositions,
     onMarkerClickRef,
+    statusLabels,
 }: {
     applications: EmploymentApplication[];
     jitteredPositions: [number, number][];
     onMarkerClickRef: React.RefObject<(id: number) => void>;
+    statusLabels: Record<string, string>;
 }) {
     const map = useMap();
     const clusterRef = useRef<any>(null);
@@ -341,7 +328,7 @@ function ClusterLayer({
         const markers: L.Marker[] = [];
         applications.forEach((app, idx) => {
             const marker = L.marker(jitteredPositions[idx], { icon: getIcon(app.status, `${app.first_name} ${app.surname}`, app.occupation) });
-            marker.bindPopup(popupHtml(app));
+            marker.bindPopup(popupHtml(app, statusLabels));
             marker.on('click', () => onMarkerClickRef.current(app.id));
             markers.push(marker);
         });
@@ -571,9 +558,10 @@ function MapRefCapture({ mapRef }: { mapRef: React.RefObject<L.Map | null> }) {
 interface Props {
     applications: EmploymentApplication[];
     toolbarSlot?: HTMLElement | null;
+    statuses: Record<string, string>;
 }
 
-export default function ApplicantMapView({ applications, toolbarSlot }: Props) {
+export default function ApplicantMapView({ applications, toolbarSlot, statuses }: Props) {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
     const [targetAddress, setTargetAddress] = useState<string>('');
@@ -957,6 +945,7 @@ export default function ApplicantMapView({ applications, toolbarSlot }: Props) {
                                 onClick={() => handleCardClick(app)}
                                 onCrowFly={() => handleCrowFly(app)}
                                 onDriving={() => handleDriving(app)}
+                                statusLabels={statuses}
                             />
                         ))}
                         {unmappable.length > 0 && (
@@ -973,7 +962,7 @@ export default function ApplicantMapView({ applications, toolbarSlot }: Props) {
                                                 </Link>
                                                 <p className="text-muted-foreground truncate text-xs">{app.suburb || 'No suburb'}</p>
                                             </div>
-                                            <Badge variant="outline" className="text-xs">{STATUS_LABELS[app.status] ?? app.status}</Badge>
+                                            <Badge variant="outline" className="text-xs">{statuses[app.status] ?? app.status}</Badge>
                                         </div>
                                     </div>
                                 ))}
@@ -1004,6 +993,7 @@ export default function ApplicantMapView({ applications, toolbarSlot }: Props) {
                                 applications={mappable}
                                 jitteredPositions={jitteredPositions}
                                 onMarkerClickRef={markerClickRef}
+                                statusLabels={statuses}
                             />
                             <TargetMarkerLayer position={targetPosition} label={targetAddress} />
                             <FlyTo position={flyTarget} />
@@ -1041,6 +1031,7 @@ const ApplicantCard = memo(function ApplicantCard({
     onClick,
     onCrowFly,
     onDriving,
+    statusLabels,
 }: {
     app: EmploymentApplication;
     isSelected: boolean;
@@ -1053,6 +1044,7 @@ const ApplicantCard = memo(function ApplicantCard({
     onClick: () => void;
     onCrowFly: () => void;
     onDriving: () => void;
+    statusLabels: Record<string, string>;
 }) {
     return (
         <div
@@ -1080,7 +1072,7 @@ const ApplicantCard = memo(function ApplicantCard({
                         className="text-xs"
                         style={{ borderColor: getStatusColor(app.status), color: getStatusColor(app.status) }}
                     >
-                        {STATUS_LABELS[app.status] ?? app.status}
+                        {statusLabels[app.status] ?? app.status}
                     </Badge>
                     {hasTarget && crowflyKm != null ? (
                         <div className="flex items-center gap-0 overflow-hidden rounded-md border" style={{ borderColor: getZone(crowflyKm).color + '40' }}>
