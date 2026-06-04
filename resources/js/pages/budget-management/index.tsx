@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { CheckCircle2, Loader2, Save } from 'lucide-react';
+import { CheckCircle2, Download, FileSpreadsheet, Loader2, Save, Search, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type GlAccount = { id: number; account_number: string; description: string | null };
@@ -257,6 +257,20 @@ function GlBudgetsPanel({
     glBudgets: GlBudgetsMap;
     canEdit: boolean;
 }) {
+    const importInputRef = useRef<HTMLInputElement>(null);
+    const importFormRef = useRef<HTMLFormElement>(null);
+    const [importing, setImporting] = useState(false);
+    const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
+
+    const triggerImport = () => importInputRef.current?.click();
+
+    const onImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setImporting(true);
+            importFormRef.current?.submit();
+        }
+    };
+
     const initial = useMemo<GlBudgetsMap>(() => {
         const map: GlBudgetsMap = {};
         glAccounts.forEach((a) => {
@@ -337,35 +351,100 @@ function GlBudgetsPanel({
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search GL account…"
-                    className="h-8 max-w-xs text-xs"
-                />
-                <p className="text-muted-foreground text-xs">
-                    {filteredAccounts.length} {filteredAccounts.length === 1 ? 'account' : 'accounts'}
-                </p>
+                <div className="flex flex-1 items-center gap-3">
+                    <div className="relative w-full max-w-xs">
+                        <Search aria-hidden className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                        <Input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search GL account…"
+                            aria-label="Search GL accounts"
+                            className="h-8 pl-7 pr-7 text-xs"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Clear search"
+                                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground text-xs tabular-nums">
+                        {search.trim()
+                            ? `${filteredAccounts.length} of ${glAccounts.length} accounts`
+                            : `${glAccounts.length} accounts`}
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                    <a href={`/budget-management/gl/template?fy=${fyYear}`}>
+                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                            Template
+                        </Button>
+                    </a>
+                    <a href={`/budget-management/gl/export?fy=${fyYear}`}>
+                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                            <Download className="h-3.5 w-3.5" />
+                            Export
+                        </Button>
+                    </a>
+                    {canEdit && (
+                        <>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                onClick={triggerImport}
+                                disabled={importing}
+                            >
+                                {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                                Import
+                            </Button>
+                            <form
+                                ref={importFormRef}
+                                action="/budget-management/gl/import"
+                                method="POST"
+                                encType="multipart/form-data"
+                                className="hidden"
+                            >
+                                <input type="hidden" name="_token" value={csrfToken} />
+                                <input type="hidden" name="fyYear" value={fyYear} />
+                                <input
+                                    ref={importInputRef}
+                                    type="file"
+                                    name="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={onImportFileChange}
+                                />
+                            </form>
+                        </>
+                    )}
+                </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="max-h-[60vh] overflow-auto rounded-lg border">
                 <table className="w-full border-collapse text-xs">
-                    <thead className="bg-muted/50 sticky top-0">
-                        <tr className="text-xs font-semibold tracking-wide uppercase">
-                            <th className="text-muted-foreground border-b border-r border-border px-2 py-2 text-left font-semibold sticky left-0 bg-muted/50 z-10 min-w-[200px]">
+                    <thead className="bg-muted/50 sticky top-0 z-20">
+                        <tr className="text-xs font-medium">
+                            <th className="text-muted-foreground border-b border-r border-border px-2 py-2 text-left sticky left-0 bg-muted/50 z-10 min-w-[200px]">
                                 GL Account
                             </th>
                             {months.map((month, index) => (
                                 <th
                                     key={month}
-                                    className={`text-muted-foreground border-b border-r border-border px-2 py-2 text-center font-semibold min-w-[80px] ${
+                                    className={`text-muted-foreground border-b border-r border-border px-2 py-2 text-center min-w-[80px] ${
                                         index > 0 && index % 3 === 0 ? 'border-l-2 border-l-foreground/20' : ''
                                     }`}
                                 >
                                     {formatMonthShort(month)}
                                 </th>
                             ))}
-                            <th className="text-muted-foreground border-b border-border bg-muted/70 px-2 py-2 text-right font-semibold min-w-[90px]">
+                            <th className="text-muted-foreground border-b border-border bg-muted/70 px-2 py-2 text-right min-w-[90px]">
                                 Total
                             </th>
                         </tr>
@@ -373,8 +452,20 @@ function GlBudgetsPanel({
                     <tbody>
                         {filteredAccounts.length === 0 ? (
                             <tr>
-                                <td colSpan={months.length + 2} className="text-muted-foreground px-3 py-8 text-center text-xs">
-                                    No GL accounts match this search.
+                                <td colSpan={months.length + 2} className="px-3 py-10 text-center">
+                                    {glAccounts.length === 0 ? (
+                                        <div className="text-muted-foreground space-y-1 text-xs">
+                                            <p>No GL accounts synced yet.</p>
+                                            <p className="text-[11px]">Run the Premier GL Accounts sync to populate this list.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="text-muted-foreground space-y-2 text-xs">
+                                            <p>No accounts match “{search}”.</p>
+                                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSearch('')}>
+                                                Clear search
+                                            </Button>
+                                        </div>
+                                    )}
                                 </td>
                             </tr>
                         ) : (

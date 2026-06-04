@@ -1072,13 +1072,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================
     Route::middleware('permission:budget.view')->group(function () {
         Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');
+        Route::get('/budget-management/gl/export', [CompanyRevenueTargetController::class, 'exportGlBudgets'])->name('budgetManagement.glExport');
+        Route::get('/budget-management/gl/template', [CompanyRevenueTargetController::class, 'downloadGlBudgetTemplate'])->name('budgetManagement.glTemplate');
     });
     Route::middleware('permission:reports.glBudgetActual')->group(function () {
         Route::get('/reports/gl-budget-actual', [GlBudgetActualReportController::class, 'index'])->name('reports.glBudgetActual');
+        Route::get('/reports/gl-budget-actual/pdf', [GlBudgetActualReportController::class, 'downloadPdf'])->name('reports.glBudgetActual.pdf');
     });
     Route::middleware('permission:budget.edit')->group(function () {
         Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store');
         Route::post('/budget-management/gl', [CompanyRevenueTargetController::class, 'storeGlBudgets'])->name('budgetManagement.storeGl');
+        Route::post('/budget-management/gl/import', [CompanyRevenueTargetController::class, 'importGlBudgets'])->name('budgetManagement.glImport');
     });
 
     // ============================================

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\GlBudgetExport;
+use App\Imports\GlBudgetImport;
 use App\Models\CompanyMonthlyRevenueTarget;
 use App\Models\GlMonthlyBudget;
 use App\Models\PremierGlAccount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
 
 class CompanyRevenueTargetController extends Controller
 {
@@ -120,6 +123,68 @@ class CompanyRevenueTargetController extends Controller
         return redirect()
             ->route('budgetManagement.index', ['fy' => $fyYear])
             ->with('success', 'Revenue targets saved.');
+    }
+
+    public function exportGlBudgets(Request $request)
+    {
+        $fyYear = $this->resolveFyYear($request->query('fy'));
+        $label = "FY{$fyYear}-".substr((string) ($fyYear + 1), 2, 2);
+        $filename = "GL Budgets - {$label}.xlsx";
+
+        return Excel::download(new GlBudgetExport($fyYear, template: false), $filename);
+    }
+
+    public function downloadGlBudgetTemplate(Request $request)
+    {
+        $fyYear = $this->resolveFyYear($request->query('fy'));
+        $label = "FY{$fyYear}-".substr((string) ($fyYear + 1), 2, 2);
+        $filename = "GL Budget Template - {$label}.xlsx";
+
+        return Excel::download(new GlBudgetExport($fyYear, template: true), $filename);
+    }
+
+    public function importGlBudgets(Request $request)
+    {
+        $validated = $request->validate([
+            'fyYear' => 'required|integer',
+            'file' => 'required|file|mimes:xlsx,xls|max:10240',
+        ]);
+
+        $fyYear = (int) $validated['fyYear'];
+        $import = new GlBudgetImport($fyYear);
+
+        try {
+            Excel::import($import, $request->file('file'));
+        } catch (\Throwable $e) {
+            return back()
+                ->with('error', 'Import failed: '.$e->getMessage())
+                ->withInput();
+        }
+
+        $parts = [];
+        if ($import->insertedCount > 0) {
+            $parts[] = "{$import->insertedCount} added";
+        }
+        if ($import->updatedCount > 0) {
+            $parts[] = "{$import->updatedCount} updated";
+        }
+        if ($import->deletedCount > 0) {
+            $parts[] = "{$import->deletedCount} cleared";
+        }
+        if (empty($parts)) {
+            $parts[] = 'no changes';
+        }
+        $message = 'GL budgets imported: '.implode(', ', $parts).'.';
+
+        if (! empty($import->unmatchedCodes)) {
+            $sample = array_slice($import->unmatchedCodes, 0, 5);
+            $extra = count($import->unmatchedCodes) > 5 ? ' (+'.(count($import->unmatchedCodes) - 5).' more)' : '';
+            $message .= ' Unmatched GL codes skipped: '.implode(', ', $sample).$extra.'.';
+        }
+
+        return redirect()
+            ->route('budgetManagement.index', ['fy' => $fyYear])
+            ->with('success', $message);
     }
 
     public function storeGlBudgets(Request $request)
