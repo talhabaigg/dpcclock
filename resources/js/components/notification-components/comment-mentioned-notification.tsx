@@ -61,29 +61,32 @@ const CommentMentionedNotification = ({ notification, onDismiss }: Props) => {
     );
 
     return (
-        <div className="group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-50/60 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:border-slate-300 focus-within:bg-slate-50/40 focus-within:shadow-md dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:focus-within:border-slate-700 dark:focus-within:bg-slate-900/80">
+        <div className="group bg-card border-border hover:bg-muted/40 focus-within:bg-muted/30 relative overflow-hidden rounded-xl border shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none motion-safe:hover:-translate-y-0.5 focus-within:shadow-md">
             <div className="p-3">
                 <div className="flex items-start gap-3">
-                    <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                    <div className="bg-primary/10 text-primary relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                         {author_name ? initialsOf(author_name) : <AtSign className="h-4 w-4" />}
-                        <span aria-hidden className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white ring-2 ring-white dark:ring-slate-950">
+                        <span
+                            aria-hidden
+                            className="bg-primary text-primary-foreground ring-card absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2"
+                        >
                             <AtSign className="h-2.5 w-2.5" />
                         </span>
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-5 text-slate-900 dark:text-slate-100">
+                        <p className="text-foreground text-sm leading-5">
                             <span className="font-medium">{author_name ?? 'Someone'}</span>{' '}
-                            <span className="text-slate-600 dark:text-slate-400">mentioned you</span>
+                            <span className="text-muted-foreground">mentioned you</span>
                             {resource_label && (
-                                <span className="text-slate-600 dark:text-slate-400"> in {resource_label}</span>
+                                <span className="text-muted-foreground"> in {resource_label}</span>
                             )}
                         </p>
                         {excerpt && (
-                            <p className="mt-1 line-clamp-2 text-xs text-slate-600 italic dark:text-slate-400">“{excerpt}”</p>
+                            <p className="text-muted-foreground mt-1 line-clamp-2 text-xs italic">“{excerpt}”</p>
                         )}
 
-                        <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-500">
+                        <div className="text-muted-foreground mt-2 flex items-center gap-1 text-xs">
                             <Clock className="h-3 w-3" />
                             <span>{formatTime(notification.created_at)}</span>
                         </div>
@@ -94,7 +97,7 @@ const CommentMentionedNotification = ({ notification, onDismiss }: Props) => {
                                     variant="outline"
                                     size="sm"
                                     onClick={handleOpen}
-                                    className="h-8 gap-1.5 border-slate-200 bg-transparent text-xs font-medium text-slate-700 shadow-none transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-slate-300 hover:bg-slate-100 active:scale-[0.98] motion-reduce:transform-none dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                                    className="h-8 gap-1.5 text-xs font-medium shadow-none active:scale-[0.98] motion-reduce:transform-none"
                                 >
                                     View comment
                                     <ChevronRight className="h-3.5 w-3.5 transition-transform duration-150 ease-out motion-reduce:transform-none motion-safe:group-hover:translate-x-0.5" />
@@ -107,9 +110,9 @@ const CommentMentionedNotification = ({ notification, onDismiss }: Props) => {
                         variant="ghost"
                         size="icon"
                         onClick={handleDismiss}
-                        className="h-7 w-7 flex-shrink-0 opacity-100 transition-[opacity,background-color,color,transform] duration-150 ease-out hover:bg-slate-100 active:scale-95 motion-reduce:transform-none sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 dark:hover:bg-slate-900"
+                        className="text-muted-foreground hover:text-foreground h-7 w-7 flex-shrink-0 opacity-100 active:scale-95 motion-reduce:transform-none sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                     >
-                        <X className="h-4 w-4 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" />
+                        <X className="h-4 w-4" />
                         <span className="sr-only">Dismiss notification</span>
                     </Button>
                 </div>
