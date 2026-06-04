@@ -203,16 +203,30 @@ class EmployeeController extends Controller
 
         // Journal entries (comments on employee)
         $journal = $employee->comments()
-            ->with(['user', 'media'])
+            ->with([
+                'user',
+                'media',
+                'mentionedUsers' => fn ($q) => $q
+                    ->select('users.id', 'users.name', 'users.email', 'users.phone', 'users.position', 'users.disabled_at'),
+            ])
             ->whereNull('parent_id')
             ->latest()
             ->get()
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'body' => $c->body,
+                'body_json' => $c->body_json,
                 'type' => $c->type,
                 'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
                 'created_at' => $c->created_at->toISOString(),
+                'mentioned_users' => $c->mentionedUsers->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'position' => $u->position,
+                    'is_active' => $u->disabled_at === null,
+                ])->values(),
                 'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'name' => $m->file_name,

@@ -467,6 +467,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
     Route::get('/comments/{comment}/attachments/{media}', [CommentController::class, 'streamAttachment'])->name('comments.attachment');
+    Route::get('/comments/users/search', [CommentController::class, 'searchUsers'])->name('comments.users.search');
 
     // ============================================
     // CHECKLISTS (generic)

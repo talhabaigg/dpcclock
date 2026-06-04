@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -20,6 +21,7 @@ class Comment extends Model implements HasMedia
         'commentable_id',
         'user_id',
         'body',
+        'body_json',
         'type',
         'parent_id',
         'metadata',
@@ -27,6 +29,7 @@ class Comment extends Model implements HasMedia
 
     protected $casts = [
         'metadata' => 'array',
+        'body_json' => 'array',
     ];
 
     public function commentable(): MorphTo
@@ -47,6 +50,75 @@ class Comment extends Model implements HasMedia
     public function replies(): HasMany
     {
         return $this->hasMany(Comment::class, 'parent_id');
+    }
+
+    public function mentionedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'comment_mentions')->withTimestamps();
+    }
+
+    /**
+     * Walk a Tiptap/ProseMirror doc and return any mention node user IDs.
+     */
+    public static function extractMentionIds(?array $doc): array
+    {
+        if (! $doc) {
+            return [];
+        }
+
+        $ids = [];
+        $walk = function ($node) use (&$walk, &$ids) {
+            if (! is_array($node)) {
+                return;
+            }
+            if (($node['type'] ?? null) === 'mention') {
+                $id = $node['attrs']['id'] ?? null;
+                if ($id !== null && $id !== '') {
+                    $ids[] = (int) $id;
+                }
+            }
+            foreach ($node['content'] ?? [] as $child) {
+                $walk($child);
+            }
+        };
+        $walk($doc);
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Derive plain text from a Tiptap/ProseMirror doc — used for previews,
+     * search indexing, and notification bodies.
+     */
+    public static function plainTextFromDoc(?array $doc): string
+    {
+        if (! $doc) {
+            return '';
+        }
+
+        $parts = [];
+        $walk = function ($node) use (&$walk, &$parts) {
+            if (! is_array($node)) {
+                return;
+            }
+            $type = $node['type'] ?? null;
+            if ($type === 'text') {
+                $parts[] = $node['text'] ?? '';
+            } elseif ($type === 'mention') {
+                $label = $node['attrs']['label'] ?? '';
+                $parts[] = '@'.$label;
+            } else {
+                foreach ($node['content'] ?? [] as $child) {
+                    $walk($child);
+                }
+                if (in_array($type, ['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem'], true)) {
+                    $parts[] = "\n";
+                }
+            }
+        };
+        $walk($doc);
+
+        return trim(preg_replace("/\n{2,}/", "\n\n", implode('', $parts)));
     }
 
     public function isSystem(): bool

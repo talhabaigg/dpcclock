@@ -12,11 +12,18 @@ trait HasComments
         return $this->morphMany(Comment::class, 'commentable');
     }
 
-    public function addComment(string $body, ?int $userId = null, ?int $parentId = null, ?array $metadata = null, ?string $type = null): Comment
-    {
+    public function addComment(
+        string $body,
+        ?int $userId = null,
+        ?int $parentId = null,
+        ?array $metadata = null,
+        ?string $type = null,
+        ?array $bodyJson = null,
+    ): Comment {
         return $this->comments()->create([
             'user_id' => $userId ?? auth()->id(),
             'body' => $body,
+            'body_json' => $bodyJson,
             'type' => $type,
             'parent_id' => $parentId,
             'metadata' => $metadata,

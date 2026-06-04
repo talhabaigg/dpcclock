@@ -139,36 +139,46 @@ class ForecastProjectController extends Controller
         $project = ForecastProject::with(['creator:id,name', 'updater:id,name', 'archiver:id,name'])
             ->findOrFail($id);
 
+        $mapComment = fn ($c) => [
+            'id' => $c->id,
+            'body' => $c->body,
+            'body_json' => $c->body_json,
+            'metadata' => $c->metadata,
+            'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
+            'created_at' => $c->created_at->toISOString(),
+            'mentioned_users' => $c->mentionedUsers->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'phone' => $u->phone,
+                'position' => $u->position,
+                'is_active' => $u->disabled_at === null,
+            ])->values(),
+            'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
+                'id' => $m->id,
+                'file_name' => $m->file_name,
+                'url' => $m->getUrl(),
+                'mime_type' => $m->mime_type,
+            ]),
+        ];
+
+        $mentionedUserLoad = fn ($q) => $q
+            ->select('users.id', 'users.name', 'users.email', 'users.phone', 'users.position', 'users.disabled_at');
+
         $comments = $project->comments()
-            ->with(['user:id,name', 'media', 'replies.user:id,name', 'replies.media'])
+            ->with([
+                'user:id,name',
+                'media',
+                'mentionedUsers' => $mentionedUserLoad,
+                'replies.user:id,name',
+                'replies.media',
+                'replies.mentionedUsers' => $mentionedUserLoad,
+            ])
             ->whereNull('parent_id')
             ->orderBy('created_at')
             ->get()
-            ->map(fn ($c) => [
-                'id' => $c->id,
-                'body' => $c->body,
-                'metadata' => $c->metadata,
-                'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
-                'created_at' => $c->created_at->toISOString(),
-                'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
-                    'id' => $m->id,
-                    'file_name' => $m->file_name,
-                    'url' => $m->getUrl(),
-                    'mime_type' => $m->mime_type,
-                ]),
-                'replies' => $c->replies->map(fn ($r) => [
-                    'id' => $r->id,
-                    'body' => $r->body,
-                    'metadata' => $r->metadata,
-                    'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name] : null,
-                    'created_at' => $r->created_at->toISOString(),
-                    'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
-                        'id' => $m->id,
-                        'file_name' => $m->file_name,
-                        'url' => $m->getUrl(),
-                        'mime_type' => $m->mime_type,
-                    ]),
-                ]),
+            ->map(fn ($c) => $mapComment($c) + [
+                'replies' => $c->replies->map($mapComment)->values(),
             ]);
 
         // Revenue budget mirrors the list view: sum of forecast entries, not the

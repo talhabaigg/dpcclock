@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { CommentBody } from '@/components/comments/comment-body';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import type { JSONContent } from '@tiptap/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
@@ -84,9 +86,19 @@ interface SigningRequestSummary {
 interface JournalEntry {
     id: number;
     body: string;
+    body_json: JSONContent | null;
     type: 'positive' | 'negative' | null;
     user: { id: number; name: string } | null;
     created_at: string;
+    mentioned_users?: {
+        id: number;
+        name: string;
+        email?: string | null;
+        phone?: string | null;
+        position?: string | null;
+        roles?: string[];
+        is_active?: boolean;
+    }[];
     attachments: JournalAttachment[];
 }
 
@@ -281,20 +293,25 @@ export default function EmployeeShow() {
     const currentUserId = auth?.user?.id;
 
     // Journal form state
-    const [journalBody, setJournalBody] = useState('');
+    const [journalDoc, setJournalDoc] = useState<JSONContent | null>(null);
     const [journalType, setJournalType] = useState<string>('positive');
     const [journalFiles, setJournalFiles] = useState<File[]>([]);
     const [journalSubmitting, setJournalSubmitting] = useState(false);
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
+    const docHasContent = (doc: JSONContent | null) => {
+        if (!doc) return false;
+        return /"text"|"mention"/.test(JSON.stringify(doc));
+    };
+
     const submitJournal = useCallback(() => {
-        if (!journalBody.trim() && journalFiles.length === 0) return;
+        if (!docHasContent(journalDoc) && journalFiles.length === 0) return;
         setJournalSubmitting(true);
 
         const formData = new FormData();
         formData.append('commentable_type', 'employee');
         formData.append('commentable_id', String(emp.id));
-        formData.append('body', journalBody.trim());
+        if (journalDoc) formData.append('body_json', JSON.stringify(journalDoc));
         formData.append('type', journalType);
         journalFiles.forEach((file) => formData.append('attachments[]', file));
 
@@ -302,13 +319,13 @@ export default function EmployeeShow() {
             preserveScroll: true,
             forceFormData: true,
             onSuccess: () => {
-                setJournalBody('');
+                setJournalDoc(null);
                 setJournalType('positive');
                 setJournalFiles([]);
             },
             onFinish: () => setJournalSubmitting(false),
         });
-    }, [journalBody, journalType, journalFiles, emp.id]);
+    }, [journalDoc, journalType, journalFiles, emp.id]);
 
     const deleteJournal = useCallback((id: number) => {
         router.delete(`/comments/${id}`, {
@@ -543,10 +560,12 @@ export default function EmployeeShow() {
                                 {/* New entry form */}
                                 <div className="flex flex-col gap-2">
                                     <AiRichTextEditor
-                                        content={journalBody}
-                                        onChange={setJournalBody}
-                                        placeholder="Add a journal entry..."
+                                        outputFormat="json"
+                                        content={journalDoc}
+                                        onChange={setJournalDoc}
+                                        placeholder="Add a journal entry. Use @ to mention someone."
                                         enableAttachments
+                                        enableMentions
                                         attachments={journalFiles}
                                         onAttachmentsChange={setJournalFiles}
                                     />
@@ -582,7 +601,7 @@ export default function EmployeeShow() {
                                                 size="sm"
                                                 className="h-8 ml-2"
                                                 onClick={submitJournal}
-                                                disabled={journalSubmitting || (!journalBody.trim() && journalFiles.length === 0)}
+                                                disabled={journalSubmitting || (!docHasContent(journalDoc) && journalFiles.length === 0)}
                                             >
                                                 {journalSubmitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                                                 Add Entry
@@ -622,7 +641,15 @@ export default function EmployeeShow() {
                                                         </button>
                                                     )}
                                                 </div>
-                                                {entry.body && <div className="prose prose-sm max-w-none dark:prose-invert mt-1.5" dangerouslySetInnerHTML={{ __html: entry.body }} />}
+                                                {entry.body_json ? (
+                                                    <CommentBody
+                                                        doc={entry.body_json}
+                                                        mentionedUsers={entry.mentioned_users}
+                                                        className="prose prose-sm dark:prose-invert mt-1.5 max-w-none"
+                                                    />
+                                                ) : entry.body ? (
+                                                    <div className="prose prose-sm dark:prose-invert mt-1.5 max-w-none" dangerouslySetInnerHTML={{ __html: entry.body }} />
+                                                ) : null}
                                                 {entry.attachments && entry.attachments.length > 0 && (
                                                     <div className="mt-2 flex flex-wrap gap-2">
                                                         {entry.attachments.map((att) =>

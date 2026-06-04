@@ -1,8 +1,9 @@
+import { createMentionExtension } from '@/components/comments/mention-extension';
 import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { type JSONContent, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Underline } from '@tiptap/extension-underline';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -31,19 +32,33 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-interface AiRichTextEditorProps {
-    content: string;
-    onChange: (html: string) => void;
+interface BaseAiRichTextEditorProps {
     placeholder?: string;
     enableAttachments?: boolean;
     attachments?: File[];
     onAttachmentsChange?: (files: File[]) => void;
+    /** Show the @mention picker. */
+    enableMentions?: boolean;
     /**
      * If provided, plain Enter calls this (e.g., to save) and Cmd/Ctrl+Enter inserts a hard break.
      * Without it, Enter behaves as in a normal Tiptap editor.
      */
     onEnter?: () => void;
 }
+
+type AiRichTextEditorProps = BaseAiRichTextEditorProps &
+    (
+        | {
+              outputFormat?: 'html';
+              content: string;
+              onChange: (html: string) => void;
+          }
+        | {
+              outputFormat: 'json';
+              content: JSONContent | null;
+              onChange: (doc: JSONContent) => void;
+          }
+    );
 
 type AiAction = 'summarize' | 'proofread' | 'rephrase' | 'improve' | 'shorten' | 'write';
 
@@ -148,7 +163,16 @@ function streamAiText(
     return controller;
 }
 
-export default function AiRichTextEditor({ content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange, onEnter }: AiRichTextEditorProps) {
+export default function AiRichTextEditor(props: AiRichTextEditorProps) {
+    const { content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange, enableMentions, onEnter } = props;
+    const outputFormat = props.outputFormat ?? 'html';
+    const emitOnChange = (editor: { getHTML: () => string; getJSON: () => JSONContent }) => {
+        if (outputFormat === 'json') {
+            (onChange as (doc: JSONContent) => void)(editor.getJSON());
+        } else {
+            (onChange as (html: string) => void)(editor.getHTML());
+        }
+    };
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiPreview, setAiPreview] = useState<string | null>(null);
@@ -157,7 +181,9 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
     const [promptMode, setPromptMode] = useState<'write' | 'rephrase' | null>(null);
     const [promptValue, setPromptValue] = useState('');
     const [lastActionPrompt, setLastActionPrompt] = useState<string | null>(null);
-    const contentBeforeAi = useRef<string>('');
+    // Snapshot taken before an AI action runs, used to revert on reject. JSON in
+    // json mode so we can pass it straight back to setContent without re-parsing.
+    const contentBeforeAi = useRef<string | JSONContent>('');
     const abortRef = useRef<AbortController | null>(null);
     const streamedHtml = useRef('');
     const promptInputRef = useRef<HTMLInputElement>(null);
@@ -167,11 +193,12 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
             StarterKit.configure({ heading: { levels: [2, 3] } }),
             Underline,
             Placeholder.configure({ placeholder: placeholder ?? 'Start typing...' }),
+            ...(enableMentions ? [createMentionExtension()] : []),
         ],
-        content,
+        content: content ?? undefined,
         onUpdate: ({ editor }) => {
             if (!aiLoading && aiPreview === null) {
-                onChange(editor.getHTML());
+                emitOnChange(editor);
             }
         },
         editorProps: {
@@ -196,8 +223,19 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
     });
 
     useEffect(() => {
-        if (editor && content !== editor.getHTML() && !aiLoading && aiPreview === null) {
-            editor.commands.setContent(content);
+        if (!editor || aiLoading || aiPreview !== null) return;
+        if (outputFormat === 'json') {
+            // Skip when both sides are empty; pushing an empty doc back into the
+            // editor can leave it in a non-typable state where onUpdate stops firing.
+            const incomingEmpty =
+                content == null ||
+                (typeof content === 'object' && (!content.content || content.content.length === 0));
+            if (incomingEmpty && editor.isEmpty) return;
+            if (JSON.stringify(editor.getJSON()) !== JSON.stringify(content)) {
+                editor.commands.setContent(content as JSONContent);
+            }
+        } else if (content !== editor.getHTML()) {
+            editor.commands.setContent((content as string) ?? '');
         }
     }, [content]);
 
@@ -215,7 +253,7 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
             const plainText = getPlainText(currentHtml);
             if (action !== 'write' && !plainText.trim()) return;
 
-            contentBeforeAi.current = currentHtml;
+            contentBeforeAi.current = outputFormat === 'json' ? editor.getJSON() : currentHtml;
             setActiveAction(action);
             setLastActionPrompt(prompt || null);
             setAiLoading(true);
@@ -245,17 +283,17 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
         if (!editor || aiPreview === null) return;
         editor.commands.setContent(aiPreview);
         editor.setEditable(true);
-        onChange(aiPreview);
+        emitOnChange(editor);
         setAiPreview(null);
         setAiError(null);
         setActiveAction(null);
         setPromptMode(null);
-    }, [editor, aiPreview, onChange]);
+    }, [editor, aiPreview, onChange, outputFormat]);
 
     const rejectAi = useCallback(() => {
         if (!editor) return;
         abortRef.current?.abort();
-        editor.commands.setContent(contentBeforeAi.current);
+        editor.commands.setContent(contentBeforeAi.current as JSONContent | string);
         editor.setEditable(true);
         setAiPreview(null);
         setAiLoading(false);
@@ -271,7 +309,10 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
         setAiPreview('');
         streamedHtml.current = '';
 
-        const plainText = getPlainText(contentBeforeAi.current);
+        const beforeHtml = typeof contentBeforeAi.current === 'string'
+            ? contentBeforeAi.current
+            : editor?.getHTML() ?? '';
+        const plainText = getPlainText(beforeHtml);
         abortRef.current = streamAiText(
             activeAction,
             activeAction === 'write' ? null : plainText,
@@ -419,16 +460,14 @@ export default function AiRichTextEditor({ content, onChange, placeholder, enabl
                         {hasContent ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <div>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-muted">
-                                                    <WandSparkles className="h-4 w-4" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top"><p>AI actions</p></TooltipContent>
-                                        </Tooltip>
-                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                                        aria-label="AI actions"
+                                    >
+                                        <WandSparkles className="h-4 w-4" />
+                                    </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start" side="bottom" sideOffset={4}>
                                     <DropdownMenuItem onClick={() => runAiAction('improve')}>

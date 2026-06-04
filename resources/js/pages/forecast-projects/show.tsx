@@ -1,11 +1,13 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
+import { CommentBody } from '@/components/comments/comment-body';
+import { CommentEditor, type CommentEditorHandle } from '@/components/comments/comment-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
+import type { JSONContent } from '@tiptap/react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Activity, Archive, ArrowRight, FileText, Paperclip, Pencil, Send, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -26,9 +28,19 @@ interface Attachment {
 interface CommentData {
     id: number;
     body: string;
+    body_json: JSONContent | null;
     metadata: Record<string, unknown> | null;
     user: { id: number; name: string } | null;
     created_at: string;
+    mentioned_users?: {
+        id: number;
+        name: string;
+        email?: string | null;
+        phone?: string | null;
+        position?: string | null;
+        roles?: string[];
+        is_active?: boolean;
+    }[];
     attachments?: Attachment[];
     replies?: CommentData[];
 }
@@ -92,7 +104,7 @@ function SystemComment({ comment }: { comment: CommentData }) {
                 </div>
                 {comment.body && (
                     <p
-                        className="text-muted-foreground mt-0.5 whitespace-pre-wrap text-xs"
+                        className="text-muted-foreground mt-0.5 text-xs whitespace-pre-wrap"
                         dangerouslySetInnerHTML={{
                             __html: comment.body.replace(
                                 /\*\*(.+?)\*\*/g,
@@ -150,7 +162,8 @@ function CommentBubble({
                         </div>
                     )}
                 </div>
-                {comment.body && <p className="mt-1 whitespace-pre-wrap text-sm">{comment.body}</p>}
+                <CommentBody doc={comment.body_json} fallback={comment.body} mentionedUsers={comment.mentioned_users} />
+
                 {comment.attachments && comment.attachments.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                         {comment.attachments.map((att) => (
@@ -206,28 +219,36 @@ export default function ForecastProjectShow({ project, comments }: Props) {
     const flash = pageProps.flash as { success?: string } | undefined;
     const currentUserId = auth?.user?.id;
 
-    const [commentBody, setCommentBody] = useState('');
+    const [commentDoc, setCommentDoc] = useState<JSONContent | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
-    const [editBody, setEditBody] = useState('');
+    const [editDoc, setEditDoc] = useState<JSONContent | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const editorRef = useRef<CommentEditorHandle>(null);
+
+    const docHasContent = (doc: JSONContent | null) => {
+        if (!doc) return false;
+        const text = JSON.stringify(doc);
+        return /"text"|"mention"/.test(text);
+    };
 
     const handlePost = () => {
-        if (!commentBody.trim() && attachments.length === 0) return;
+        if (!docHasContent(commentDoc) && attachments.length === 0) return;
         setSubmitting(true);
 
         const formData = new FormData();
         formData.append('commentable_type', 'forecast_project');
         formData.append('commentable_id', String(project.id));
-        formData.append('body', commentBody);
+        if (commentDoc) formData.append('body_json', JSON.stringify(commentDoc));
         attachments.forEach((file) => formData.append('attachments[]', file));
 
         router.post('/comments', formData, {
             preserveScroll: true,
             forceFormData: true,
             onSuccess: () => {
-                setCommentBody('');
+                setCommentDoc(null);
+                editorRef.current?.clear();
                 setAttachments([]);
             },
             onFinish: () => setSubmitting(false),
@@ -236,14 +257,14 @@ export default function ForecastProjectShow({ project, comments }: Props) {
 
     const handleEditStart = (comment: CommentData) => {
         setEditingComment(comment);
-        setEditBody(comment.body);
+        setEditDoc(comment.body_json ?? null);
     };
 
     const handleEditSave = () => {
-        if (!editingComment || !editBody.trim()) return;
+        if (!editingComment || !docHasContent(editDoc)) return;
         router.patch(
             `/comments/${editingComment.id}`,
-            { body: editBody },
+            { body_json: editDoc },
             {
                 preserveScroll: true,
                 onSuccess: () => setEditingComment(null),
@@ -279,11 +300,7 @@ export default function ForecastProjectShow({ project, comments }: Props) {
                                         {comments.map((comment) =>
                                             editingComment?.id === comment.id ? (
                                                 <div key={comment.id} className="space-y-2">
-                                                    <Textarea
-                                                        value={editBody}
-                                                        onChange={(e) => setEditBody(e.target.value)}
-                                                        rows={3}
-                                                    />
+                                                    <CommentEditor value={editDoc} onChange={setEditDoc} onSubmit={handleEditSave} autoFocus />
                                                     <div className="flex gap-2">
                                                         <Button size="sm" onClick={handleEditSave}>
                                                             Save
@@ -345,24 +362,19 @@ export default function ForecastProjectShow({ project, comments }: Props) {
                                     >
                                         <Paperclip className="h-4 w-4" />
                                     </Button>
-                                    <Textarea
-                                        placeholder="Enter message here..."
-                                        className="min-h-[40px] flex-1 resize-none"
-                                        rows={1}
-                                        value={commentBody}
-                                        onChange={(e) => setCommentBody(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                e.preventDefault();
-                                                handlePost();
-                                            }
-                                        }}
+                                    <CommentEditor
+                                        ref={editorRef}
+                                        value={commentDoc}
+                                        onChange={setCommentDoc}
+                                        onSubmit={handlePost}
+                                        placeholder="Enter message. Use @ to mention someone."
+                                        className="flex-1"
                                     />
                                     <Button
                                         size="icon"
                                         className="h-10 w-10 shrink-0"
                                         onClick={handlePost}
-                                        disabled={submitting || (!commentBody.trim() && attachments.length === 0)}
+                                        disabled={submitting || (!docHasContent(commentDoc) && attachments.length === 0)}
                                     >
                                         <Send className="h-4 w-4" />
                                     </Button>
