@@ -14,6 +14,7 @@ use App\Http\Controllers\CreditCardReceiptController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\GlBudgetActualReportController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\ToolboxSignController;
@@ -1072,8 +1073,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:budget.view')->group(function () {
         Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');
     });
-    Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store')
-        ->middleware('permission:budget.edit');
+    Route::middleware('permission:reports.glBudgetActual')->group(function () {
+        Route::get('/reports/gl-budget-actual', [GlBudgetActualReportController::class, 'index'])->name('reports.glBudgetActual');
+    });
+    Route::middleware('permission:budget.edit')->group(function () {
+        Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store');
+        Route::post('/budget-management/gl', [CompanyRevenueTargetController::class, 'storeGlBudgets'])->name('budgetManagement.storeGl');
+    });
 
     // ============================================
     // VARIATIONS

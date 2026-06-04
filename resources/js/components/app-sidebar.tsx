@@ -152,6 +152,12 @@ const finance = [
                 icon: PiggyBank,
                 permission: 'budget.view',
             },
+            {
+                name: 'GL Budget vs Actual',
+                url: '/reports/gl-budget-actual',
+                icon: FileBarChart,
+                permission: 'reports.glBudgetActual',
+            },
         ],
     },
 ];

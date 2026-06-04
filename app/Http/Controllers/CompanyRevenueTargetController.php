@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompanyMonthlyRevenueTarget;
+use App\Models\GlMonthlyBudget;
+use App\Models\PremierGlAccount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -61,12 +63,32 @@ class CompanyRevenueTargetController extends Controller
             $targetMap[$month] = (float) ($targets[$month]->target_amount ?? 0);
         }
 
+        $glAccounts = PremierGlAccount::orderBy('account_number')
+            ->get(['id', 'account_number', 'description'])
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'account_number' => $a->account_number,
+                'description' => $a->description,
+            ])
+            ->all();
+
+        $glBudgetRows = GlMonthlyBudget::where('fy_year', $fyYear)
+            ->whereIn('month', $months)
+            ->get(['premier_gl_account_id', 'month', 'budget_amount']);
+
+        $glBudgets = [];
+        foreach ($glBudgetRows as $row) {
+            $glBudgets[$row->premier_gl_account_id][$row->month] = (float) $row->budget_amount;
+        }
+
         $currentFy = $this->resolveFyYear(null);
 
         return Inertia::render('budget-management/index', [
             'fyYear' => $fyYear,
             'months' => $months,
             'targets' => $targetMap,
+            'glAccounts' => $glAccounts,
+            'glBudgets' => $glBudgets,
             'availableFYs' => $this->buildAvailableFys($currentFy),
         ]);
     }
@@ -98,5 +120,47 @@ class CompanyRevenueTargetController extends Controller
         return redirect()
             ->route('budgetManagement.index', ['fy' => $fyYear])
             ->with('success', 'Revenue targets saved.');
+    }
+
+    public function storeGlBudgets(Request $request)
+    {
+        $validated = $request->validate([
+            'fyYear' => 'required|integer',
+            'budgets' => 'required|array',
+            'budgets.*' => 'array',
+            'budgets.*.*' => 'nullable|numeric|min:0',
+        ]);
+
+        $fyYear = (int) $validated['fyYear'];
+        $months = $this->buildFyMonths($fyYear);
+        $validMonths = array_flip($months);
+        $accountIds = PremierGlAccount::pluck('id')->all();
+        $validAccountIds = array_flip($accountIds);
+
+        foreach ($validated['budgets'] as $accountId => $monthlyAmounts) {
+            $accountId = (int) $accountId;
+            if (! isset($validAccountIds[$accountId])) {
+                continue;
+            }
+            foreach ($monthlyAmounts as $month => $amount) {
+                if (! isset($validMonths[$month])) {
+                    continue;
+                }
+                GlMonthlyBudget::updateOrCreate(
+                    [
+                        'premier_gl_account_id' => $accountId,
+                        'fy_year' => $fyYear,
+                        'month' => $month,
+                    ],
+                    [
+                        'budget_amount' => $amount ?? 0,
+                    ]
+                );
+            }
+        }
+
+        return redirect()
+            ->route('budgetManagement.index', ['fy' => $fyYear])
+            ->with('success', 'GL budgets saved.');
     }
 }

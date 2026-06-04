@@ -291,6 +291,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.retention' => 'View retention report',
             'reports.retention.edit' => 'Edit manual retention values',
             'reports.timesheet-vs-dpc' => 'View timesheet vs DPC report',
+            'reports.glBudgetActual' => 'View GL budget vs actual report',
         ],
 
         // ============================================
