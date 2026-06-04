@@ -19,5 +19,14 @@ export interface NotificationProps {
         location_name?: string;
         requisition_id?: number;
         total_cost?: number | string;
+        // Comment mention fields
+        comment_id?: number;
+        commentable_type?: string;
+        commentable_id?: number | string;
+        author_id?: number;
+        author_name?: string | null;
+        excerpt?: string;
+        url?: string | null;
+        resource_label?: string | null;
     };
 }

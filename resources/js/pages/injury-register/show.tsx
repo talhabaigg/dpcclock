@@ -1,4 +1,5 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
+import { CommentBody } from '@/components/comments/comment-body';
 import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -8,7 +9,8 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { Textarea } from '@/components/ui/textarea';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import type { JSONContent } from '@tiptap/react';
 import { type BreadcrumbItem } from '@/types';
 import type { Injury, InjuryFormOptions } from '@/types/injury';
 import { Input } from '@/components/ui/input';
@@ -36,9 +38,18 @@ interface Attachment {
 interface CommentData {
     id: number;
     body: string;
+    body_json: JSONContent | null;
     metadata: Record<string, unknown> | null;
     user: { id: number; name: string } | null;
     created_at: string;
+    mentioned_users?: {
+        id: number;
+        name: string;
+        email?: string | null;
+        phone?: string | null;
+        position?: string | null;
+        is_active?: boolean;
+    }[];
     attachments: Attachment[];
     replies?: CommentData[];
 }
@@ -291,7 +302,6 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
     }
 
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
-    const hasAttachments = comment.attachments.length > 0;
 
     return (
         <div className="flex gap-3">
@@ -300,7 +310,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
             ) : (
                 <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs">S</div>
             )}
-            <div className={`min-w-0 flex-1 ${hasAttachments ? 'border-muted-foreground/30 border-l pl-3' : ''}`}>
+            <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{comment.user?.name ?? 'System'}</span>
                     <span className="text-muted-foreground text-xs">{new Date(comment.created_at).toLocaleString('en-AU')}</span>
@@ -316,10 +326,10 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
                         </div>
                     )}
                 </div>
-                {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
+                <CommentBody doc={comment.body_json} fallback={comment.body} mentionedUsers={comment.mentioned_users} />
                 <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} />
                 {comment.replies && comment.replies.length > 0 && (
-                    <div className="mt-3 space-y-3 border-l-2 pl-4">
+                    <div className="mt-3 space-y-3 pl-6">
                         {comment.replies.map((reply) => (
                             <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} />
                         ))}
@@ -392,13 +402,17 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
             onFinish: () => setSending(false),
         });
     };
-    const [commentBody, setCommentBody] = useState('');
+    const [commentDoc, setCommentDoc] = useState<JSONContent | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
-    const [editBody, setEditBody] = useState('');
+    const [editDoc, setEditDoc] = useState<JSONContent | null>(null);
+
+    const docHasContent = (doc: JSONContent | null) => {
+        if (!doc) return false;
+        return /"text"|"mention"/.test(JSON.stringify(doc));
+    };
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
 
     const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
@@ -477,28 +491,29 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
     };
 
     function handlePostComment() {
-        if (!commentBody.trim() && attachments.length === 0) return;
+        if (!docHasContent(commentDoc) && attachments.length === 0) return;
         setSubmitting(true);
         const formData = new FormData();
         formData.append('commentable_type', 'injury');
         formData.append('commentable_id', String(injury.id));
-        formData.append('body', commentBody);
+        if (commentDoc) formData.append('body_json', JSON.stringify(commentDoc));
         attachments.forEach((f) => formData.append('attachments[]', f));
         router.post(route('comments.store'), formData, {
             preserveScroll: true,
-            onSuccess: () => { setCommentBody(''); setAttachments([]); },
+            forceFormData: true,
+            onSuccess: () => { setCommentDoc(null); setAttachments([]); },
             onFinish: () => setSubmitting(false),
         });
     }
 
     function handleEditComment(comment: CommentData) {
         setEditingComment(comment);
-        setEditBody(comment.body);
+        setEditDoc(comment.body_json ?? null);
     }
 
     function submitEditComment() {
-        if (!editingComment || !editBody.trim()) return;
-        router.patch(route('comments.update', editingComment.id), { body: editBody }, {
+        if (!editingComment || !docHasContent(editDoc)) return;
+        router.patch(route('comments.update', editingComment.id), { body_json: editDoc }, {
             preserveScroll: true,
             onSuccess: () => setEditingComment(null),
         });
@@ -593,39 +608,33 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                             </div>
 
                             {/* Comment Input — pinned to bottom */}
-                            <div className="mt-auto border-t p-3">
-                                {attachments.length > 0 && (
-                                    <div className="mb-2 flex flex-wrap gap-2">
-                                        {attachments.map((file, i) => (
-                                            <div key={i} className="bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs">
-                                                <FileText className="h-3 w-3" />
-                                                <span className="max-w-[120px] truncate">{file.name}</span>
-                                                <button type="button" onClick={() => setAttachments(attachments.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground">×</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                            <div className="mt-auto p-3">
                                 <div className="flex items-end gap-2">
-                                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => { setAttachments([...attachments, ...Array.from(e.target.files ?? [])]); e.target.value = ''; }} />
-                                    <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" type="button" onClick={() => fileInputRef.current?.click()}>
-                                        <Paperclip className="h-4 w-4" />
-                                    </Button>
-                                    <Textarea
-                                        placeholder="Enter message here..."
-                                        className="min-h-[40px] flex-1 resize-none"
-                                        rows={1}
-                                        value={commentBody}
-                                        onChange={(e) => setCommentBody(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                e.preventDefault();
-                                                handlePostComment();
+                                    <div className="flex-1">
+                                        <AiRichTextEditor
+                                            outputFormat="json"
+                                            content={commentDoc}
+                                            onChange={setCommentDoc}
+                                            placeholder="Write a comment and mention others with @"
+                                            enableAttachments
+                                            enableMentions
+                                            collapseToolbar
+                                            inlineActions
+                                            editorClassName="min-h-0 py-1.5"
+                                            attachments={attachments}
+                                            onAttachmentsChange={setAttachments}
+                                            trailingActions={
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8"
+                                                    onClick={handlePostComment}
+                                                    disabled={submitting || (!docHasContent(commentDoc) && attachments.length === 0)}
+                                                >
+                                                    Update
+                                                </Button>
                                             }
-                                        }}
-                                    />
-                                    <Button size="icon" className="h-10 w-10 shrink-0" onClick={handlePostComment} disabled={submitting || (!commentBody.trim() && attachments.length === 0)}>
-                                        <Send className="h-4 w-4" />
-                                    </Button>
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1010,10 +1019,16 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                         <DialogTitle>Edit Comment</DialogTitle>
                         <DialogDescription>Update your comment below.</DialogDescription>
                     </DialogHeader>
-                    <Textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={3} />
+                    <AiRichTextEditor
+                        outputFormat="json"
+                        content={editDoc}
+                        onChange={setEditDoc}
+                        placeholder="Edit your comment. Use @ to mention someone."
+                        enableMentions
+                    />
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setEditingComment(null)}>Cancel</Button>
-                        <Button onClick={submitEditComment} disabled={!editBody.trim()}>Save</Button>
+                        <Button onClick={submitEditComment} disabled={!docHasContent(editDoc)}>Save</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

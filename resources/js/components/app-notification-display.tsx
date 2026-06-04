@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { Bell, Clock, X } from 'lucide-react';
 import { useCallback } from 'react';
+import CommentMentionedNotification from './notification-components/comment-mentioned-notification';
 import JobForecastStatusNotification from './notification-components/job-forecast-status-notification';
 import { NotificationProps } from './notification-components/Notification';
 import RequisitionSentToOfficeNotification from './notification-components/requisition-sent-to-office-notification';
@@ -71,6 +72,9 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
 
                     case 'RequisitionSentToOffice':
                         return <RequisitionSentToOfficeNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
+
+                    case 'CommentMentioned':
+                        return <CommentMentionedNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
 
                     default:
                         return (

@@ -3,6 +3,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { type JSONContent, EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Underline } from '@tiptap/extension-underline';
@@ -14,7 +15,6 @@ import {
     ClipboardCopy,
     CornerDownLeft,
     FileText,
-    Heading2,
     Italic,
     List,
     ListOrdered,
@@ -39,6 +39,29 @@ interface BaseAiRichTextEditorProps {
     onAttachmentsChange?: (files: File[]) => void;
     /** Show the @mention picker. */
     enableMentions?: boolean;
+    /**
+     * Monday-style chat composer: hide the formatting toolbar until the editor
+     * is focused or has content. The AI wand and paperclip stay visible.
+     */
+    collapseToolbar?: boolean;
+    /**
+     * Rendered on the right side of the bottom action bar (alongside the AI
+     * wand and paperclip). Use this to embed a Send / Submit button inside
+     * the composer instead of placing it outside.
+     */
+    trailingActions?: React.ReactNode;
+    /**
+     * Extra classes merged into the editor content area. Use this to override
+     * height (e.g. `min-h-[40px]`, `max-h-[300px] overflow-y-auto`) or other
+     * layout properties. Tailwind merge resolves conflicts with the defaults.
+     */
+    editorClassName?: string;
+    /**
+     * Render the AI wand, paperclip, and trailingActions inline with the editor
+     * (single row) instead of in a separate bar below. Use this for compact
+     * chat-style composers.
+     */
+    inlineActions?: boolean;
     /**
      * If provided, plain Enter calls this (e.g., to save) and Cmd/Ctrl+Enter inserts a hard break.
      * Without it, Enter behaves as in a normal Tiptap editor.
@@ -164,8 +187,14 @@ function streamAiText(
 }
 
 export default function AiRichTextEditor(props: AiRichTextEditorProps) {
-    const { content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange, enableMentions, onEnter } = props;
+    const { content, onChange, placeholder, enableAttachments, attachments, onAttachmentsChange, enableMentions, collapseToolbar, trailingActions, editorClassName, inlineActions, onEnter } = props;
     const outputFormat = props.outputFormat ?? 'html';
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isFocused, setIsFocused] = useState(false);
+    // True when the editor content has wrapped past a single line — we use this
+    // (with hysteresis) to decide whether the inline action buttons should move
+    // to a second row so the editor can have full width.
+    const [isMultiLine, setIsMultiLine] = useState(false);
     const emitOnChange = (editor: { getHTML: () => string; getJSON: () => JSONContent }) => {
         if (outputFormat === 'json') {
             (onChange as (doc: JSONContent) => void)(editor.getJSON());
@@ -203,7 +232,10 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
         },
         editorProps: {
             attributes: {
-                class: 'prose prose-sm max-w-none focus:outline-none min-h-[80px] px-3 py-2 dark:prose-invert',
+                class: cn(
+                    'prose prose-sm max-w-none focus:outline-none min-h-[80px] px-3 py-2 dark:prose-invert',
+                    editorClassName,
+                ),
             },
             handleKeyDown: (_view, event) => {
                 if (!onEnter || event.key !== 'Enter') return false;
@@ -221,6 +253,32 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
             },
         },
     });
+
+    // Toggle isMultiLine based on the editor's content. We wrap actions to a
+    // second row when content overflows past one line (height threshold), and
+    // unwrap when the editor goes empty. Height alone can't reliably distinguish
+    // "empty in w-full mode" from "short content in w-full mode" (same height),
+    // so editor.isEmpty drives the unwrap path and only height drives the wrap.
+    useEffect(() => {
+        if (!editor || !inlineActions) return;
+        const el = editor.view.dom;
+        const WRAP_TRIGGER = 44;
+        const measure = () => {
+            setIsMultiLine((prev) => {
+                if (prev && editor.isEmpty) return false;
+                if (!prev && el.clientHeight > WRAP_TRIGGER) return true;
+                return prev;
+            });
+        };
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        editor.on('update', measure);
+        measure();
+        return () => {
+            ro.disconnect();
+            editor.off('update', measure);
+        };
+    }, [editor, inlineActions]);
 
     useEffect(() => {
         if (!editor || aiLoading || aiPreview !== null) return;
@@ -349,15 +407,95 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
     const hasContent = getPlainText(editor.getHTML()).trim().length > 0;
     const showAiPanel = aiPreview !== null || aiLoading;
     const inPromptMode = promptMode !== null;
+    const showToolbar = !collapseToolbar || (isFocused && !showAiPanel && !inPromptMode);
     const promptPlaceholder = promptMode === 'rephrase'
         ? 'e.g. Make it more formal...'
         : 'Describe your message and what it should include...';
 
+    const handleContainerFocus = () => setIsFocused(true);
+    const handleContainerBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+        // Only collapse when focus leaves the whole composer — clicking a toolbar
+        // button moves focus within the same container and shouldn't collapse it.
+        if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+            setIsFocused(false);
+        }
+    };
+
+    const renderWandButton = () =>
+        hasContent ? (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                        aria-label="AI actions"
+                    >
+                        <WandSparkles className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="bottom" sideOffset={4} className="w-full">
+                    <DropdownMenuItem onClick={() => runAiAction('improve')}>
+                        <Sparkles className="mr-2 h-4 w-4" /> Improve text
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => runAiAction('shorten')}>
+                        <Minimize2 className="mr-2 h-4 w-4" /> Shorten text
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => runAiAction('summarize')}>
+                        <FileText className="mr-2 h-4 w-4" /> Summarize
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => runAiAction('proofread')}>
+                        <SpellCheck className="mr-2 h-4 w-4" /> Proof read
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); setPromptMode('rephrase'); }}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Rephrase...
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        ) : (
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                        onClick={() => setPromptMode('write')}
+                    >
+                        <WandSparkles className="h-4 w-4" />
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top"><p>Write with AI</p></TooltipContent>
+            </Tooltip>
+        );
+
+    const renderAttachButton = () => (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:bg-muted"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <Paperclip className="h-4 w-4" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Attach files</p></TooltipContent>
+        </Tooltip>
+    );
+
     return (
         <TooltipProvider delayDuration={300}>
-        <div className="rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px] dark:bg-input/30 overflow-hidden">
+        <div
+            ref={containerRef}
+            onFocus={handleContainerFocus}
+            onBlur={handleContainerBlur}
+            className="rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px] dark:bg-input/30 overflow-hidden"
+        >
             {/* Toolbar */}
-                <div className="flex flex-wrap items-center gap-0.5 border-b border-input bg-muted/40 px-1 py-1">
+                {showToolbar && (
+                <div className="flex flex-wrap items-center gap-0.5 px-1 py-1">
                     <Toggle size="sm" pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} aria-label="Bold" disabled={showAiPanel || inPromptMode}>
                         <Bold className="h-4 w-4" />
                     </Toggle>
@@ -366,10 +504,6 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
                     </Toggle>
                     <Toggle size="sm" pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} aria-label="Underline" disabled={showAiPanel || inPromptMode}>
                         <UnderlineIcon className="h-4 w-4" />
-                    </Toggle>
-                    <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
-                    <Toggle size="sm" pressed={editor.isActive('heading', { level: 2 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} aria-label="Heading" disabled={showAiPanel || inPromptMode} className="hidden sm:inline-flex">
-                        <Heading2 className="h-4 w-4" />
                     </Toggle>
                     <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
                     <Toggle size="sm" pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} aria-label="Bullet list" disabled={showAiPanel || inPromptMode}>
@@ -386,6 +520,7 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
                         <Redo className="h-4 w-4" />
                     </Toggle>
                 </div>
+                )}
 
                 {/* Prompt mode (write / rephrase) — replaces editor */}
                 {inPromptMode && !showAiPanel ? (
@@ -419,7 +554,20 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
                         </button>
                     </div>
                 ) : !showAiPanel ? (
-                    <EditorContent editor={editor} />
+                    inlineActions ? (
+                        <div className="flex flex-wrap items-center px-2 py-1">
+                            <div className={cn('min-w-0', isMultiLine ? 'w-full' : 'flex-1')}>
+                                <EditorContent editor={editor} />
+                            </div>
+                            <div className="ml-auto flex items-center">
+                                {renderWandButton()}
+                                {enableAttachments && renderAttachButton()}
+                                {trailingActions && <div className="ml-1 flex items-center gap-0.5">{trailingActions}</div>}
+                            </div>
+                        </div>
+                    ) : (
+                        <EditorContent editor={editor} />
+                    )
                 ) : null}
 
                 {/* Attachment previews */}
@@ -454,90 +602,28 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
                     </div>
                 )}
 
-                {/* Bottom bar with AI wand + attach */}
-                {!showAiPanel && !inPromptMode && (
-                    <div className="flex items-center px-2 py-1">
-                        {hasContent ? (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:bg-muted"
-                                        aria-label="AI actions"
-                                    >
-                                        <WandSparkles className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" side="bottom" sideOffset={4}>
-                                    <DropdownMenuItem onClick={() => runAiAction('improve')}>
-                                        <Sparkles className="mr-2 h-4 w-4" />
-                                        Improve text
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => runAiAction('shorten')}>
-                                        <Minimize2 className="mr-2 h-4 w-4" />
-                                        Shorten text
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => runAiAction('summarize')}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Summarize
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => runAiAction('proofread')}>
-                                        <SpellCheck className="mr-2 h-4 w-4" />
-                                        Proof read
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={(e) => { e.preventDefault(); setPromptMode('rephrase'); }}>
-                                        <RefreshCw className="mr-2 h-4 w-4" />
-                                        Rephrase...
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        ) : (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:bg-muted"
-                                        onClick={() => setPromptMode('write')}
-                                    >
-                                        <WandSparkles className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top"><p>Write with AI</p></TooltipContent>
-                            </Tooltip>
-                        )}
+                {/* Hidden file picker — shared between inline and stacked layouts */}
+                {enableAttachments && (
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                            if (e.target.files) {
+                                onAttachmentsChange?.([...(attachments || []), ...Array.from(e.target.files)]);
+                                e.target.value = '';
+                            }
+                        }}
+                    />
+                )}
 
-                        {enableAttachments && (
-                            <>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    multiple
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        if (e.target.files) {
-                                            onAttachmentsChange?.([...(attachments || []), ...Array.from(e.target.files)]);
-                                            e.target.value = '';
-                                        }
-                                    }}
-                                />
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-muted-foreground hover:bg-muted"
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
-                                            <Paperclip className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top"><p>Attach files</p></TooltipContent>
-                                </Tooltip>
-                            </>
-                        )}
+                {/* Bottom bar with AI wand + attach (stacked layout only) */}
+                {!showAiPanel && !inPromptMode && !inlineActions && (
+                    <div className="flex items-center px-2 py-1">
+                        {renderWandButton()}
+                        {enableAttachments && renderAttachButton()}
+                        {trailingActions && <div className="ml-auto flex items-center gap-1">{trailingActions}</div>}
                     </div>
                 )}
 

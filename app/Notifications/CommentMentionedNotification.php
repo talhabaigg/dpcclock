@@ -5,9 +5,13 @@ namespace App\Notifications;
 use App\Models\Comment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Mentions only write to the in-app database channel for now. If we later add
+ * a "mark as important" affordance on a comment, we can route important
+ * mentions to mail (and SMS) by checking that flag inside via().
+ */
 class CommentMentionedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -20,40 +24,13 @@ class CommentMentionedNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        $channels = ['database'];
-
-        $mailRoute = method_exists($notifiable, 'routeNotificationForMail')
-            ? $notifiable->routeNotificationForMail($this)
-            : $notifiable->routeNotificationFor('mail', $this);
-        if (! empty($mailRoute)) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
-    }
-
-    public function toMail(object $notifiable): MailMessage
-    {
-        $author = $this->comment->user?->name ?? 'Someone';
-        $excerpt = $this->excerpt();
-        $label = $this->resourceLabel ?? 'a record';
-
-        $mail = (new MailMessage)
-            ->subject("{$author} mentioned you in {$label}")
-            ->greeting("Hi {$notifiable->name},")
-            ->line("**{$author}** mentioned you in {$label}:")
-            ->line('> '.$excerpt);
-
-        if ($this->resourceUrl) {
-            $mail->action('View comment', $this->resourceUrl);
-        }
-
-        return $mail;
+        return ['database'];
     }
 
     public function toArray(object $notifiable): array
     {
         return [
+            'type' => 'CommentMentioned',
             'comment_id' => $this->comment->id,
             'commentable_type' => $this->comment->commentable_type,
             'commentable_id' => $this->comment->commentable_id,

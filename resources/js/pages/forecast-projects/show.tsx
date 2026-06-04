@@ -180,7 +180,7 @@ function CommentBubble({
                     </div>
                 )}
                 {comment.replies && comment.replies.length > 0 && (
-                    <div className="mt-3 space-y-3 border-l-2 pl-4">
+                    <div className="mt-3 space-y-3 pl-6">
                         {comment.replies.map((reply) => (
                             <CommentBubble
                                 key={reply.id}

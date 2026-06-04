@@ -193,10 +193,16 @@ class CommentController extends Controller
      */
     private function syncMentions(Comment $comment, $commentable): void
     {
-        $ids = collect(Comment::extractMentionIds($comment->body_json))
+        $rawIds = collect(Comment::extractMentionIds($comment->body_json))
             ->reject(fn ($id) => $id === $comment->user_id)
             ->values()
             ->all();
+
+        // Filter to real users so a tampered/stale payload can't FK-violate the
+        // pivot (e.g. mention.attrs.id referencing a deleted or fake user).
+        $ids = empty($rawIds)
+            ? []
+            : User::whereIn('id', $rawIds)->pluck('id')->all();
 
         $existing = $comment->mentionedUsers()->pluck('users.id')->all();
         $comment->mentionedUsers()->sync($ids);
