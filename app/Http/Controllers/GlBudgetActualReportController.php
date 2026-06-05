@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GlAccountGroup;
 use App\Models\GlMonthlyBudget;
 use App\Models\GlTransactionDetail;
 use App\Models\PremierGlAccount;
@@ -204,8 +205,99 @@ class GlBudgetActualReportController extends Controller
             ];
         }
 
+        // Default account-number sort; gets overridden if a row falls into a group with custom sort.
         usort($rows, fn ($a, $b) => strcmp((string) $a['account_number'], (string) $b['account_number']));
 
+        $groups = $this->buildGroups($rows);
+        $totals = $this->computeTotals($rows);
+
+        return [
+            'fyYear' => $fyYear,
+            'fyLabel' => $this->fyLabel($fyYear),
+            'monthLabel' => date('F Y', strtotime($monthStart)),
+            'selectedMonth' => $selectedMonth,
+            'rows' => $rows, // kept for backwards compatibility / fallback
+            'groups' => $groups,
+            'totals' => $totals,
+        ];
+    }
+
+    /**
+     * Build the grouped row structure from the flat rows list.
+     * Returns an ordered list of groups, each with its rows and per-group subtotals.
+     * Ungrouped accounts fall into a trailing "Ungrouped" group (omitted if empty).
+     */
+    private function buildGroups(array $rows): array
+    {
+        // groupId => ['name', 'sort', 'accountSort' => [accountId => orderInGroup]]
+        $groupConfig = GlAccountGroup::with('assignments:id,gl_account_group_id,premier_gl_account_id,sort_order')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        // accountId => [groupId, sortOrder]
+        $accountToGroup = [];
+        foreach ($groupConfig as $group) {
+            foreach ($group->assignments as $a) {
+                $accountToGroup[$a->premier_gl_account_id] = [
+                    'group_id' => $group->id,
+                    'sort_order' => $a->sort_order,
+                ];
+            }
+        }
+
+        // Bucket rows by group id, plus an "ungrouped" bucket
+        $bucketed = []; // groupId => list of rows
+        $ungrouped = [];
+        foreach ($rows as $row) {
+            $accountId = $row['id'];
+            if (is_int($accountId) && isset($accountToGroup[$accountId])) {
+                $row['_sort'] = $accountToGroup[$accountId]['sort_order'];
+                $bucketed[$accountToGroup[$accountId]['group_id']][] = $row;
+            } else {
+                $ungrouped[] = $row;
+            }
+        }
+
+        $out = [];
+        foreach ($groupConfig as $group) {
+            $groupRows = $bucketed[$group->id] ?? [];
+            if (empty($groupRows)) {
+                continue;
+            }
+            usort($groupRows, fn ($a, $b) => ($a['_sort'] <=> $b['_sort']) ?: strcmp((string) $a['account_number'], (string) $b['account_number']));
+            foreach ($groupRows as &$r) {
+                unset($r['_sort']);
+            }
+            unset($r);
+
+            $out[] = [
+                'id' => $group->id,
+                'name' => $group->name,
+                'rows' => $groupRows,
+                'subtotal' => $this->computeTotals($groupRows),
+            ];
+        }
+
+        if (! empty($ungrouped)) {
+            $out[] = [
+                'id' => null,
+                'name' => 'Ungrouped',
+                'rows' => $ungrouped,
+                'subtotal' => $this->computeTotals($ungrouped),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Compute total row across a set of report rows.
+     * Only includes accounts that have a non-zero budget (avoids the
+     * double-entry-net-to-zero pitfall when summing across all accounts).
+     */
+    private function computeTotals(array $rows): array
+    {
         $totals = [
             'month' => ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null],
             'fy' => ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null],
@@ -229,14 +321,7 @@ class GlBudgetActualReportController extends Controller
             ? ($totals['fy']['variance'] / $totals['fy']['budget']) * 100
             : null;
 
-        return [
-            'fyYear' => $fyYear,
-            'fyLabel' => $this->fyLabel($fyYear),
-            'monthLabel' => date('F Y', strtotime($monthStart)),
-            'selectedMonth' => $selectedMonth,
-            'rows' => $rows,
-            'totals' => $totals,
-        ];
+        return $totals;
     }
 
     public function index(Request $request)
@@ -266,7 +351,7 @@ class GlBudgetActualReportController extends Controller
         $html = view('reports.gl-budget-actual', [
             'fyLabel' => $data['fyLabel'],
             'monthLabel' => $data['monthLabel'],
-            'rows' => $data['rows'],
+            'groups' => $data['groups'],
             'totals' => $data['totals'],
             'logoBase64' => $logoBase64,
         ])->render();

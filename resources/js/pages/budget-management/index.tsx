@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import AppLayout from '@/layouts/app-layout';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { CheckCircle2, Download, FileSpreadsheet, Loader2, Save, Search, Upload, X } from 'lucide-react';
+import { CheckCircle2, Download, FileSpreadsheet, FolderTree, Loader2, Save, Search, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type GlAccount = { id: number; account_number: string; description: string | null };
@@ -380,6 +380,12 @@ function GlBudgetsPanel({
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                    <a href="/budget-management/gl-groups">
+                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                            <FolderTree className="h-3.5 w-3.5" />
+                            Groups
+                        </Button>
+                    </a>
                     <a href={`/budget-management/gl/template?fy=${fyYear}`}>
                         <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
                             <FileSpreadsheet className="h-3.5 w-3.5" />

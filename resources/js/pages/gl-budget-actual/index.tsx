@@ -27,6 +27,13 @@ type Row = {
 
 type Totals = { month: PeriodTotals; fy: PeriodTotals };
 
+type Group = {
+    id: number | null;
+    name: string;
+    rows: Row[];
+    subtotal: Totals;
+};
+
 type PageProps = {
     selectedMonth: string;
     fyYear: number;
@@ -35,6 +42,7 @@ type PageProps = {
     availableFys: { value: string; label: string }[];
     availableMonths: { value: string; label: string }[];
     rows: Row[];
+    groups: Group[];
     totals: Totals;
 };
 
@@ -79,6 +87,35 @@ function PeriodCells({ data }: { data: PeriodTotals }) {
     );
 }
 
+function GroupSection({ group }: { group: Group }) {
+    return (
+        <>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-t">
+                <TableCell colSpan={10} className="bg-muted/40 sticky left-0 z-10 pl-3 text-xs font-semibold text-foreground">
+                    {group.name}
+                </TableCell>
+            </TableRow>
+            {group.rows.map((row) => (
+                <TableRow key={row.id} className="hover:bg-muted/30">
+                    <TableCell className="bg-background sticky left-0 z-10 pl-3 tabular-nums">{row.account_number}</TableCell>
+                    <TableCell className="text-muted-foreground max-w-[260px] truncate" title={row.description ?? ''}>
+                        {row.description ?? '—'}
+                    </TableCell>
+                    <PeriodCells data={row.month} />
+                    <PeriodCells data={row.fy} />
+                </TableRow>
+            ))}
+            <TableRow className="bg-muted/20 hover:bg-muted/20">
+                <TableCell colSpan={2} className="bg-muted/20 sticky left-0 z-10 pl-3 text-xs font-semibold text-foreground">
+                    Total {group.name}
+                </TableCell>
+                <PeriodCells data={group.subtotal.month} />
+                <PeriodCells data={group.subtotal.fy} />
+            </TableRow>
+        </>
+    );
+}
+
 export default function GlBudgetActualReport({
     selectedMonth,
     fyYear,
@@ -87,20 +124,27 @@ export default function GlBudgetActualReport({
     availableFys,
     availableMonths,
     rows,
+    groups,
     totals,
 }: PageProps) {
     const [search, setSearch] = useState('');
 
-    const filteredRows = useMemo(() => {
+    // Filter rows within each group, drop groups that become empty.
+    const filteredGroups = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return rows;
-        return rows.filter(
-            (r) => r.account_number.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q),
-        );
-    }, [rows, search]);
+        if (!q) return groups;
+        return groups
+            .map((g) => ({
+                ...g,
+                rows: g.rows.filter(
+                    (r) => r.account_number.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q),
+                ),
+            }))
+            .filter((g) => g.rows.length > 0);
+    }, [groups, search]);
 
     const hasData = rows.length > 0;
-    const hasMatches = filteredRows.length > 0;
+    const hasMatches = filteredGroups.length > 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -240,15 +284,8 @@ export default function GlBudgetActualReport({
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredRows.map((row) => (
-                                    <TableRow key={row.id} className="hover:bg-muted/30">
-                                        <TableCell className="bg-background sticky left-0 z-10 pl-3 tabular-nums">{row.account_number}</TableCell>
-                                        <TableCell className="text-muted-foreground max-w-[260px] truncate" title={row.description ?? ''}>
-                                            {row.description ?? '—'}
-                                        </TableCell>
-                                        <PeriodCells data={row.month} />
-                                        <PeriodCells data={row.fy} />
-                                    </TableRow>
+                                filteredGroups.map((group) => (
+                                    <GroupSection key={group.id ?? 'ungrouped'} group={group} />
                                 ))
                             )}
                         </TableBody>

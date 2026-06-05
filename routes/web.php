@@ -14,6 +14,7 @@ use App\Http\Controllers\CreditCardReceiptController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\GlAccountGroupController;
 use App\Http\Controllers\GlBudgetActualReportController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
@@ -1074,6 +1075,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/budget-management', [CompanyRevenueTargetController::class, 'index'])->name('budgetManagement.index');
         Route::get('/budget-management/gl/export', [CompanyRevenueTargetController::class, 'exportGlBudgets'])->name('budgetManagement.glExport');
         Route::get('/budget-management/gl/template', [CompanyRevenueTargetController::class, 'downloadGlBudgetTemplate'])->name('budgetManagement.glTemplate');
+        Route::get('/budget-management/gl-groups', [GlAccountGroupController::class, 'index'])->name('budgetManagement.glGroups');
     });
     Route::middleware('permission:reports.glBudgetActual')->group(function () {
         Route::get('/reports/gl-budget-actual', [GlBudgetActualReportController::class, 'index'])->name('reports.glBudgetActual');
@@ -1083,6 +1085,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store');
         Route::post('/budget-management/gl', [CompanyRevenueTargetController::class, 'storeGlBudgets'])->name('budgetManagement.storeGl');
         Route::post('/budget-management/gl/import', [CompanyRevenueTargetController::class, 'importGlBudgets'])->name('budgetManagement.glImport');
+        Route::post('/budget-management/gl-groups/sync', [GlAccountGroupController::class, 'syncLayout'])->name('budgetManagement.glGroups.sync');
     });
 
     // ============================================

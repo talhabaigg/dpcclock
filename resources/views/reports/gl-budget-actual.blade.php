@@ -84,14 +84,39 @@
         table.data tbody td.negative { color: #b91c1c; }
         table.data tbody td.warning { color: #b45309; }
 
-        table.data tr.totals td {
+        /* Group header row */
+        table.data tbody tr.group-header td {
+            font-weight: 700;
+            color: #0f172a;
+            padding: 6px 5px 3px;
+            font-size: 8.5px;
+        }
+        /* Subtotal row — borders confined to the numeric columns */
+        table.data tbody tr.subtotal td {
+            font-weight: 700;
+            color: #0f172a;
+            padding: 3px 5px;
+        }
+        table.data tbody tr.subtotal td.label {
+            color: #475569;
+            font-weight: 600;
+        }
+        table.data tbody tr.subtotal td.num {
+            text-align: right;
+            border-top: 0.5px solid #cbd5e1;
+            border-bottom: 0.5px solid #cbd5e1;
+        }
+
+        /* Grand total row — same stroke as subtotal but extends full width */
+        table.data tbody tr.totals td {
             color: #0f172a;
             font-weight: 700;
-            padding: 3px 5px 4px;
-            border-top: 1px solid #cbd5e1;
-            border-bottom: 1px solid #cbd5e1;
+            padding: 5px 5px 6px;
+            font-size: 9px;
+            border-top: 0.5px solid #cbd5e1;
+            border-bottom: 0.5px solid #cbd5e1;
         }
-        table.data tr.totals td.num { text-align: right; }
+        table.data tbody tr.totals td.num { text-align: right; }
 
         table.data thead { display: table-header-group; }
         table.data tr { page-break-inside: avoid; }
@@ -138,7 +163,9 @@
     <div></div>
 </div>
 
-@if(count($rows) === 0)
+@php $totalAccountCount = collect($groups)->sum(fn ($g) => count($g['rows'])); @endphp
+
+@if($totalAccountCount === 0)
     <div class="empty-state">No GL activity or budgets for {{ $monthLabel }}.</div>
 @else
     <table class="data">
@@ -172,28 +199,49 @@
                 <th>%</th>
             </tr>
         </thead>
-        <tbody>
-            @foreach($rows as $row)
-                @php
-                    $monthPctClass = $variancePctClass($row['month']['variance_pct']);
-                    $fyPctClass = $variancePctClass($row['fy']['variance_pct']);
-                @endphp
-                <tr>
-                    <td class="code">{{ $row['account_number'] }}</td>
-                    <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
-
-                    <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
-                    <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
-
-                    <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
-                    <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
+        @foreach($groups as $group)
+            <tbody>
+                <tr class="group-header">
+                    <td colspan="10">{{ $group['name'] }}</td>
                 </tr>
-            @endforeach
-        </tbody>
+                @foreach($group['rows'] as $row)
+                    @php
+                        $monthPctClass = $variancePctClass($row['month']['variance_pct']);
+                        $fyPctClass = $variancePctClass($row['fy']['variance_pct']);
+                    @endphp
+                    <tr>
+                        <td class="code">{{ $row['account_number'] }}</td>
+                        <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
+
+                        <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
+                        <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
+                        <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
+
+                        <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
+                        <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
+                        <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
+                    </tr>
+                @endforeach
+                @php
+                    $sub = $group['subtotal'];
+                    $subMonthClass = $variancePctClass($sub['month']['variance_pct']);
+                    $subFyClass = $variancePctClass($sub['fy']['variance_pct']);
+                @endphp
+                <tr class="subtotal">
+                    <td colspan="2" class="label">Total {{ $group['name'] }}</td>
+                    <td class="num">{{ $formatCurrency($sub['month']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($sub['month']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($sub['month']['variance']) }}</td>
+                    <td class="num {{ $subMonthClass }}">{{ $formatPct($sub['month']['variance_pct']) }}</td>
+                    <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($sub['fy']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($sub['fy']['variance']) }}</td>
+                    <td class="num {{ $subFyClass }}">{{ $formatPct($sub['fy']['variance_pct']) }}</td>
+                </tr>
+            </tbody>
+        @endforeach
         @if($totals['month']['budget'] > 0 || $totals['fy']['budget'] > 0)
             @php
                 $totalMonthPctClass = $variancePctClass($totals['month']['variance_pct']);
