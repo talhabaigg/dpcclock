@@ -544,6 +544,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'trainings.edit',
             // Silica Register
             'silica-register.view',
+            // Employment Applications (view + screen)
+            'employment-applications.view',
+            'employment-applications.screen',
+            // Employee Transfers (view only)
+            'employee-transfers.view',
+            // AI
+            'ai.chat',
         ],
 
         'director' => [

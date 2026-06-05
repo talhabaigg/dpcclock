@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -7,8 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { Download, Info, Search, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Download, Info } from 'lucide-react';
 
 type PeriodTotals = {
     budget: number;
@@ -48,12 +46,11 @@ type PageProps = {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'GL Budget vs Actual', href: '/reports/gl-budget-actual' }];
 
+// ERP convention: no $ on each cell, always 2 decimals, negatives in parens.
 const formatCurrency = (value: number): string => {
     const formatted = new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     }).format(Math.abs(value));
     return value < 0 ? `(${formatted})` : formatted;
 };
@@ -71,18 +68,46 @@ function variancePctColor(pct: number | null): string {
     return 'text-rose-600 dark:text-rose-500';
 }
 
-const HEAD_LABEL = 'h-7 px-2 text-right text-[11px] font-medium text-muted-foreground';
+// ERP-style: plain backgrounds, no hover fills, no vertical separators.
+const HEAD_LABEL = 'h-6 px-2 py-1 text-right text-xs font-semibold text-muted-foreground';
+const CELL_PAD = 'py-0.5 px-2 text-xs';
 
 function PeriodCells({ data }: { data: PeriodTotals }) {
     const pctColor = variancePctColor(data.variance_pct);
     return (
         <>
-            <TableCell className="border-l border-border text-right tabular-nums">
-                {formatCurrency(data.budget)}
-            </TableCell>
-            <TableCell className="text-right tabular-nums">{formatCurrency(data.actual)}</TableCell>
-            <TableCell className="text-right tabular-nums">{formatCurrency(data.variance)}</TableCell>
-            <TableCell className={cn('text-right tabular-nums', pctColor)}>{formatPct(data.variance_pct)}</TableCell>
+            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.budget)}</TableCell>
+            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.actual)}</TableCell>
+            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.variance)}</TableCell>
+            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums', pctColor)}>{formatPct(data.variance_pct)}</TableCell>
+        </>
+    );
+}
+
+// Subtotal: borders only on numeric columns (matches PDF "Total {group}" row)
+function SubtotalCells({ data }: { data: PeriodTotals }) {
+    const pctColor = variancePctColor(data.variance_pct);
+    const num = 'py-1 px-2 text-right tabular-nums border-y border-border font-semibold text-xs';
+    return (
+        <>
+            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.actual)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.variance)}</TableCell>
+            <TableCell className={cn(num, pctColor)}>{formatPct(data.variance_pct)}</TableCell>
+        </>
+    );
+}
+
+// Grand total: full-width thin border on every cell
+function GrandTotalCells({ data }: { data: PeriodTotals }) {
+    const pctColor = variancePctColor(data.variance_pct);
+    const num = 'py-1.5 px-2 text-right tabular-nums font-bold border-y border-border text-xs';
+    return (
+        <>
+            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.actual)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.variance)}</TableCell>
+            <TableCell className={cn(num, pctColor)}>{formatPct(data.variance_pct)}</TableCell>
         </>
     );
 }
@@ -90,27 +115,27 @@ function PeriodCells({ data }: { data: PeriodTotals }) {
 function GroupSection({ group }: { group: Group }) {
     return (
         <>
-            <TableRow className="bg-muted/40 hover:bg-muted/40 border-t">
-                <TableCell colSpan={10} className="bg-muted/40 sticky left-0 z-10 pl-3 text-xs font-semibold text-foreground">
+            <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={10} className="pt-3 pb-1 pl-3 text-xs font-bold text-foreground">
                     {group.name}
                 </TableCell>
             </TableRow>
             {group.rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-muted/30">
-                    <TableCell className="bg-background sticky left-0 z-10 pl-3 tabular-nums">{row.account_number}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[260px] truncate" title={row.description ?? ''}>
+                <TableRow key={row.id} className="border-0 hover:bg-transparent">
+                    <TableCell className={cn(CELL_PAD, 'pl-3 tabular-nums text-muted-foreground')}>{row.account_number}</TableCell>
+                    <TableCell className={cn(CELL_PAD, 'max-w-[240px] truncate text-foreground')} title={row.description ?? ''}>
                         {row.description ?? '—'}
                     </TableCell>
                     <PeriodCells data={row.month} />
                     <PeriodCells data={row.fy} />
                 </TableRow>
             ))}
-            <TableRow className="bg-muted/20 hover:bg-muted/20">
-                <TableCell colSpan={2} className="bg-muted/20 sticky left-0 z-10 pl-3 text-xs font-semibold text-foreground">
+            <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={2} className="pl-3 py-1 text-xs font-semibold text-muted-foreground">
                     Total {group.name}
                 </TableCell>
-                <PeriodCells data={group.subtotal.month} />
-                <PeriodCells data={group.subtotal.fy} />
+                <SubtotalCells data={group.subtotal.month} />
+                <SubtotalCells data={group.subtotal.fy} />
             </TableRow>
         </>
     );
@@ -127,52 +152,15 @@ export default function GlBudgetActualReport({
     groups,
     totals,
 }: PageProps) {
-    const [search, setSearch] = useState('');
-
-    // Filter rows within each group, drop groups that become empty.
-    const filteredGroups = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return groups;
-        return groups
-            .map((g) => ({
-                ...g,
-                rows: g.rows.filter(
-                    (r) => r.account_number.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q),
-                ),
-            }))
-            .filter((g) => g.rows.length > 0);
-    }, [groups, search]);
-
     const hasData = rows.length > 0;
-    const hasMatches = filteredGroups.length > 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="GL Budget vs Actual" />
 
-            <div className="mx-auto w-full max-w-5xl p-3 lg:p-4">
+            <div className="mx-auto w-full max-w-7xl p-3 lg:p-4">
                 {/* Toolbar */}
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="relative w-full max-w-xs">
-                        <Search aria-hidden className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search GL account…"
-                            aria-label="Search GL accounts"
-                            className="h-8 pl-7 pr-7 text-xs"
-                        />
-                        {search && (
-                            <button
-                                type="button"
-                                onClick={() => setSearch('')}
-                                aria-label="Clear search"
-                                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        )}
-                    </div>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                     <div className="flex items-center gap-2">
                         <label className="text-muted-foreground text-xs" htmlFor="fy-select">FY</label>
                         <Select
@@ -221,28 +209,32 @@ export default function GlBudgetActualReport({
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="rounded-lg border [&_[data-slot=table-container]]:rounded-lg">
-                    <Table className="text-xs">
+                {/* Report title — centered above the table, ERP convention */}
+                <div className="mb-3 text-center">
+                    <h2 className="text-foreground text-sm font-bold">GL Budget vs Actual</h2>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                        {monthLabel} &mdash; {fyLabel} To Date
+                    </p>
+                </div>
+
+                {/* Table — ERP-styled body, no outer card border */}
+                <div className="bg-background">
+                    <Table className="border-t border-border text-xs [&_tr]:border-0">
                         <TableHeader>
-                            <TableRow className="bg-muted/40 hover:bg-muted/40">
-                                <TableHead rowSpan={2} className="bg-muted/40 sticky left-0 z-10 h-8 align-bottom pl-3">
-                                    Code
-                                </TableHead>
-                                <TableHead rowSpan={2} className="h-8 align-bottom">
-                                    Account
-                                </TableHead>
-                                <TableHead colSpan={4} className="border-l border-border h-7 text-center">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead rowSpan={2} className="h-6 px-2 pl-3 py-1 align-bottom text-[11px] font-semibold text-muted-foreground border-b border-border" />
+                                <TableHead rowSpan={2} className="h-6 px-2 py-1 align-bottom text-[11px] font-semibold text-muted-foreground border-b border-border" />
+                                <TableHead colSpan={4} className="h-6 px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">
                                     {monthLabel}
                                 </TableHead>
-                                <TableHead colSpan={4} className="border-l border-border h-7 text-center">
+                                <TableHead colSpan={4} className="h-6 px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">
                                     {fyLabel} To Date
                                 </TableHead>
                             </TableRow>
-                            <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableHead className={cn(HEAD_LABEL, 'border-l border-border')}>Budget</TableHead>
-                                <TableHead className={HEAD_LABEL}>Actual</TableHead>
-                                <TableHead className={HEAD_LABEL}>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>
                                     <span className="inline-flex items-center justify-end gap-1">
                                         Variance
                                         <Tooltip>
@@ -257,46 +249,37 @@ export default function GlBudgetActualReport({
                                         </Tooltip>
                                     </span>
                                 </TableHead>
-                                <TableHead className={HEAD_LABEL}>%</TableHead>
-                                <TableHead className={cn(HEAD_LABEL, 'border-l border-border')}>Budget</TableHead>
-                                <TableHead className={HEAD_LABEL}>Actual</TableHead>
-                                <TableHead className={HEAD_LABEL}>Variance</TableHead>
-                                <TableHead className={cn(HEAD_LABEL, 'pr-3')}>%</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>%</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Variance</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border pr-3')}>%</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {!hasMatches ? (
+                            {!hasData ? (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell colSpan={10} className="py-12 text-center">
-                                        {!hasData ? (
-                                            <div className="text-muted-foreground space-y-1 text-xs">
-                                                <p>No GL activity or budgets for {monthLabel}.</p>
-                                                <p className="text-[11px]">Try a different month, or set budgets in Budget Management.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="text-muted-foreground space-y-2 text-xs">
-                                                <p>No accounts match “{search}”.</p>
-                                                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSearch('')}>
-                                                    Clear search
-                                                </Button>
-                                            </div>
-                                        )}
+                                        <div className="text-muted-foreground space-y-1 text-xs">
+                                            <p>No GL activity or budgets for {monthLabel}.</p>
+                                            <p className="text-[11px]">Try a different month, or set budgets in Budget Management.</p>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredGroups.map((group) => (
+                                groups.map((group) => (
                                     <GroupSection key={group.id ?? 'ungrouped'} group={group} />
                                 ))
                             )}
                         </TableBody>
-                        {hasMatches && (
-                            <tfoot className="bg-muted/50">
-                                <TableRow className="border-t hover:bg-muted/50">
-                                    <TableCell colSpan={2} className="bg-muted/50 sticky left-0 z-10 pl-3 text-xs font-semibold">
+                        {hasData && (
+                            <tfoot>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell colSpan={2} className="pt-3 pl-3 py-1.5 text-xs font-bold border-y border-border">
                                         Total
                                     </TableCell>
-                                    <PeriodCells data={totals.month} />
-                                    <PeriodCells data={totals.fy} />
+                                    <GrandTotalCells data={totals.month} />
+                                    <GrandTotalCells data={totals.fy} />
                                 </TableRow>
                             </tfoot>
                         )}

@@ -132,9 +132,10 @@
 <body>
 
 @php
+    // ERP convention: no $ on each cell, always 2 decimals, negatives in parens.
     $formatCurrency = function ($value) {
-        $abs = number_format(abs((float) $value), 0, '.', ',');
-        return (float) $value < 0 ? "(\${$abs})" : "\${$abs}";
+        $abs = number_format(abs((float) $value), 2, '.', ',');
+        return (float) $value < 0 ? "({$abs})" : $abs;
     };
     $formatPct = function ($value) {
         if ($value === null) return '0.0%';
