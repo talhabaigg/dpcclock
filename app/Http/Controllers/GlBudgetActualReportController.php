@@ -97,7 +97,7 @@ class GlBudgetActualReportController extends Controller
      * Build the report dataset (rows + totals + labels) for a given fy + month.
      * Shared by the Inertia screen and the PDF renderer so they stay consistent.
      */
-    private function buildReportData(int $fyYear, string $selectedMonth): array
+    private function buildReportData(int $fyYear, string $selectedMonth, bool $showUngrouped = false): array
     {
         $monthStart = $selectedMonth.'-01';
         $monthEnd = date('Y-m-t', strtotime($monthStart));
@@ -209,13 +209,22 @@ class GlBudgetActualReportController extends Controller
         usort($rows, fn ($a, $b) => strcmp((string) $a['account_number'], (string) $b['account_number']));
 
         $groups = $this->buildGroups($rows);
-        $totals = $this->computeTotals($rows);
+        if (! $showUngrouped) {
+            // Ungrouped section is identified by null id
+            $groups = array_values(array_filter($groups, fn ($g) => $g['id'] !== null));
+        }
+        // Grand total reflects only what's actually shown.
+        $totalsSource = $showUngrouped
+            ? $rows
+            : (empty($groups) ? [] : array_merge(...array_map(fn ($g) => $g['rows'], $groups)));
+        $totals = $this->computeTotals($totalsSource);
 
         return [
             'fyYear' => $fyYear,
             'fyLabel' => $this->fyLabel($fyYear),
             'monthLabel' => date('F Y', strtotime($monthStart)),
             'selectedMonth' => $selectedMonth,
+            'showUngrouped' => $showUngrouped,
             'rows' => $rows, // kept for backwards compatibility / fallback
             'groups' => $groups,
             'totals' => $totals,
@@ -327,7 +336,8 @@ class GlBudgetActualReportController extends Controller
     public function index(Request $request)
     {
         [$fyYear, $selectedMonth] = $this->resolveFyAndMonth($request);
-        $data = $this->buildReportData($fyYear, $selectedMonth);
+        $showUngrouped = $request->boolean('show_ungrouped');
+        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped);
 
         return Inertia::render('gl-budget-actual/index', array_merge($data, [
             'availableFys' => $this->buildAvailableFys($this->currentFy()),
@@ -338,7 +348,8 @@ class GlBudgetActualReportController extends Controller
     public function downloadPdf(Request $request)
     {
         [$fyYear, $selectedMonth] = $this->resolveFyAndMonth($request);
-        $data = $this->buildReportData($fyYear, $selectedMonth);
+        $showUngrouped = $request->boolean('show_ungrouped');
+        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped);
 
         $logoPath = public_path('logo.png');
         if (! file_exists($logoPath)) {

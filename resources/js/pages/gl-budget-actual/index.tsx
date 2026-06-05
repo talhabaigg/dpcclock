@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
@@ -37,6 +38,7 @@ type PageProps = {
     fyYear: number;
     fyLabel: string;
     monthLabel: string;
+    showUngrouped: boolean;
     availableFys: { value: string; label: string }[];
     availableMonths: { value: string; label: string }[];
     rows: Row[];
@@ -146,6 +148,7 @@ export default function GlBudgetActualReport({
     fyYear,
     fyLabel,
     monthLabel,
+    showUngrouped,
     availableFys,
     availableMonths,
     rows,
@@ -154,6 +157,18 @@ export default function GlBudgetActualReport({
 }: PageProps) {
     const hasData = rows.length > 0;
 
+    const navigate = (overrides: Record<string, string | number | boolean | undefined>) => {
+        const params: Record<string, string> = {};
+        // Carry forward current filters, then apply overrides
+        const current = { fy: String(fyYear), month: selectedMonth, show_ungrouped: showUngrouped };
+        const merged: Record<string, unknown> = { ...current, ...overrides };
+        Object.entries(merged).forEach(([k, v]) => {
+            if (v === undefined || v === '' || v === false) return;
+            params[k] = v === true ? '1' : String(v);
+        });
+        router.get('/reports/gl-budget-actual', params, { preserveScroll: true });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="GL Budget vs Actual" />
@@ -161,43 +176,55 @@ export default function GlBudgetActualReport({
             <div className="mx-auto w-full max-w-7xl p-3 lg:p-4">
                 {/* Toolbar */}
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                    <div className="flex items-center gap-2">
-                        <label className="text-muted-foreground text-xs" htmlFor="fy-select">FY</label>
-                        <Select
-                            value={String(fyYear)}
-                            onValueChange={(v) => router.get('/reports/gl-budget-actual', { fy: v }, { preserveScroll: true })}
-                        >
-                            <SelectTrigger id="fy-select" size="sm" className="w-[120px] text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableFys.map((fy) => (
-                                    <SelectItem key={fy.value} value={fy.value} className="text-xs">
-                                        {fy.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="flex items-center gap-3">
+                        <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                            <Switch
+                                size="sm"
+                                checked={showUngrouped}
+                                onCheckedChange={(v) => navigate({ show_ungrouped: v ? '1' : undefined })}
+                                aria-label="Show ungrouped accounts"
+                            />
+                            Show ungrouped
+                        </label>
 
-                        <label className="text-muted-foreground text-xs" htmlFor="month-select">Month</label>
-                        <Select
-                            value={selectedMonth}
-                            onValueChange={(v) => router.get('/reports/gl-budget-actual', { month: v }, { preserveScroll: true })}
-                        >
-                            <SelectTrigger id="month-select" size="sm" className="w-[140px] text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableMonths.map((m) => (
-                                    <SelectItem key={m.value} value={m.value} className="text-xs">
-                                        {m.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-2">
+                            <label className="text-muted-foreground text-xs" htmlFor="fy-select">FY</label>
+                            <Select
+                                value={String(fyYear)}
+                                onValueChange={(v) => navigate({ fy: v, month: undefined })}
+                            >
+                                <SelectTrigger id="fy-select" size="sm" className="w-[120px] text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableFys.map((fy) => (
+                                        <SelectItem key={fy.value} value={fy.value} className="text-xs">
+                                            {fy.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <label className="text-muted-foreground text-xs" htmlFor="month-select">Month</label>
+                            <Select
+                                value={selectedMonth}
+                                onValueChange={(v) => navigate({ month: v })}
+                            >
+                                <SelectTrigger id="month-select" size="sm" className="w-[140px] text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableMonths.map((m) => (
+                                        <SelectItem key={m.value} value={m.value} className="text-xs">
+                                            {m.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
                         <a
-                            href={`/reports/gl-budget-actual/pdf?month=${selectedMonth}`}
+                            href={`/reports/gl-budget-actual/pdf?month=${selectedMonth}${showUngrouped ? '&show_ungrouped=1' : ''}`}
                             target="_blank"
                             rel="noopener noreferrer"
                         >
