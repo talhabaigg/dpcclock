@@ -8,8 +8,32 @@
             font-family: Arial, Helvetica, sans-serif;
             font-size: 9px;
             color: #1e293b;
-            line-height: 1.4;
+            line-height: 1.25;
             font-variant-numeric: tabular-nums;
+        }
+
+        .doc-header {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .doc-header .logo { justify-self: start; }
+        .doc-header .logo img { max-height: 32px; display: block; }
+        .doc-header .title-block {
+            justify-self: center;
+            text-align: center;
+            color: #0f172a;
+        }
+        .doc-header .title-block .name {
+            font-size: 9px;
+            font-weight: 700;
+        }
+        .doc-header .title-block .period {
+            font-size: 8px;
+            font-weight: 600;
+            color: #475569;
+            margin-top: 1px;
         }
 
         table.data {
@@ -17,31 +41,27 @@
             border-collapse: collapse;
             table-layout: fixed;
             font-size: 8.5px;
-            border-top: 1.5px solid #334155;
-            border-bottom: 1.5px solid #334155;
+            border-top: 1px solid #cbd5e1;
         }
         table.data thead th {
-            background: #f1f5f9;
-            color: #0f172a;
+            background: transparent;
+            color: #334155;
             font-weight: 700;
-            padding: 5px 5px;
+            padding: 3px 5px;
             text-align: center;
             font-size: 8.5px;
-            border-bottom: 1px solid #cbd5e1;
         }
-        table.data thead .col-group {
-            border-left: 1px solid #cbd5e1;
+        table.data thead th[rowspan] {
+            border-bottom: 1px solid #cbd5e1;
+            vertical-align: bottom;
         }
         table.data thead tr.sub th {
-            background: #f8fafc;
-            font-weight: 600;
-            font-size: 7.5px;
-            padding: 4px 5px;
+            font-weight: 700;
+            font-size: 8px;
+            padding: 2px 5px 4px;
             color: #475569;
-            border-bottom: 1px solid #94a3b8;
-        }
-        table.data thead tr.sub th.group-start {
-            border-left: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
+            text-align: right;
         }
 
         /* Column widths — total must add to 100% */
@@ -50,43 +70,37 @@
         col.col-num  { width: 9%; }
 
         table.data tbody td {
-            padding: 3px 5px;
-            border-bottom: 1px solid #e2e8f0;
+            padding: 1.5px 5px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        table.data tbody td.code { font-weight: 600; }
-        table.data tbody td.name { color: #475569; }
+        table.data tbody td.code { color: #475569; }
+        table.data tbody td.name { color: #1e293b; }
         table.data tbody td.num {
             text-align: right;
-            font-variant-numeric: tabular-nums;
         }
-        table.data tbody td.group-start { border-left: 1px solid #cbd5e1; }
-        table.data tbody td.zero-budget { color: #94a3b8; }
         table.data tbody td.positive { color: #15803d; }
         table.data tbody td.negative { color: #b91c1c; }
         table.data tbody td.warning { color: #b45309; }
 
         table.data tr.totals td {
-            background: #f1f5f9;
             color: #0f172a;
             font-weight: 700;
-            padding: 5px 5px;
-            border-top: 1px solid #94a3b8;
-            border-bottom: none;
+            padding: 3px 5px 4px;
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
         }
         table.data tr.totals td.num { text-align: right; }
-        table.data tr.totals td.group-start { border-left: 1px solid #cbd5e1; }
 
         table.data thead { display: table-header-group; }
         table.data tr { page-break-inside: avoid; }
 
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 24px 16px;
             color: #64748b;
-            font-size: 10px;
+            font-size: 9px;
         }
     </style>
 </head>
@@ -94,11 +108,11 @@
 
 @php
     $formatCurrency = function ($value) {
-        $abs = number_format(abs($value), 0, '.', ',');
-        return $value < 0 ? "(\${$abs})" : "\${$abs}";
+        $abs = number_format(abs((float) $value), 0, '.', ',');
+        return (float) $value < 0 ? "(\${$abs})" : "\${$abs}";
     };
     $formatPct = function ($value) {
-        if ($value === null) return '—';
+        if ($value === null) return '0.0%';
         $sign = $value > 0 ? '+' : '';
         return $sign . number_format($value, 1) . '%';
     };
@@ -110,6 +124,19 @@
         return 'negative';
     };
 @endphp
+
+<div class="doc-header">
+    <div class="logo">
+        @if($logoBase64)
+            <img src="{{ $logoBase64 }}" alt="">
+        @endif
+    </div>
+    <div class="title-block">
+        <div class="name">GL Budget vs Actual</div>
+        <div class="period">{{ $monthLabel }} &mdash; {{ $fyLabel }} To Date</div>
+    </div>
+    <div></div>
+</div>
 
 @if(count($rows) === 0)
     <div class="empty-state">No GL activity or budgets for {{ $monthLabel }}.</div>
@@ -129,17 +156,17 @@
         </colgroup>
         <thead>
             <tr>
-                <th rowspan="2" style="text-align: left;">Code</th>
-                <th rowspan="2" style="text-align: left;">Account</th>
-                <th colspan="4" class="col-group">{{ $monthLabel }}</th>
-                <th colspan="4" class="col-group">{{ $fyLabel }} To Date</th>
+                <th rowspan="2" aria-hidden="true"></th>
+                <th rowspan="2" aria-hidden="true"></th>
+                <th colspan="4">{{ $monthLabel }}</th>
+                <th colspan="4">{{ $fyLabel }} To Date</th>
             </tr>
             <tr class="sub">
-                <th class="group-start">Budget</th>
+                <th>Budget</th>
                 <th>Actual</th>
                 <th>Variance</th>
                 <th>%</th>
-                <th class="group-start">Budget</th>
+                <th>Budget</th>
                 <th>Actual</th>
                 <th>Variance</th>
                 <th>%</th>
@@ -155,12 +182,12 @@
                     <td class="code">{{ $row['account_number'] }}</td>
                     <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
 
-                    <td class="num group-start {{ $row['month']['budget'] == 0 ? 'zero-budget' : '' }}">{{ $formatCurrency($row['month']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
                     <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
                     <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
 
-                    <td class="num group-start {{ $row['fy']['budget'] == 0 ? 'zero-budget' : '' }}">{{ $formatCurrency($row['fy']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
                     <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
                     <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
@@ -175,11 +202,11 @@
             <tbody>
                 <tr class="totals">
                     <td colspan="2">Total</td>
-                    <td class="num group-start">{{ $formatCurrency($totals['month']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($totals['month']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($totals['month']['actual']) }}</td>
                     <td class="num">{{ $formatCurrency($totals['month']['variance']) }}</td>
                     <td class="num {{ $totalMonthPctClass }}">{{ $formatPct($totals['month']['variance_pct']) }}</td>
-                    <td class="num group-start">{{ $formatCurrency($totals['fy']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($totals['fy']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($totals['fy']['actual']) }}</td>
                     <td class="num">{{ $formatCurrency($totals['fy']['variance']) }}</td>
                     <td class="num {{ $totalFyPctClass }}">{{ $formatPct($totals['fy']['variance_pct']) }}</td>

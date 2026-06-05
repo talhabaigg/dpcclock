@@ -51,7 +51,7 @@ const formatCurrency = (value: number): string => {
 };
 
 const formatPct = (value: number | null): string => {
-    if (value === null) return '—';
+    if (value === null) return '0.0%';
     return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 };
 
@@ -67,10 +67,9 @@ const HEAD_LABEL = 'h-7 px-2 text-right text-[11px] font-medium text-muted-foreg
 
 function PeriodCells({ data }: { data: PeriodTotals }) {
     const pctColor = variancePctColor(data.variance_pct);
-    const zeroBudget = data.budget === 0;
     return (
         <>
-            <TableCell className={cn('border-l border-border text-right tabular-nums', zeroBudget && 'text-muted-foreground')}>
+            <TableCell className="border-l border-border text-right tabular-nums">
                 {formatCurrency(data.budget)}
             </TableCell>
             <TableCell className="text-right tabular-nums">{formatCurrency(data.actual)}</TableCell>
