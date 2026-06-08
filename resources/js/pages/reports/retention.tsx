@@ -1,12 +1,12 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { useMemo, useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Download, Check, X, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Download, Check, X, Pencil, Plus, Trash2, RotateCcw } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SearchSelect } from '@/components/search-select';
 import { DatePickerDemo } from '@/components/date-picker';
+import { cn } from '@/lib/utils';
 
 interface RetentionRow {
     id: number;
@@ -66,8 +67,13 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Retention Report', href: '/retention-report' },
 ];
 
+// ERP convention: no $ sign per cell, always 2 decimals, negatives in parens.
 function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+    const formatted = new Intl.NumberFormat('en-AU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Math.abs(value));
+    return value < 0 ? `(${formatted})` : formatted;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -97,6 +103,10 @@ function computeTotals(data: RetentionRow[]) {
     };
 }
 
+const ERP_HEAD = 'h-7 px-2 py-1 text-right text-[11px] font-semibold text-muted-foreground border-b border-border';
+const ERP_HEAD_LEFT = 'h-7 px-2 py-1 text-left text-[11px] font-semibold text-muted-foreground border-b border-border';
+const ERP_CELL = 'py-0.5 px-2 text-xs';
+
 export default function RetentionReport({ retentionData, filters, companies, availableLocations }: RetentionProps) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
@@ -117,12 +127,12 @@ export default function RetentionReport({ retentionData, filters, companies, ava
     const [deleteJobNumber, setDeleteJobNumber] = useState<string | null>(null);
     const [deleteJobName, setDeleteJobName] = useState('');
 
-    const existingJobNumbers = useMemo(() => new Set(retentionData.map(r => r.job_number)), [retentionData]);
+    const existingJobNumbers = useMemo(() => new Set(retentionData.map((r) => r.job_number)), [retentionData]);
 
     const locationOptions = useMemo(
         () => availableLocations
-            .filter(loc => !existingJobNumbers.has(loc.external_id))
-            .map(loc => ({ value: loc.external_id, label: `${loc.external_id} - ${loc.name}` })),
+            .filter((loc) => !existingJobNumbers.has(loc.external_id))
+            .map((loc) => ({ value: loc.external_id, label: `${loc.external_id} - ${loc.name}` })),
         [availableLocations, existingJobNumbers],
     );
 
@@ -204,11 +214,14 @@ export default function RetentionReport({ retentionData, filters, companies, ava
         router.get('/retention-report', params, { preserveState: true, preserveScroll: true });
     }, [filters]);
 
-    const totals = useMemo(() => retentionData.length > 0 ? computeTotals(retentionData) : null, [retentionData]);
+    const totals = useMemo(() => (retentionData.length > 0 ? computeTotals(retentionData) : null), [retentionData]);
 
-    const startEditing = useCallback((jobNumber: string, currentValue: number) => {
-        setEditingJob(jobNumber);
-        setEditValue(currentValue !== 0 ? String(currentValue) : '');
+    // The inline pencil lets the user set the *displayed* cash holding directly.
+    // Storage stays as a delta on top of system retention, but the UI hides that
+    // detail so the input value matches what's on screen.
+    const startEditing = useCallback((row: RetentionRow) => {
+        setEditingJob(row.job_number);
+        setEditValue(row.current_cash_holding !== 0 ? String(row.current_cash_holding) : '');
     }, []);
 
     const cancelEditing = useCallback(() => {
@@ -216,15 +229,19 @@ export default function RetentionReport({ retentionData, filters, companies, ava
         setEditValue('');
     }, []);
 
-    const saveManualRetention = useCallback((jobNumber: string) => {
-        const numValue = parseFloat(editValue);
-        if (isNaN(numValue)) {
+    const saveManualRetention = useCallback((row: RetentionRow) => {
+        const targetTotal = parseFloat(editValue);
+        if (isNaN(targetTotal)) {
             cancelEditing();
             return;
         }
+        // system retention from Premier = displayed − previous manual adjustment
+        const systemRetainage = row.current_cash_holding - row.manual_retention_held;
+        const delta = targetTotal - systemRetainage;
+
         router.post('/retention-report/manual', {
-            job_number: jobNumber,
-            manual_retention_held: numValue,
+            job_number: row.job_number,
+            manual_retention_held: delta,
         }, {
             preserveScroll: true,
             onSuccess: () => {
@@ -233,6 +250,14 @@ export default function RetentionReport({ retentionData, filters, companies, ava
             },
         });
     }, [editValue, cancelEditing]);
+
+    // Wipe any pencil adjustment on a system row — revert to the pure Premier value.
+    const revertToSystem = useCallback((row: RetentionRow) => {
+        router.post('/retention-report/manual', {
+            job_number: row.job_number,
+            manual_retention_held: 0,
+        }, { preserveScroll: true });
+    }, []);
 
     const exportToExcel = useCallback(async () => {
         const wb = new ExcelJS.Workbook();
@@ -302,12 +327,14 @@ export default function RetentionReport({ retentionData, filters, companies, ava
         saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Retention_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }, [retentionData, totals]);
 
+    const today = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Retention Report" />
 
-            <div className="flex flex-col gap-4 p-4 max-h-[calc(100vh-4rem)]">
-                {/* Filters */}
+            <div className="flex flex-col gap-4 p-4">
+                {/* Toolbar */}
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-muted-foreground">Company</span>
@@ -344,104 +371,132 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                     </span>
                 </div>
 
-                {/* Table */}
-                <div className="flex-1 min-h-0 rounded-lg border overflow-auto">
-                    <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5 [&_td]:px-2 [&_th]:px-2">
-                        <TableHeader className="sticky top-0 z-10">
-                            <TableRow className="bg-muted/30">
-                                <TableHead className="sticky left-0 z-20 bg-muted/30 min-w-[200px]">Job Name</TableHead>
-                                <TableHead className="min-w-[160px]">Customer Name</TableHead>
-                                <TableHead className="text-right min-w-[160px]">Revised Contract Value</TableHead>
-                                <TableHead className="text-right min-w-[130px]">Retention 5%</TableHead>
-                                <TableHead className="text-right min-w-[130px]">Retention 2.5%</TableHead>
-                                <TableHead className="text-right min-w-[180px]">Current Cash Holding (Excl GST)</TableHead>
-                                <TableHead className="text-right min-w-[140px]">1st Release Date</TableHead>
-                                <TableHead className="text-right min-w-[140px]">1st Release Amount</TableHead>
-                                <TableHead className="text-right min-w-[140px]">2nd Release Date</TableHead>
-                                <TableHead className="text-right min-w-[140px]">2nd Release Amount</TableHead>
-                                {canEdit && <TableHead className="w-[90px] text-center">Actions</TableHead>}
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {retentionData.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={canEdit ? 11 : 10} className="h-32 text-center text-muted-foreground">
-                                        No retention data found.
-                                    </TableCell>
+                {/* Report */}
+                <div className="w-full">
+                    <div className="mb-3 text-center">
+                        <h2 className="text-foreground text-sm font-bold">Retention Report</h2>
+                        <p className="text-muted-foreground mt-0.5 text-xs">As of {today}</p>
+                    </div>
+
+                    <div className="bg-background">
+                        <Table className="border-t border-border text-xs [&_tr]:border-0">
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableHead className={cn(ERP_HEAD_LEFT, 'pl-3')}>Job Name</TableHead>
+                                    <TableHead className={ERP_HEAD_LEFT}>Customer</TableHead>
+                                    <TableHead className={ERP_HEAD}>Revised Contract</TableHead>
+                                    <TableHead className={ERP_HEAD}>Retention 5%</TableHead>
+                                    <TableHead className={ERP_HEAD}>Retention 2.5%</TableHead>
+                                    <TableHead className={ERP_HEAD}>Cash Holding (Excl GST)</TableHead>
+                                    <TableHead className={ERP_HEAD}>1st Release Date</TableHead>
+                                    <TableHead className={ERP_HEAD}>1st Release Amount</TableHead>
+                                    <TableHead className={ERP_HEAD}>2nd Release Date</TableHead>
+                                    <TableHead className={cn(ERP_HEAD, !canEdit && 'pr-3')}>2nd Release Amount</TableHead>
+                                    {canEdit && (
+                                        <TableHead className={cn(ERP_HEAD, 'pr-3 text-center')}>Actions</TableHead>
+                                    )}
                                 </TableRow>
-                            ) : (
-                                <>
-                                    {retentionData.map((row) => (
-                                        <TableRow key={row.id} className="group hover:bg-muted/30">
-                                            <TableCell className="sticky left-0 z-10 bg-background group-hover:bg-muted/30 min-w-[200px] max-w-[250px] truncate font-medium" title={row.job_name}>
+                            </TableHeader>
+                            <TableBody>
+                                {retentionData.length === 0 ? (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={canEdit ? 11 : 10} className="py-12 text-center">
+                                            <p className="text-muted-foreground text-xs">No retention data found.</p>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    retentionData.map((row) => (
+                                        <TableRow key={row.id} className="border-0 hover:bg-muted/30">
+                                            <TableCell className={cn(ERP_CELL, 'pl-3 max-w-[260px] truncate text-foreground font-medium')} title={row.job_name}>
                                                 <span className="mr-2">{row.job_name}</span>
                                                 {row.is_manual_entry && (
-                                                    <Badge variant="secondary" className="text-xs px-1.5 py-0">Manual</Badge>
+                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Manual</Badge>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="min-w-[160px] max-w-[200px] truncate" title={row.customer_name}>
+                                            <TableCell className={cn(ERP_CELL, 'max-w-[220px] truncate text-muted-foreground')} title={row.customer_name}>
                                                 {row.customer_name}
                                             </TableCell>
-                                            <TableCell className="text-right">{formatCurrency(row.revised_contract_value)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(row.retention_5pct)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(row.retention_2_5pct)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
+                                                {formatCurrency(row.revised_contract_value)}
+                                            </TableCell>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
+                                                {formatCurrency(row.retention_5pct)}
+                                            </TableCell>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
+                                                {formatCurrency(row.retention_2_5pct)}
+                                            </TableCell>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
                                                 {row.is_manual_entry ? (
                                                     <span>{formatCurrency(row.current_cash_holding)}</span>
+                                                ) : editingJob === row.job_number ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={editValue}
+                                                            onChange={(e) => setEditValue(e.target.value)}
+                                                            className="w-28 h-7 px-2 text-right text-xs md:text-xs"
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') saveManualRetention(row);
+                                                                if (e.key === 'Escape') cancelEditing();
+                                                            }}
+                                                            autoFocus
+                                                        />
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button variant="default" size="icon" className="h-7 w-7" onClick={() => saveManualRetention(row)}>
+                                                                        <Check className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>Save</TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={cancelEditing}>
+                                                                        <X className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>Cancel</TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    </div>
                                                 ) : (
                                                     <div className="flex items-center justify-end gap-1">
-                                                        {editingJob === row.job_number ? (
+                                                        <span>{formatCurrency(row.current_cash_holding)}</span>
+                                                        {canEdit && (
                                                             <>
-                                                                <Input
-                                                                    type="number"
-                                                                    step="0.01"
-                                                                    value={editValue}
-                                                                    onChange={(e) => setEditValue(e.target.value)}
-                                                                    className="w-28 h-7 px-2 text-right text-xs"
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') saveManualRetention(row.job_number);
-                                                                        if (e.key === 'Escape') cancelEditing();
-                                                                    }}
-                                                                    autoFocus
-                                                                />
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button variant="default" size="icon" className="h-7 w-7" onClick={() => saveManualRetention(row.job_number)}>
-                                                                                <Check className="h-3.5 w-3.5" />
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                                                onClick={() => startEditing(row)}
+                                                                            >
+                                                                                <Pencil className="h-3 w-3" />
                                                                             </Button>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent>Save</TooltipContent>
+                                                                        <TooltipContent>Adjust retention</TooltipContent>
                                                                     </Tooltip>
                                                                 </TooltipProvider>
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Button variant="outline" size="icon" className="h-7 w-7" onClick={cancelEditing}>
-                                                                                <X className="h-3.5 w-3.5" />
-                                                                            </Button>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>Cancel</TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <span>{formatCurrency(row.current_cash_holding)}</span>
-                                                                {canEdit && (
+                                                                {row.manual_retention_held !== 0 && (
                                                                     <TooltipProvider>
                                                                         <Tooltip>
                                                                             <TooltipTrigger asChild>
                                                                                 <Button
-                                                                                    variant="outline"
+                                                                                    variant="ghost"
                                                                                     size="icon"
-                                                                                    className="h-7 w-7"
-                                                                                    onClick={() => startEditing(row.job_number, row.manual_retention_held)}
+                                                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                                                                    onClick={() => revertToSystem(row)}
                                                                                 >
-                                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                                    <RotateCcw className="h-3 w-3" />
                                                                                 </Button>
                                                                             </TooltipTrigger>
-                                                                            <TooltipContent>Adjust retention</TooltipContent>
+                                                                            <TooltipContent>Revert to system value</TooltipContent>
                                                                         </Tooltip>
                                                                     </TooltipProvider>
                                                                 )}
@@ -450,28 +505,27 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                     </div>
                                                 )}
                                             </TableCell>
-                                            <TableCell className={`text-right ${!row.first_release_date ? 'text-amber-500 font-medium' : ''}`}>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !row.first_release_date && 'text-amber-600 font-medium dark:text-amber-500')}>
                                                 {formatDate(row.first_release_date)}
                                             </TableCell>
-                                            <TableCell className="text-right">{formatCurrency(row.first_release_amount)}</TableCell>
-                                            <TableCell className={`text-right ${!row.second_release_date ? 'text-amber-500 font-medium' : ''}`}>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
+                                                {formatCurrency(row.first_release_amount)}
+                                            </TableCell>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !row.second_release_date && 'text-amber-600 font-medium dark:text-amber-500')}>
                                                 {formatDate(row.second_release_date)}
                                             </TableCell>
-                                            <TableCell className="text-right">{formatCurrency(row.second_release_amount)}</TableCell>
+                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !canEdit && 'pr-3')}>
+                                                {formatCurrency(row.second_release_amount)}
+                                            </TableCell>
                                             {canEdit && (
-                                                <TableCell className="text-center">
+                                                <TableCell className={cn(ERP_CELL, 'pr-3 text-center')}>
                                                     {row.is_manual_entry && (
                                                         <div className="flex items-center justify-center gap-1">
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="icon"
-                                                                            className="h-7 w-7"
-                                                                            onClick={() => openEditDialog(row)}
-                                                                        >
-                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(row)}>
+                                                                            <Pencil className="h-3 w-3" />
                                                                         </Button>
                                                                     </TooltipTrigger>
                                                                     <TooltipContent>Edit entry</TooltipContent>
@@ -480,12 +534,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="destructive"
-                                                                            size="icon"
-                                                                            className="h-7 w-7"
-                                                                            onClick={() => confirmDelete(row)}
-                                                                        >
+                                                                        <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => confirmDelete(row)}>
                                                                             <Trash2 className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </TooltipTrigger>
@@ -497,27 +546,41 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                 </TableCell>
                                             )}
                                         </TableRow>
-                                    ))}
-                                    {/* Totals row */}
-                                    {totals && (
-                                        <TableRow className="bg-muted/50 font-bold border-t-2">
-                                            <TableCell className="sticky left-0 z-10 bg-muted/50 min-w-[200px]">TOTAL</TableCell>
-                                            <TableCell />
-                                            <TableCell className="text-right">{formatCurrency(totals.revised_contract_value)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(totals.retention_5pct)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(totals.retention_2_5pct)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(totals.current_cash_holding)}</TableCell>
-                                            <TableCell />
-                                            <TableCell className="text-right">{formatCurrency(totals.first_release_amount)}</TableCell>
-                                            <TableCell />
-                                            <TableCell className="text-right">{formatCurrency(totals.second_release_amount)}</TableCell>
-                                            {canEdit && <TableCell />}
-                                        </TableRow>
-                                    )}
-                                </>
+                                    ))
+                                )}
+                            </TableBody>
+                            {totals && (
+                                <tfoot>
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={2} className="pl-3 py-1.5 text-xs font-bold text-foreground">
+                                            Total
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border">
+                                            {formatCurrency(totals.revised_contract_value)}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border">
+                                            {formatCurrency(totals.retention_5pct)}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border">
+                                            {formatCurrency(totals.retention_2_5pct)}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border">
+                                            {formatCurrency(totals.current_cash_holding)}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 border-y border-border" />
+                                        <TableCell className="py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border">
+                                            {formatCurrency(totals.first_release_amount)}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-2 border-y border-border" />
+                                        <TableCell className={cn('py-1.5 px-2 text-right tabular-nums text-xs font-bold border-y border-border', !canEdit && 'pr-3')}>
+                                            {formatCurrency(totals.second_release_amount)}
+                                        </TableCell>
+                                        {canEdit && <TableCell className="py-1.5 px-2 pr-3 border-y border-border" />}
+                                    </TableRow>
+                                </tfoot>
                             )}
-                        </TableBody>
-                    </Table>
+                        </Table>
+                    </div>
                 </div>
             </div>
 
@@ -537,7 +600,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                 <Input
                                     className="text-xs h-7 px-2"
                                     value={(() => {
-                                        const loc = availableLocations.find(l => l.external_id === dialogJobNumber);
+                                        const loc = availableLocations.find((l) => l.external_id === dialogJobNumber);
                                         return loc ? `${loc.external_id} - ${loc.name}` : dialogJobNumber;
                                     })()}
                                     disabled
@@ -557,7 +620,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                 className="text-xs h-7 px-2"
                                 placeholder="e.g. Anura Pty Ltd"
                                 value={dialogForm.customer_name}
-                                onChange={(e) => setDialogForm(f => ({ ...f, customer_name: e.target.value }))}
+                                onChange={(e) => setDialogForm((f) => ({ ...f, customer_name: e.target.value }))}
                             />
                         </div>
                         <div className="flex flex-col gap-2">
@@ -568,7 +631,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                 step="0.01"
                                 placeholder="e.g. 1500000"
                                 value={dialogForm.contract_value}
-                                onChange={(e) => setDialogForm(f => ({ ...f, contract_value: e.target.value }))}
+                                onChange={(e) => setDialogForm((f) => ({ ...f, contract_value: e.target.value }))}
                             />
                         </div>
                         <div className="flex flex-col gap-2">
@@ -579,7 +642,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                 step="0.01"
                                 placeholder="e.g. 15000 or -5000"
                                 value={dialogForm.retention_held}
-                                onChange={(e) => setDialogForm(f => ({ ...f, retention_held: e.target.value }))}
+                                onChange={(e) => setDialogForm((f) => ({ ...f, retention_held: e.target.value }))}
                             />
                             <p className="text-xs text-muted-foreground">
                                 Supports negative values. Added to any existing system retention.
@@ -589,7 +652,7 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                             <Label className="text-xs">Estimated Completion Date</Label>
                             <DatePickerDemo
                                 value={dialogForm.estimated_end_date}
-                                onChange={(date) => setDialogForm(f => ({ ...f, estimated_end_date: date }))}
+                                onChange={(date) => setDialogForm((f) => ({ ...f, estimated_end_date: date }))}
                                 placeholder="Pick a date (optional)"
                             />
                             <p className="text-xs text-muted-foreground">

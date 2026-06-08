@@ -140,6 +140,15 @@ class RetentionReportController extends Controller
             $retention5pct = round($revisedContractValue * 0.05, 2);
             $retention2_5pct = round($revisedContractValue * 0.025, 2);
 
+            // Release amounts are 50/50 of actual cash holding.
+            // Compute in cents so the two halves always add up to exactly the displayed value
+            // (no off-by-a-cent drift from independent rounding).
+            $cashHoldingCents = (int) round($currentCashHolding * 100);
+            $firstReleaseCents = intdiv($cashHoldingCents, 2);
+            $secondReleaseCents = $cashHoldingCents - $firstReleaseCents;
+            $firstReleaseAmount = $firstReleaseCents / 100;
+            $secondReleaseAmount = $secondReleaseCents / 100;
+
             $retentionData[] = [
                 'id' => $location->id,
                 'job_number' => $jobNumber,
@@ -150,18 +159,24 @@ class RetentionReportController extends Controller
                 'retention_2_5pct' => $retention2_5pct,
                 'current_cash_holding' => round($currentCashHolding, 2),
                 'manual_retention_held' => $manual,
-                'is_manual_entry' => $setting && ($setting->manual_retention_held !== null || $setting->manual_contract_value !== null || $setting->manual_customer_name !== null || $setting->manual_estimated_end_date !== null),
+                // A row is a "manual entry" only when there's no Premier JobSummary backing it
+                // (i.e., it was created via the Add Manual Entry dialog for an off-Premier job).
+                // System rows that happen to have a pencil-adjusted manual delta stay treated as
+                // system rows so the inline pencil remains available for future tweaks.
+                'is_manual_entry' => $jobSummary === null,
                 'manual_customer_name' => $setting?->manual_customer_name,
-                'manual_contract_value' => $setting?->manual_contract_value ? (float) $setting->manual_contract_value : null,
+                // Preserve an explicit 0 (a contract value the user really set to zero) instead
+                // of collapsing it to null via a truthy check.
+                'manual_contract_value' => $setting?->manual_contract_value !== null ? (float) $setting->manual_contract_value : null,
                 'manual_estimated_end_date' => $setting?->manual_estimated_end_date?->format('Y-m-d'),
                 'first_release_date' => $estimatedEndDate
                     ? Carbon::parse($estimatedEndDate)->addDays(30)->format('Y-m-d')
                     : null,
-                'first_release_amount' => $retention2_5pct,
+                'first_release_amount' => $firstReleaseAmount,
                 'second_release_date' => $estimatedEndDate
                     ? Carbon::parse($estimatedEndDate)->addMonths(12)->format('Y-m-d')
                     : null,
-                'second_release_amount' => $retention2_5pct,
+                'second_release_amount' => $secondReleaseAmount,
             ];
         }
 
