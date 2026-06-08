@@ -36,6 +36,22 @@ class BroadcastQueueJobEvents
 
     public function handleJobProcessed(JobProcessed $event): void
     {
+        // Laravel fires JobProcessed whenever handle() returns without throwing — that
+        // covers genuine success AND two misleading cases we need to filter out:
+        //
+        //   1. Released for retry — $this->release($delay) inside handle(), or middleware
+        //      like WithoutOverlapping / RateLimited releasing because a lock isn't free.
+        //      The job will run again; dashboard should NOT show "completed".
+        //
+        //   2. Already failed — $this->fail($e) inside handle() fires JobFailed first and
+        //      then handle() returns normally, so JobProcessed fires too. We'd end up
+        //      overwriting the "failed" log with "completed".
+        //
+        // Skip both. JobProcessing will fire again on the next attempt for released jobs.
+        if ($event->job->isReleased() || $event->job->hasFailed()) {
+            return;
+        }
+
         $jobName = $this->extractJobName($event->job->payload());
 
         $this->log($event->job->getJobId(), $jobName, 'completed', 'Job completed successfully', [

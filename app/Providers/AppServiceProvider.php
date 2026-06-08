@@ -7,6 +7,7 @@ use App\Events\DocumentSigned;
 use App\Events\FormSubmitted;
 use App\Listeners\BroadcastQueueJobEvents;
 use App\Listeners\AddFormSubmittedSystemComment;
+use App\Listeners\NotifyOnJobFailed;
 use App\Listeners\UpdateEmploymentApplicationOnSigned;
 use App\Support\FeatureFlags;
 use Illuminate\Queue\Events\JobFailed;
@@ -60,5 +61,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(JobProcessing::class, [BroadcastQueueJobEvents::class, 'handleJobProcessing']);
         Event::listen(JobProcessed::class, [BroadcastQueueJobEvents::class, 'handleJobProcessed']);
         Event::listen(JobFailed::class, [BroadcastQueueJobEvents::class, 'handleJobFailed']);
+
+        // Email alert (throttled, with AI root-cause hint) when a job exhausts retries.
+        Event::listen(JobFailed::class, NotifyOnJobFailed::class);
     }
 }

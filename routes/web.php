@@ -1528,6 +1528,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/queue-status/download-logs', [QueueStatusController::class, 'downloadLogs'])->name('queueStatus.downloadLogs')
         ->middleware('role:admin');
 
+    // Failed-job details + actions used by the dialog on the queue status page.
+    Route::get('/queue-status/failed-jobs/{uuid}/details', [QueueStatusController::class, 'failedJobDetails'])
+        ->whereUuid('uuid')
+        ->name('queueStatus.failedJob.details')
+        ->middleware('permission:queue-status.view');
+    Route::post('/queue-status/failed-jobs/{uuid}/retry', [QueueStatusController::class, 'retryFailedJob'])
+        ->whereUuid('uuid')
+        ->name('queueStatus.failedJob.retry')
+        ->middleware('role:admin');
+    Route::post('/queue-status/failed-jobs/analyze', [QueueStatusController::class, 'analyzeFailedJob'])
+        ->name('queueStatus.failedJob.analyze')
+        ->middleware('permission:queue-status.view');
+
     // Role & Permission Management (Admin only)
     Route::middleware('permission:admin.roles')->group(function () {
         Route::get('/admin/roles', [RoleController::class, 'index'])->name('admin.roles.index');

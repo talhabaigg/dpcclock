@@ -39,7 +39,12 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // MUST exceed the longest possible job timeout (currently 1800s = 30 min for
+            // Premier OData paginated jobs — see config/premier.php jobs.timeout). If
+            // retry_after < timeout, a slow job gets re-picked-up by a second worker
+            // mid-flight, the dashboard reports "complete" while the first worker is still
+            // paginating, and both workers double-insert into staging.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 2100),
             'after_commit' => false,
         ],
 
@@ -67,7 +72,9 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // Same rule as the database driver: must exceed the longest job timeout
+            // (currently 1800s for Premier OData paginated jobs). See config/premier.php.
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 2100),
             'block_for' => null,
             'after_commit' => false,
         ],

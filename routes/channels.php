@@ -33,3 +33,9 @@ Broadcast::channel('drawing-sets.{projectId}', function () {
 Broadcast::channel('premier-sync', function () {
     return true;
 });
+
+// Live laravel.log stream for the queue-status page log viewer. Restricted to the
+// same permission gate as the page itself so we don't leak log content.
+Broadcast::channel('portal-logs', function ($user) {
+    return $user && $user->can('queue-status.view');
+});

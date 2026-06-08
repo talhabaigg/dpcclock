@@ -1,3 +1,4 @@
+import { FailedJobDetailsDialog } from '@/components/failed-job-details-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -186,7 +187,9 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
     const [logViewer, setLogViewer] = useState<{ open: boolean; content: string; size: number; truncated: boolean; loading: boolean }>({
         open: false, content: '', size: 0, truncated: false, loading: false,
     });
+    const [logLive, setLogLive] = useState(false);
     const logEndRef = useRef<HTMLDivElement>(null);
+    const logScrollRef = useRef<HTMLDivElement>(null);
 
     const handleClear = async (action: 'clear-queue' | 'clear-completed' | 'clear-failed' | 'clear-logs' | 'clear-job-logs' | 'restart') => {
         if (action === 'restart' && !confirm('Restart queue workers? This will signal workers to stop gracefully, clear stuck "processing" entries, and release reserved jobs back to the queue.')) {
@@ -335,17 +338,61 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
         };
     }, []);
 
-    const formatDate = (dateStr?: string) => {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return new Intl.DateTimeFormat('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-        }).format(date);
-    };
+    // Live log tail — runs only while the log viewer dialog is open. Subscribes to the
+    // private 'portal-logs' channel; every LogLineAppended event from the BroadcastLogHandler
+    // server-side gets appended to the dialog and the view scrolls if the user is near the bottom.
+    useEffect(() => {
+        if (!logViewer.open) {
+            setLogLive(false);
+            return;
+        }
+
+        window.Pusher = Pusher;
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+        const echo = new Echo({
+            broadcaster: 'reverb',
+            key: import.meta.env.VITE_REVERB_APP_KEY,
+            wsHost: import.meta.env.VITE_REVERB_HOST,
+            wsPort: import.meta.env.VITE_REVERB_PORT,
+            forceTLS: false,
+            enabledTransports: ['ws'],
+            disableStats: true,
+            // Private channels hit /broadcasting/auth — include CSRF + session cookie.
+            authEndpoint: '/broadcasting/auth',
+            auth: { headers: { 'X-CSRF-TOKEN': csrfToken } },
+        });
+
+        const isNearBottom = () => {
+            const el = logScrollRef.current;
+            if (!el) return true;
+            return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+        };
+
+        const channel = echo.private('portal-logs');
+        channel.subscribed(() => setLogLive(true));
+        channel.error(() => setLogLive(false));
+        channel.listen('.log.line.appended', (event: { line: string }) => {
+            const wasAtBottom = isNearBottom();
+            setLogViewer((prev) => {
+                if (!prev.open) return prev;
+                const next = prev.content ? prev.content + '\n' + event.line : event.line;
+                // Cap at ~500KB (matches the server-side tail) so the dialog can't grow unboundedly.
+                const maxChars = 500 * 1024;
+                const trimmed = next.length > maxChars ? next.slice(next.length - maxChars) : next;
+                return { ...prev, content: trimmed };
+            });
+            if (wasAtBottom) {
+                requestAnimationFrame(() => logEndRef.current?.scrollIntoView({ block: 'end' }));
+            }
+        });
+
+        return () => {
+            channel.stopListening('.log.line.appended');
+            echo.leave('portal-logs');
+            echo.disconnect();
+            setLogLive(false);
+        };
+    }, [logViewer.open]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -432,50 +479,17 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             </div>
 
             {/* Failed Job Details Dialog */}
-            <Dialog open={!!selectedFailedJob} onOpenChange={(open) => !open && setSelectedFailedJob(null)}>
-                <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <XCircle className="text-muted-foreground h-5 w-5" />
-                            Failed Job Details
-                        </DialogTitle>
-                    </DialogHeader>
-                    {selectedFailedJob && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Job Name</h3>
-                                <p className="break-words text-base">{selectedFailedJob.name}</p>
-                            </div>
-                            <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Job ID</h3>
-                                <p className="break-all font-mono text-sm text-gray-600 dark:text-gray-400">{selectedFailedJob.id}</p>
-                            </div>
-                            <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Queue</h3>
-                                <p className="break-words text-sm">{selectedFailedJob.queue || selectedFailedJob.metadata?.queue || 'default'}</p>
-                            </div>
-                            <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Failed At</h3>
-                                <p className="text-sm">{formatDate(selectedFailedJob.failed_at || selectedFailedJob.timestamp)}</p>
-                            </div>
-                            {selectedFailedJob.metadata?.exception && (
-                                <div>
-                                    <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Exception Type</h3>
-                                    <p className="break-all font-mono text-sm text-gray-600 dark:text-gray-400">{selectedFailedJob.metadata.exception}</p>
-                                </div>
-                            )}
-                            <div>
-                                <h3 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Error Message</h3>
-                                <div className="bg-muted max-h-96 overflow-x-auto overflow-y-auto rounded-md border p-3">
-                                    <pre className="text-foreground break-words whitespace-pre-wrap text-xs">
-                                        {selectedFailedJob.message || 'No error message available'}
-                                    </pre>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
+            <FailedJobDetailsDialog
+                job={selectedFailedJob}
+                onClose={() => setSelectedFailedJob(null)}
+                onRetried={(uuid) => {
+                    setJobs((prev) => ({
+                        ...prev,
+                        failed: prev.failed.filter((j) => j.id !== uuid),
+                        stats: { ...prev.stats, failed_count: Math.max(0, prev.stats.failed_count - 1) },
+                    }));
+                }}
+            />
             {/* Log Viewer Dialog */}
             <Dialog open={logViewer.open} onOpenChange={(open) => !open && setLogViewer((prev) => ({ ...prev, open: false }))}>
                 <DialogContent className="flex h-[90vh] min-w-full flex-col overflow-hidden">
@@ -490,6 +504,19 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                                         {logViewer.truncated && ' - showing last 500KB'}
                                     </span>
                                 )}
+                                {logLive ? (
+                                    <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-500">
+                                        <span className="relative flex h-1.5 w-1.5">
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                        </span>
+                                        Live
+                                    </span>
+                                ) : (
+                                    <span className="ml-1 text-muted-foreground text-[10px] uppercase tracking-wide">
+                                        Reconnecting…
+                                    </span>
+                                )}
                             </DialogTitle>
                             <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDownloadLogs} title="Download Full Log">
                                 <Download className="h-4 w-4" />
@@ -501,15 +528,18 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
                             <Loader2 className="h-6 w-6 animate-spin" />
                         </div>
                     ) : logViewer.content ? (
-                        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-gray-950">
+                        <div ref={logScrollRef} className="min-h-0 flex-1 overflow-auto rounded-md border bg-gray-950">
                             <pre className="whitespace-pre-wrap break-words p-4 text-xs leading-relaxed text-gray-200">
                                 {logViewer.content}
                                 <div ref={logEndRef} />
                             </pre>
                         </div>
                     ) : (
-                        <div className="text-muted-foreground py-12 text-center text-sm">
-                            Log file is empty.
+                        <div ref={logScrollRef} className="min-h-0 flex-1 overflow-auto rounded-md border bg-gray-950">
+                            <pre className="whitespace-pre-wrap break-words p-4 text-xs leading-relaxed text-gray-500">
+                                Waiting for log entries…
+                                <div ref={logEndRef} />
+                            </pre>
                         </div>
                     )}
                 </DialogContent>
