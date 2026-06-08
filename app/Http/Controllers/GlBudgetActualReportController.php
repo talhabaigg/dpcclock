@@ -97,6 +97,24 @@ class GlBudgetActualReportController extends Controller
      * Build the report dataset (rows + totals + labels) for a given fy + month.
      * Shared by the Inertia screen and the PDF renderer so they stay consistent.
      */
+    /**
+     * Raw-direction variance % = (Actual − Budget) / Budget × 100.
+     * When Budget is 0 but Actual isn't, returns ±100 as a stand-in for ∞ —
+     * a useful signal that the line is "fully off budget". Returns null only
+     * when both are 0 (no activity → nothing to compare).
+     */
+    private function rawDirectionPct(float $actual, float $budget): ?float
+    {
+        if ($budget != 0.0) {
+            return (($actual - $budget) / $budget) * 100;
+        }
+        if ($actual == 0.0) {
+            return null;
+        }
+
+        return $actual > 0 ? 100.0 : -100.0;
+    }
+
     private function buildReportData(int $fyYear, string $selectedMonth, bool $showUngrouped = false): array
     {
         $monthStart = $selectedMonth.'-01';
@@ -129,11 +147,13 @@ class GlBudgetActualReportController extends Controller
             ->pluck('total', 'premier_gl_account_id');
 
         $monthActualByAccountNumber = GlTransactionDetail::whereBetween('transaction_date', [$monthStart, $monthEnd])
+            ->where('company_code', 'SWCP')
             ->groupBy('account')
             ->selectRaw('account, SUM(debit) - SUM(credit) AS net')
             ->pluck('net', 'account');
 
         $fyActualByAccountNumber = GlTransactionDetail::whereBetween('transaction_date', [$fyStart, $monthEnd])
+            ->where('company_code', 'SWCP')
             ->groupBy('account')
             ->selectRaw('account, SUM(debit) - SUM(credit) AS net')
             ->pluck('net', 'account');
@@ -164,6 +184,12 @@ class GlBudgetActualReportController extends Controller
             $fyBudget = (float) ($fyBudgetByAccountId[$account->id] ?? 0);
             $fyActual = (float) ($fyActualByAccountNumber[$account->account_number] ?? 0);
 
+            // Expense convention (default):
+            //   variance $    = Budget − Actual (favourable = positive: spent less)
+            //   variance %    = (Actual − Budget) / Budget × 100 (raw direction: negative = under-spent)
+            // Revenue groups override variance $ in flipActualSign() while keeping the
+            // same raw-direction formula for %; after the actual is flipped, that naturally
+            // reads "exceeded target = positive %".
             $rows[] = [
                 'id' => $account->id,
                 'account_number' => $account->account_number,
@@ -171,14 +197,14 @@ class GlBudgetActualReportController extends Controller
                 'month' => [
                     'budget' => $monthBudget,
                     'actual' => $monthActual,
-                    'variance' => $monthActual - $monthBudget,
-                    'variance_pct' => $monthBudget != 0.0 ? (($monthActual - $monthBudget) / $monthBudget) * 100 : null,
+                    'variance' => $monthBudget - $monthActual,
+                    'variance_pct' => $this->rawDirectionPct($monthActual, $monthBudget),
                 ],
                 'fy' => [
                     'budget' => $fyBudget,
                     'actual' => $fyActual,
-                    'variance' => $fyActual - $fyBudget,
-                    'variance_pct' => $fyBudget != 0.0 ? (($fyActual - $fyBudget) / $fyBudget) * 100 : null,
+                    'variance' => $fyBudget - $fyActual,
+                    'variance_pct' => $this->rawDirectionPct($fyActual, $fyBudget),
                 ],
             ];
         }
@@ -193,14 +219,14 @@ class GlBudgetActualReportController extends Controller
                 'month' => [
                     'budget' => 0.0,
                     'actual' => $monthActual,
-                    'variance' => $monthActual,
-                    'variance_pct' => null,
+                    'variance' => -$monthActual, // no budget → spend is unfavourable
+                    'variance_pct' => $this->rawDirectionPct($monthActual, 0.0),
                 ],
                 'fy' => [
                     'budget' => 0.0,
                     'actual' => $fyActual,
-                    'variance' => $fyActual,
-                    'variance_pct' => null,
+                    'variance' => -$fyActual,
+                    'variance_pct' => $this->rawDirectionPct($fyActual, 0.0),
                 ],
             ];
         }
@@ -208,16 +234,8 @@ class GlBudgetActualReportController extends Controller
         // Default account-number sort; gets overridden if a row falls into a group with custom sort.
         usort($rows, fn ($a, $b) => strcmp((string) $a['account_number'], (string) $b['account_number']));
 
-        $groups = $this->buildGroups($rows);
-        if (! $showUngrouped) {
-            // Ungrouped section is identified by null id
-            $groups = array_values(array_filter($groups, fn ($g) => $g['id'] !== null));
-        }
-        // Grand total reflects only what's actually shown.
-        $totalsSource = $showUngrouped
-            ? $rows
-            : (empty($groups) ? [] : array_merge(...array_map(fn ($g) => $g['rows'], $groups)));
-        $totals = $this->computeTotals($totalsSource);
+        $sections = $this->buildSections($rows, $showUngrouped);
+        $computed = $this->computeComputedLines($sections);
 
         return [
             'fyYear' => $fyYear,
@@ -225,26 +243,41 @@ class GlBudgetActualReportController extends Controller
             'monthLabel' => date('F Y', strtotime($monthStart)),
             'selectedMonth' => $selectedMonth,
             'showUngrouped' => $showUngrouped,
-            'rows' => $rows, // kept for backwards compatibility / fallback
-            'groups' => $groups,
-            'totals' => $totals,
+            'monthStart' => $monthStart,
+            'monthEnd' => $monthEnd,
+            'fyStart' => $fyStart,
+            'fyEnd' => $monthEnd,
+            'sections' => $sections,
+            'computed' => $computed,
         ];
     }
 
     /**
-     * Build the grouped row structure from the flat rows list.
-     * Returns an ordered list of groups, each with its rows and per-group subtotals.
-     * Ungrouped accounts fall into a trailing "Ungrouped" group (omitted if empty).
+     * Fixed accounting order. The income statement composition + sign flip
+     * convention is driven entirely off the group's section_type.
+     * @var list<array{key:string,label:string}>
      */
-    private function buildGroups(array $rows): array
+    private const SECTION_ORDER = [
+        ['key' => 'revenue', 'label' => 'Revenue'],
+        ['key' => 'cogs', 'label' => 'Cost of Goods Sold'],
+        ['key' => 'operating_expense', 'label' => 'Operating Expenses'],
+        ['key' => 'other_income', 'label' => 'Other Income'],
+        ['key' => 'other_expense', 'label' => 'Other Expenses'],
+    ];
+
+    /**
+     * Build the income-statement section structure.
+     * Each section contains an ordered list of groups (each with rows + group subtotal)
+     * and a section subtotal. Ungrouped accounts go into a trailing "Ungrouped" section
+     * only when $showUngrouped — they're never included in section totals or computed lines.
+     */
+    private function buildSections(array $rows, bool $showUngrouped): array
     {
-        // groupId => ['name', 'sort', 'accountSort' => [accountId => orderInGroup]]
         $groupConfig = GlAccountGroup::with('assignments:id,gl_account_group_id,premier_gl_account_id,sort_order')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
 
-        // accountId => [groupId, sortOrder]
         $accountToGroup = [];
         foreach ($groupConfig as $group) {
             foreach ($group->assignments as $a) {
@@ -255,7 +288,6 @@ class GlBudgetActualReportController extends Controller
             }
         }
 
-        // Bucket rows by group id, plus an "ungrouped" bucket
         $bucketed = []; // groupId => list of rows
         $ungrouped = [];
         foreach ($rows as $row) {
@@ -268,7 +300,8 @@ class GlBudgetActualReportController extends Controller
             }
         }
 
-        $out = [];
+        // groupId => prepared group block (rows sorted + sign-flipped if revenue-natured)
+        $groupBlocks = [];
         foreach ($groupConfig as $group) {
             $groupRows = $bucketed[$group->id] ?? [];
             if (empty($groupRows)) {
@@ -280,30 +313,144 @@ class GlBudgetActualReportController extends Controller
             }
             unset($r);
 
-            $out[] = [
-                'id' => $group->id,
-                'name' => $group->name,
-                'rows' => $groupRows,
-                'subtotal' => $this->computeTotals($groupRows),
+            $sectionType = $group->section_type ?: 'operating_expense';
+            $isRevenueNatured = in_array($sectionType, GlAccountGroup::REVENUE_NATURED_SECTIONS, true);
+            if ($isRevenueNatured) {
+                $groupRows = array_map(fn ($row) => $this->flipActualSign($row), $groupRows);
+            }
+
+            $groupBlocks[$group->id] = [
+                'section_type' => $sectionType,
+                'block' => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'account_type' => $group->account_type ?: 'expense',
+                    'section_type' => $sectionType,
+                    'rows' => $groupRows,
+                    'subtotal' => $this->computeTotals($groupRows),
+                ],
             ];
         }
 
-        if (! empty($ungrouped)) {
-            $out[] = [
-                'id' => null,
-                'name' => 'Ungrouped',
-                'rows' => $ungrouped,
+        // Bucket prepared groups by section, preserving group sort_order.
+        $sectionsOut = [];
+        foreach (self::SECTION_ORDER as $sectionDef) {
+            $sectionGroups = [];
+            foreach ($groupBlocks as $entry) {
+                if ($entry['section_type'] === $sectionDef['key']) {
+                    $sectionGroups[] = $entry['block'];
+                }
+            }
+
+            $sectionsOut[] = [
+                'key' => $sectionDef['key'],
+                'label' => $sectionDef['label'],
+                'is_revenue_natured' => in_array($sectionDef['key'], GlAccountGroup::REVENUE_NATURED_SECTIONS, true),
+                'groups' => $sectionGroups,
+                'subtotal' => $this->computeTotals(
+                    array_merge(...array_map(fn ($g) => $g['rows'], $sectionGroups)) ?: []
+                ),
+            ];
+        }
+
+        if ($showUngrouped && ! empty($ungrouped)) {
+            $sectionsOut[] = [
+                'key' => 'ungrouped',
+                'label' => 'Ungrouped',
+                'is_revenue_natured' => false,
+                'groups' => [[
+                    'id' => null,
+                    'name' => 'Ungrouped',
+                    'account_type' => 'expense',
+                    'section_type' => 'ungrouped',
+                    'rows' => $ungrouped,
+                    'subtotal' => $this->computeTotals($ungrouped),
+                ]],
                 'subtotal' => $this->computeTotals($ungrouped),
             ];
+        }
+
+        return $sectionsOut;
+    }
+
+    /**
+     * Computed P&L lines: Gross Profit, Net Operating Income, Net Income.
+     * Each is a signed addition of section subtotals — revenue-natured sections
+     * contribute "+", expense-natured contribute "−". Variance stays
+     * favourable-positive across all lines.
+     */
+    private function computeComputedLines(array $sections): array
+    {
+        $byKey = [];
+        foreach ($sections as $s) {
+            $byKey[$s['key']] = $s['subtotal'];
+        }
+
+        $empty = ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null];
+        $revenue = $byKey['revenue'] ?? ['month' => $empty, 'fy' => $empty];
+        $cogs = $byKey['cogs'] ?? ['month' => $empty, 'fy' => $empty];
+        $opex = $byKey['operating_expense'] ?? ['month' => $empty, 'fy' => $empty];
+        $otherInc = $byKey['other_income'] ?? ['month' => $empty, 'fy' => $empty];
+        $otherExp = $byKey['other_expense'] ?? ['month' => $empty, 'fy' => $empty];
+
+        $grossProfit = $this->combine([['p' => $revenue, 's' => +1], ['p' => $cogs, 's' => -1]]);
+        $noi = $this->combine([['p' => $grossProfit, 's' => +1], ['p' => $opex, 's' => -1]]);
+        $netIncome = $this->combine([['p' => $noi, 's' => +1], ['p' => $otherInc, 's' => +1], ['p' => $otherExp, 's' => -1]]);
+
+        return [
+            'gross_profit' => $grossProfit,
+            'net_operating_income' => $noi,
+            'net_income' => $netIncome,
+        ];
+    }
+
+    /**
+     * Signed combination of period totals (Month + FY) for composite lines.
+     * Each part contributes ±actual, ±budget. Variance is rebuilt as
+     * (actual − budget) so all composites stay favourable-positive
+     * (revenue-natured convention, since all composite outputs represent income).
+     */
+    private function combine(array $parts): array
+    {
+        $out = ['month' => ['budget' => 0.0, 'actual' => 0.0], 'fy' => ['budget' => 0.0, 'actual' => 0.0]];
+        foreach ($parts as $part) {
+            $sign = $part['s'];
+            foreach (['month', 'fy'] as $period) {
+                $out[$period]['actual'] += $sign * (float) $part['p'][$period]['actual'];
+                $out[$period]['budget'] += $sign * (float) $part['p'][$period]['budget'];
+            }
+        }
+        foreach (['month', 'fy'] as $period) {
+            $out[$period]['variance'] = $out[$period]['actual'] - $out[$period]['budget'];
+            $out[$period]['variance_pct'] = $this->rawDirectionPct($out[$period]['actual'], $out[$period]['budget']);
         }
 
         return $out;
     }
 
     /**
+     * For a revenue row, flip the sign on actuals so a credit-heavy
+     * net displays as a positive revenue figure.
+     *   variance $ = Actual − Budget   (favourable = positive: beat target)
+     *   variance % = (Actual − Budget) / Budget × 100   (raw direction; positive = beat target)
+     */
+    private function flipActualSign(array $row): array
+    {
+        foreach (['month', 'fy'] as $period) {
+            $actual = -1 * (float) $row[$period]['actual'];
+            $budget = (float) $row[$period]['budget'];
+            $row[$period]['actual'] = $actual;
+            $row[$period]['variance'] = $actual - $budget;
+            $row[$period]['variance_pct'] = $this->rawDirectionPct($actual, $budget);
+        }
+
+        return $row;
+    }
+
+    /**
      * Compute total row across a set of report rows.
-     * Only includes accounts that have a non-zero budget (avoids the
-     * double-entry-net-to-zero pitfall when summing across all accounts).
+     * Sections are already scoped to a single P&L bucket (revenue/cogs/opex/…), so
+     * we sum every row — no double-entry-cancellation guard needed.
      */
     private function computeTotals(array $rows): array
     {
@@ -312,23 +459,23 @@ class GlBudgetActualReportController extends Controller
             'fy' => ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null],
         ];
         foreach ($rows as $row) {
-            $isBudgeted = (float) $row['fy']['budget'] > 0 || (float) $row['month']['budget'] > 0;
-            if (! $isBudgeted) {
-                continue;
+            foreach (['month', 'fy'] as $period) {
+                $totals[$period]['budget'] += (float) $row[$period]['budget'];
+                $totals[$period]['actual'] += (float) $row[$period]['actual'];
+                // Sum per-row variance $ so each row's polarity (expense vs revenue) is preserved.
+                $totals[$period]['variance'] += (float) $row[$period]['variance'];
             }
-            $totals['month']['budget'] += (float) $row['month']['budget'];
-            $totals['month']['actual'] += (float) $row['month']['actual'];
-            $totals['fy']['budget'] += (float) $row['fy']['budget'];
-            $totals['fy']['actual'] += (float) $row['fy']['actual'];
         }
-        $totals['month']['variance'] = $totals['month']['actual'] - $totals['month']['budget'];
-        $totals['month']['variance_pct'] = $totals['month']['budget'] != 0.0
-            ? ($totals['month']['variance'] / $totals['month']['budget']) * 100
-            : null;
-        $totals['fy']['variance'] = $totals['fy']['actual'] - $totals['fy']['budget'];
-        $totals['fy']['variance_pct'] = $totals['fy']['budget'] != 0.0
-            ? ($totals['fy']['variance'] / $totals['fy']['budget']) * 100
-            : null;
+        foreach (['month', 'fy'] as $period) {
+            // Variance % stays in raw direction: (Actual − Budget) / Budget × 100.
+            // Negative for under-spent expense groups, positive for revenue groups
+            // that beat target (revenue actuals are already flipped at the row level).
+            // Returns ±100 if budget=0 but there's activity (helper handles it).
+            $totals[$period]['variance_pct'] = $this->rawDirectionPct(
+                (float) $totals[$period]['actual'],
+                (float) $totals[$period]['budget']
+            );
+        }
 
         return $totals;
     }
@@ -362,8 +509,8 @@ class GlBudgetActualReportController extends Controller
         $html = view('reports.gl-budget-actual', [
             'fyLabel' => $data['fyLabel'],
             'monthLabel' => $data['monthLabel'],
-            'groups' => $data['groups'],
-            'totals' => $data['totals'],
+            'sections' => $data['sections'],
+            'computed' => $data['computed'],
             'logoBase64' => $logoBase64,
         ])->render();
 

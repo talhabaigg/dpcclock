@@ -16,6 +16,7 @@ use App\Http\Controllers\CompanyRevenueTargetController;
 use App\Http\Controllers\CostcodeController;
 use App\Http\Controllers\GlAccountGroupController;
 use App\Http\Controllers\GlBudgetActualReportController;
+use App\Http\Controllers\GlTransactionDetailReportController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\ToolboxSignController;
@@ -1080,6 +1081,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:reports.glBudgetActual')->group(function () {
         Route::get('/reports/gl-budget-actual', [GlBudgetActualReportController::class, 'index'])->name('reports.glBudgetActual');
         Route::get('/reports/gl-budget-actual/pdf', [GlBudgetActualReportController::class, 'downloadPdf'])->name('reports.glBudgetActual.pdf');
+        Route::get('/reports/gl-transaction-detail', [GlTransactionDetailReportController::class, 'index'])->name('reports.glTransactionDetail');
     });
     Route::middleware('permission:budget.edit')->group(function () {
         Route::post('/budget-management', [CompanyRevenueTargetController::class, 'store'])->name('budgetManagement.store');

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GL Budget vs Actual — {{ $monthLabel }}</title>
+    <title>Income Statement — {{ $monthLabel }}</title>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -64,7 +64,6 @@
             text-align: right;
         }
 
-        /* Column widths — total must add to 100% */
         col.col-code { width: 6%; }
         col.col-name { width: 22%; }
         col.col-num  { width: 9%; }
@@ -77,46 +76,62 @@
         }
         table.data tbody td.code { color: #475569; }
         table.data tbody td.name { color: #1e293b; }
-        table.data tbody td.num {
-            text-align: right;
-        }
+        table.data tbody td.num { text-align: right; }
         table.data tbody td.positive { color: #15803d; }
         table.data tbody td.negative { color: #b91c1c; }
         table.data tbody td.warning { color: #b45309; }
 
-        /* Group header row */
-        table.data tbody tr.group-header td {
+        table.data tbody tr.section-header td {
             font-weight: 700;
             color: #0f172a;
-            padding: 6px 5px 3px;
+            padding: 6px 5px 2px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        table.data tbody tr.group-header td {
+            font-weight: 600;
+            color: #475569;
+            padding: 4px 5px 2px 14px;
             font-size: 8.5px;
         }
-        /* Subtotal row — borders confined to the numeric columns */
-        table.data tbody tr.subtotal td {
+        table.data tbody tr.group-subtotal td {
+            font-weight: 600;
+            color: #334155;
+            padding: 3px 5px;
+        }
+        table.data tbody tr.group-subtotal td.label { padding-left: 14px; }
+        table.data tbody tr.group-subtotal td.num {
+            border-top: 0.5px solid #cbd5e1;
+            border-bottom: 0.5px solid #cbd5e1;
+        }
+        table.data tbody tr.section-subtotal td {
             font-weight: 700;
             color: #0f172a;
             padding: 3px 5px;
         }
-        table.data tbody tr.subtotal td.label {
-            color: #475569;
-            font-weight: 600;
-        }
-        table.data tbody tr.subtotal td.num {
-            text-align: right;
+        table.data tbody tr.section-subtotal td.num { text-align: right; }
+        /* Single-group section subtotal IS the group total — show the borders. */
+        table.data tbody tr.section-subtotal.single-group td.num {
             border-top: 0.5px solid #cbd5e1;
             border-bottom: 0.5px solid #cbd5e1;
         }
-
-        /* Grand total row — same stroke as subtotal but extends full width */
-        table.data tbody tr.totals td {
+        table.data tbody tr.computed td {
             color: #0f172a;
             font-weight: 700;
-            padding: 5px 5px 6px;
+            padding: 5px 5px;
             font-size: 9px;
-            border-top: 0.5px solid #cbd5e1;
-            border-bottom: 0.5px solid #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
-        table.data tbody tr.totals td.num { text-align: right; }
+        table.data tbody tr.computed td.num {
+            text-align: right;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        table.data tbody tr.account-row td.code { padding-left: 14px; }
+        table.data tbody tr.account-row.indented td.code { padding-left: 22px; }
 
         table.data thead { display: table-header-group; }
         table.data tr { page-break-inside: avoid; }
@@ -132,23 +147,25 @@
 <body>
 
 @php
-    // ERP convention: no $ on each cell, always 2 decimals, negatives in parens.
     $formatCurrency = function ($value) {
         $abs = number_format(abs((float) $value), 2, '.', ',');
         return (float) $value < 0 ? "({$abs})" : $abs;
     };
     $formatPct = function ($value) {
-        if ($value === null) return '0.0%';
+        if ($value === null) return '—';
         $sign = $value > 0 ? '+' : '';
         return $sign . number_format($value, 1) . '%';
     };
-    // Variance = Actual - Budget. Positive % = overspent (red). Negative % = underspent (green).
-    $variancePctClass = function ($pct) {
-        if ($pct === null) return '';
-        if ($pct <= -1) return 'positive';
-        if ($pct <= 10) return 'warning';
+    $varianceClass = function ($variance, $budget) {
+        if ($variance === null || (float) $variance == 0.0) return '';
+        if ((float) $variance > 0) return 'positive';
+        if ($budget === null || (float) $budget <= 0) return 'negative';
+        $magnitude = -((float) $variance) / (float) $budget;
+        if ($magnitude <= 0.1) return 'warning';
         return 'negative';
     };
+    $sectionByKey = collect($sections)->keyBy('key');
+    $hasData = $sectionByKey->contains(fn ($s) => ! empty($s['groups']));
 @endphp
 
 <div class="doc-header">
@@ -158,15 +175,13 @@
         @endif
     </div>
     <div class="title-block">
-        <div class="name">GL Budget vs Actual</div>
+        <div class="name">Income Statement</div>
         <div class="period">{{ $monthLabel }} &mdash; {{ $fyLabel }} To Date</div>
     </div>
     <div></div>
 </div>
 
-@php $totalAccountCount = collect($groups)->sum(fn ($g) => count($g['rows'])); @endphp
-
-@if($totalAccountCount === 0)
+@if(! $hasData)
     <div class="empty-state">No GL activity or budgets for {{ $monthLabel }}.</div>
 @else
     <table class="data">
@@ -200,68 +215,112 @@
                 <th>%</th>
             </tr>
         </thead>
-        @foreach($groups as $group)
-            <tbody>
-                <tr class="group-header">
-                    <td colspan="10">{{ $group['name'] }}</td>
-                </tr>
-                @foreach($group['rows'] as $row)
-                    @php
-                        $monthPctClass = $variancePctClass($row['month']['variance_pct']);
-                        $fyPctClass = $variancePctClass($row['fy']['variance_pct']);
-                    @endphp
-                    <tr>
-                        <td class="code">{{ $row['account_number'] }}</td>
-                        <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
+        <tbody>
 
-                        <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
-                        <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
-                        <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
-                        <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
+        {{-- Layout sequence: each section is followed by its computed line where relevant. --}}
+        @php
+            $layout = [
+                ['type' => 'section',  'key' => 'revenue'],
+                ['type' => 'section',  'key' => 'cogs'],
+                ['type' => 'computed', 'key' => 'gross_profit',         'label' => 'Gross Profit'],
+                ['type' => 'section',  'key' => 'operating_expense'],
+                ['type' => 'computed', 'key' => 'net_operating_income', 'label' => 'Net Operating Income'],
+                ['type' => 'section',  'key' => 'other_income'],
+                ['type' => 'section',  'key' => 'other_expense'],
+                ['type' => 'computed', 'key' => 'net_income',           'label' => 'Net Income'],
+                ['type' => 'section',  'key' => 'ungrouped'],
+            ];
+        @endphp
 
-                        <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
-                        <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
-                        <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
-                        <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
+        @foreach($layout as $entry)
+            @if($entry['type'] === 'section')
+                @php $section = $sectionByKey->get($entry['key']); @endphp
+                @if($section && ! empty($section['groups']))
+                    @php $showGroupSubtotals = count($section['groups']) > 1; @endphp
+                    <tr class="section-header">
+                        <td colspan="10">{{ $section['label'] }}</td>
                     </tr>
-                @endforeach
+                    @foreach($section['groups'] as $group)
+                        @if($showGroupSubtotals)
+                            <tr class="group-header">
+                                <td colspan="10">{{ $group['name'] }}</td>
+                            </tr>
+                        @endif
+                        @foreach($group['rows'] as $row)
+                            @php
+                                $monthPctClass = $varianceClass($row['month']['variance'], $row['month']['budget']);
+                                $fyPctClass = $varianceClass($row['fy']['variance'], $row['fy']['budget']);
+                            @endphp
+                            <tr class="account-row {{ $showGroupSubtotals ? 'indented' : '' }}">
+                                <td class="code">{{ $row['account_number'] }}</td>
+                                <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
+                                <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
+                                <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
+                                <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
+                            </tr>
+                        @endforeach
+                        @if($showGroupSubtotals)
+                            @php
+                                $sub = $group['subtotal'];
+                                $subMonthClass = $varianceClass($sub['month']['variance'], $sub['month']['budget']);
+                                $subFyClass = $varianceClass($sub['fy']['variance'], $sub['fy']['budget']);
+                            @endphp
+                            <tr class="group-subtotal">
+                                <td colspan="2" class="label">Total {{ $group['name'] }}</td>
+                                <td class="num">{{ $formatCurrency($sub['month']['budget']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['month']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['month']['variance']) }}</td>
+                                <td class="num {{ $subMonthClass }}">{{ $formatPct($sub['month']['variance_pct']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['fy']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['fy']['variance']) }}</td>
+                                <td class="num {{ $subFyClass }}">{{ $formatPct($sub['fy']['variance_pct']) }}</td>
+                            </tr>
+                        @endif
+                    @endforeach
+                    @php
+                        $st = $section['subtotal'];
+                        $stMonthClass = $varianceClass($st['month']['variance'], $st['month']['budget']);
+                        $stFyClass = $varianceClass($st['fy']['variance'], $st['fy']['budget']);
+                    @endphp
+                    <tr class="section-subtotal {{ $showGroupSubtotals ? '' : 'single-group' }}">
+                        <td colspan="2">Total {{ $section['label'] }}</td>
+                        <td class="num">{{ $formatCurrency($st['month']['budget']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['month']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['month']['variance']) }}</td>
+                        <td class="num {{ $stMonthClass }}">{{ $formatPct($st['month']['variance_pct']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['fy']['budget']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['fy']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['fy']['variance']) }}</td>
+                        <td class="num {{ $stFyClass }}">{{ $formatPct($st['fy']['variance_pct']) }}</td>
+                    </tr>
+                @endif
+            @elseif($entry['type'] === 'computed')
                 @php
-                    $sub = $group['subtotal'];
-                    $subMonthClass = $variancePctClass($sub['month']['variance_pct']);
-                    $subFyClass = $variancePctClass($sub['fy']['variance_pct']);
+                    $data = $computed[$entry['key']];
+                    $monthClass = $varianceClass($data['month']['variance'], $data['month']['budget']);
+                    $fyClass = $varianceClass($data['fy']['variance'], $data['fy']['budget']);
                 @endphp
-                <tr class="subtotal">
-                    <td colspan="2" class="label">Total {{ $group['name'] }}</td>
-                    <td class="num">{{ $formatCurrency($sub['month']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($sub['month']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($sub['month']['variance']) }}</td>
-                    <td class="num {{ $subMonthClass }}">{{ $formatPct($sub['month']['variance_pct']) }}</td>
-                    <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($sub['fy']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($sub['fy']['variance']) }}</td>
-                    <td class="num {{ $subFyClass }}">{{ $formatPct($sub['fy']['variance_pct']) }}</td>
+                <tr class="computed">
+                    <td colspan="2">{{ $entry['label'] }}</td>
+                    <td class="num">{{ $formatCurrency($data['month']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['month']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['month']['variance']) }}</td>
+                    <td class="num {{ $monthClass }}">{{ $formatPct($data['month']['variance_pct']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['fy']['budget']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['fy']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['fy']['variance']) }}</td>
+                    <td class="num {{ $fyClass }}">{{ $formatPct($data['fy']['variance_pct']) }}</td>
                 </tr>
-            </tbody>
+            @endif
         @endforeach
-        @if($totals['month']['budget'] > 0 || $totals['fy']['budget'] > 0)
-            @php
-                $totalMonthPctClass = $variancePctClass($totals['month']['variance_pct']);
-                $totalFyPctClass = $variancePctClass($totals['fy']['variance_pct']);
-            @endphp
-            <tbody>
-                <tr class="totals">
-                    <td colspan="2">Total</td>
-                    <td class="num">{{ $formatCurrency($totals['month']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($totals['month']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($totals['month']['variance']) }}</td>
-                    <td class="num {{ $totalMonthPctClass }}">{{ $formatPct($totals['month']['variance_pct']) }}</td>
-                    <td class="num">{{ $formatCurrency($totals['fy']['budget']) }}</td>
-                    <td class="num">{{ $formatCurrency($totals['fy']['actual']) }}</td>
-                    <td class="num">{{ $formatCurrency($totals['fy']['variance']) }}</td>
-                    <td class="num {{ $totalFyPctClass }}">{{ $formatPct($totals['fy']['variance_pct']) }}</td>
-                </tr>
-            </tbody>
-        @endif
+
+        </tbody>
     </table>
 @endif
 

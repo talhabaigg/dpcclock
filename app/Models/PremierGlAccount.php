@@ -10,5 +10,6 @@ class PremierGlAccount extends Model
         'premier_account_id',
         'account_number',
         'description',
+        'account_type',
     ];
 }

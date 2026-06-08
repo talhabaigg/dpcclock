@@ -42,16 +42,39 @@ import {
 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+type AccountType = 'revenue' | 'expense';
+type SectionType = 'revenue' | 'cogs' | 'operating_expense' | 'other_income' | 'other_expense';
+
+const SECTION_OPTIONS: { value: SectionType; label: string }[] = [
+    { value: 'revenue', label: 'Revenue' },
+    { value: 'cogs', label: 'Cost of Goods Sold' },
+    { value: 'operating_expense', label: 'Operating Expense' },
+    { value: 'other_income', label: 'Other Income' },
+    { value: 'other_expense', label: 'Other Expense' },
+];
+
+const SECTION_SHORT_LABEL: Record<SectionType, string> = {
+    revenue: 'Revenue',
+    cogs: 'COGS',
+    operating_expense: 'Op Ex',
+    other_income: 'Other Inc',
+    other_expense: 'Other Exp',
+};
+
 type Account = {
     id: number;
     account_number: string;
     description: string | null;
+    account_type?: string | null;
 };
 
 type GroupRow = {
     key: string; // 'g-<id>' for saved, 'new-<n>' for unsaved
     id: number | null;
     name: string;
+    account_type: AccountType;
+    section_type: SectionType;
+    suggested_type: AccountType | null;
 };
 
 type PageProps = {
@@ -59,6 +82,9 @@ type PageProps = {
         id: number;
         name: string;
         sort_order: number;
+        account_type: AccountType;
+        section_type: SectionType;
+        suggested_type: AccountType | null;
         accounts: (Account & { sort_order: number })[];
     }>;
     unassigned: Account[];
@@ -157,6 +183,85 @@ function DroppableContainer({
 }
 
 // =================================================================
+// Compact Revenue/Expense toggle — sits inside the group header.
+// =================================================================
+function GroupTypeToggle({
+    value,
+    suggested,
+    onChange,
+}: {
+    value: AccountType;
+    suggested: AccountType | null;
+    onChange: (v: AccountType) => void;
+}) {
+    const mismatch = suggested !== null && suggested !== value;
+    return (
+        <div
+            role="group"
+            aria-label="Account group type"
+            className="inline-flex items-center rounded-md border border-border bg-background text-[10px] leading-none"
+        >
+            {(['expense', 'revenue'] as const).map((t) => {
+                const active = value === t;
+                return (
+                    <button
+                        key={t}
+                        type="button"
+                        onClick={() => !active && onChange(t)}
+                        className={
+                            active
+                                ? (t === 'revenue'
+                                      ? 'rounded-l-[5px] last:rounded-r-[5px] bg-emerald-600 px-1.5 py-0.5 font-semibold text-white'
+                                      : 'rounded-l-[5px] last:rounded-r-[5px] bg-foreground px-1.5 py-0.5 font-semibold text-background')
+                                : 'rounded-l-[5px] last:rounded-r-[5px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground'
+                        }
+                        title={t === 'revenue' ? 'Revenue (credit-natured)' : 'Expense (debit-natured)'}
+                    >
+                        {t === 'revenue' ? 'Rev' : 'Exp'}
+                    </button>
+                );
+            })}
+            {mismatch && (
+                <span
+                    className="ml-1 mr-1 text-[10px] text-amber-600 dark:text-amber-500"
+                    title={`Premier accounts in this group look like ${suggested}.`}
+                >
+                    !
+                </span>
+            )}
+        </div>
+    );
+}
+
+// =================================================================
+// Income-statement section selector — native <select> styled to fit
+// inside the group header. Drives where the group renders on the P&L.
+// =================================================================
+function GroupSectionSelect({
+    value,
+    onChange,
+}: {
+    value: SectionType;
+    onChange: (v: SectionType) => void;
+}) {
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value as SectionType)}
+            aria-label="Income statement section"
+            title="Where this group appears on the income statement"
+            className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] leading-none text-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+            {SECTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                    {SECTION_SHORT_LABEL[opt.value]}
+                </option>
+            ))}
+        </select>
+    );
+}
+
+// =================================================================
 // Group card — draggable header + droppable accounts body
 // =================================================================
 function GroupCard({
@@ -169,6 +274,8 @@ function GroupCard({
     onRename,
     onDelete,
     onSort,
+    onChangeType,
+    onChangeSection,
 }: {
     group: GroupRow;
     accountIds: number[];
@@ -179,6 +286,8 @@ function GroupCard({
     onRename: (name: string) => void;
     onDelete: () => void;
     onSort: () => void;
+    onChangeType: (type: AccountType) => void;
+    onChangeSection: (section: SectionType) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: GRP(group.key),
@@ -248,6 +357,19 @@ function GroupCard({
                     </button>
                 )}
                 <span className="text-muted-foreground text-[11px]">({accountIds.length})</span>
+                {!editing && (
+                    <>
+                        <GroupTypeToggle
+                            value={group.account_type}
+                            suggested={group.suggested_type}
+                            onChange={onChangeType}
+                        />
+                        <GroupSectionSelect
+                            value={group.section_type}
+                            onChange={onChangeSection}
+                        />
+                    </>
+                )}
                 <span className="flex-1" />
                 {!editing && (
                     <>
@@ -313,7 +435,14 @@ function GroupCard({
 export default function GlAccountGroupsIndex({ groups: initialGroups, unassigned: initialUnassigned }: PageProps) {
     // Metadata: ordered group rows
     const [groups, setGroups] = useState<GroupRow[]>(() =>
-        initialGroups.map((g) => ({ key: `g-${g.id}`, id: g.id, name: g.name })),
+        initialGroups.map((g) => ({
+            key: `g-${g.id}`,
+            id: g.id,
+            name: g.name,
+            account_type: g.account_type ?? 'expense',
+            section_type: g.section_type ?? 'operating_expense',
+            suggested_type: g.suggested_type ?? null,
+        })),
     );
     // Lookup: account id → account (built once from initial props — accounts never mutate client-side)
     const accountsById = useMemo<Record<number, Account>>(() => {
@@ -505,7 +634,7 @@ export default function GlAccountGroupsIndex({ groups: initialGroups, unassigned
         const name = newGroupName.trim();
         if (!name) return;
         const key = `new-${newCounterRef.current++}`;
-        setGroups((prev) => [...prev, { key, id: null, name }]);
+        setGroups((prev) => [...prev, { key, id: null, name, account_type: 'expense', section_type: 'operating_expense', suggested_type: null }]);
         setByContainer((prev) => ({ ...prev, [key]: [] }));
         setNewGroupName('');
         markDirty();
@@ -513,6 +642,16 @@ export default function GlAccountGroupsIndex({ groups: initialGroups, unassigned
 
     const renameGroup = (key: string, name: string) => {
         setGroups((prev) => prev.map((g) => (g.key === key ? { ...g, name } : g)));
+        markDirty();
+    };
+
+    const changeGroupType = (key: string, type: AccountType) => {
+        setGroups((prev) => prev.map((g) => (g.key === key ? { ...g, account_type: type } : g)));
+        markDirty();
+    };
+
+    const changeGroupSection = (key: string, section: SectionType) => {
+        setGroups((prev) => prev.map((g) => (g.key === key ? { ...g, section_type: section } : g)));
         markDirty();
     };
 
@@ -561,6 +700,8 @@ export default function GlAccountGroupsIndex({ groups: initialGroups, unassigned
                 groups: groups.map((g) => ({
                     id: g.id,
                     name: g.name,
+                    account_type: g.account_type,
+                    section_type: g.section_type,
                     account_ids: byContainer[g.key] ?? [],
                 })),
             },
@@ -736,6 +877,8 @@ export default function GlAccountGroupsIndex({ groups: initialGroups, unassigned
                                             onRename={(name) => renameGroup(group.key, name)}
                                             onDelete={() => deleteGroup(group.key)}
                                             onSort={() => sortGroup(group.key)}
+                                            onChangeType={(t) => changeGroupType(group.key, t)}
+                                            onChangeSection={(s) => changeGroupSection(group.key, s)}
                                         />
                                     ))}
                                 </SortableContext>

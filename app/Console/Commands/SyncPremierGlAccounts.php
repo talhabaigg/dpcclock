@@ -60,6 +60,11 @@ class SyncPremierGlAccounts extends Command
                 $accountId = $account['AccountId'] ?? $account['Id'] ?? null;
                 $accountNumber = $account['AccountNumber'] ?? $account['Number'] ?? null;
                 $description = $account['Description'] ?? $account['AccountName'] ?? $account['Name'] ?? null;
+                // Premier reports list "Account Type: Revenue/Expense/Asset/Liability/Equity".
+                // The API likely exposes one of these key names; lower-case and store as a hint
+                // so we can default group types from it without depending on Premier semantics.
+                $rawType = $account['AccountType'] ?? $account['Type'] ?? $account['AccountClass'] ?? $account['Class'] ?? null;
+                $accountType = is_string($rawType) && $rawType !== '' ? strtolower(trim($rawType)) : null;
 
                 if (! $accountId || ! $accountNumber) {
                     continue;
@@ -67,7 +72,11 @@ class SyncPremierGlAccounts extends Command
 
                 PremierGlAccount::updateOrCreate(
                     ['premier_account_id' => $accountId],
-                    ['account_number' => $accountNumber, 'description' => $description]
+                    [
+                        'account_number' => $accountNumber,
+                        'description' => $description,
+                        'account_type' => $accountType,
+                    ]
                 );
 
                 $totalSynced++;
