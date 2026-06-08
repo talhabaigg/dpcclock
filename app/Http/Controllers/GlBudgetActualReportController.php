@@ -147,13 +147,11 @@ class GlBudgetActualReportController extends Controller
             ->pluck('total', 'premier_gl_account_id');
 
         $monthActualByAccountNumber = GlTransactionDetail::whereBetween('transaction_date', [$monthStart, $monthEnd])
-            ->where('company_code', 'SWCP')
             ->groupBy('account')
             ->selectRaw('account, SUM(debit) - SUM(credit) AS net')
             ->pluck('net', 'account');
 
         $fyActualByAccountNumber = GlTransactionDetail::whereBetween('transaction_date', [$fyStart, $monthEnd])
-            ->where('company_code', 'SWCP')
             ->groupBy('account')
             ->selectRaw('account, SUM(debit) - SUM(credit) AS net')
             ->pluck('net', 'account');

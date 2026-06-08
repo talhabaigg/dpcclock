@@ -110,8 +110,8 @@ function PeriodCells({ data, drillUrl }: { data: PeriodTotals; drillUrl?: string
     );
     return (
         <>
-            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{actualCell}</TableCell>
+            <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={cn(CELL_PAD, 'text-right tabular-nums')}>{formatCurrency(data.variance)}</TableCell>
             <TableCell className={cn(CELL_PAD, 'text-right tabular-nums', pctColor)}>{formatPct(data.variance_pct)}</TableCell>
         </>
@@ -131,8 +131,8 @@ function SubtotalCells({ data, bordered = true }: { data: PeriodTotals; bordered
     );
     return (
         <>
-            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={num}>{formatCurrency(data.actual)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={num}>{formatCurrency(data.variance)}</TableCell>
             <TableCell className={cn(num, pctColor)}>{formatPct(data.variance_pct)}</TableCell>
         </>
@@ -146,8 +146,8 @@ function ComputedCells({ data }: { data: PeriodTotals }) {
     const num = 'py-1.5 px-2 text-right tabular-nums font-bold text-xs';
     return (
         <>
-            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={num}>{formatCurrency(data.actual)}</TableCell>
+            <TableCell className={num}>{formatCurrency(data.budget)}</TableCell>
             <TableCell className={num}>{formatCurrency(data.variance)}</TableCell>
             <TableCell className={cn(num, pctColor)}>{formatPct(data.variance_pct)}</TableCell>
         </>
@@ -341,8 +341,8 @@ export default function GlBudgetActualReport({
                                 </TableHead>
                             </TableRow>
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>
                                     <span className="inline-flex items-center justify-end gap-1">
                                         Variance
@@ -359,8 +359,8 @@ export default function GlBudgetActualReport({
                                     </span>
                                 </TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>%</TableHead>
-                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
+                                <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Variance</TableHead>
                                 <TableHead className={cn(HEAD_LABEL, 'border-b border-border pr-3')}>%</TableHead>
                             </TableRow>

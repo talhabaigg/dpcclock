@@ -205,12 +205,12 @@
                 <th colspan="4">{{ $fyLabel }} To Date</th>
             </tr>
             <tr class="sub">
-                <th>Budget</th>
                 <th>Actual</th>
+                <th>Budget</th>
                 <th>Variance</th>
                 <th>%</th>
-                <th>Budget</th>
                 <th>Actual</th>
+                <th>Budget</th>
                 <th>Variance</th>
                 <th>%</th>
             </tr>
@@ -254,12 +254,12 @@
                             <tr class="account-row {{ $showGroupSubtotals ? 'indented' : '' }}">
                                 <td class="code">{{ $row['account_number'] }}</td>
                                 <td class="name" title="{{ $row['description'] ?? '' }}">{{ $row['description'] ?? '—' }}</td>
-                                <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($row['month']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['month']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($row['month']['variance']) }}</td>
                                 <td class="num {{ $monthPctClass }}">{{ $formatPct($row['month']['variance_pct']) }}</td>
-                                <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($row['fy']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
                                 <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
                             </tr>
@@ -272,12 +272,12 @@
                             @endphp
                             <tr class="group-subtotal">
                                 <td colspan="2" class="label">Total {{ $group['name'] }}</td>
-                                <td class="num">{{ $formatCurrency($sub['month']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($sub['month']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['month']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($sub['month']['variance']) }}</td>
                                 <td class="num {{ $subMonthClass }}">{{ $formatPct($sub['month']['variance_pct']) }}</td>
-                                <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($sub['fy']['actual']) }}</td>
+                                <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($sub['fy']['variance']) }}</td>
                                 <td class="num {{ $subFyClass }}">{{ $formatPct($sub['fy']['variance_pct']) }}</td>
                             </tr>
@@ -290,12 +290,12 @@
                     @endphp
                     <tr class="section-subtotal {{ $showGroupSubtotals ? '' : 'single-group' }}">
                         <td colspan="2">Total {{ $section['label'] }}</td>
-                        <td class="num">{{ $formatCurrency($st['month']['budget']) }}</td>
                         <td class="num">{{ $formatCurrency($st['month']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['month']['budget']) }}</td>
                         <td class="num">{{ $formatCurrency($st['month']['variance']) }}</td>
                         <td class="num {{ $stMonthClass }}">{{ $formatPct($st['month']['variance_pct']) }}</td>
-                        <td class="num">{{ $formatCurrency($st['fy']['budget']) }}</td>
                         <td class="num">{{ $formatCurrency($st['fy']['actual']) }}</td>
+                        <td class="num">{{ $formatCurrency($st['fy']['budget']) }}</td>
                         <td class="num">{{ $formatCurrency($st['fy']['variance']) }}</td>
                         <td class="num {{ $stFyClass }}">{{ $formatPct($st['fy']['variance_pct']) }}</td>
                     </tr>
@@ -308,12 +308,12 @@
                 @endphp
                 <tr class="computed">
                     <td colspan="2">{{ $entry['label'] }}</td>
-                    <td class="num">{{ $formatCurrency($data['month']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($data['month']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['month']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($data['month']['variance']) }}</td>
                     <td class="num {{ $monthClass }}">{{ $formatPct($data['month']['variance_pct']) }}</td>
-                    <td class="num">{{ $formatCurrency($data['fy']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($data['fy']['actual']) }}</td>
+                    <td class="num">{{ $formatCurrency($data['fy']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($data['fy']['variance']) }}</td>
                     <td class="num {{ $fyClass }}">{{ $formatPct($data['fy']['variance_pct']) }}</td>
                 </tr>

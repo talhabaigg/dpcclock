@@ -24,7 +24,6 @@ class GlTransactionDetailReportController extends Controller
         }
 
         $query = GlTransactionDetail::query()
-            ->where('company_code', 'SWCP')
             ->whereBetween('transaction_date', [$from, $to]);
 
         if ($account !== '') {
