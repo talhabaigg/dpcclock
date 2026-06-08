@@ -111,8 +111,9 @@ test('retention calculations are correct', function () {
             ->where('retention_5pct', 100000)
             ->where('retention_2_5pct', 50000)
             ->where('current_cash_holding', 50000)
-            ->where('first_release_amount', 50000)
-            ->where('second_release_amount', 50000)
+            // Release amounts split actual cash holding 50/50.
+            ->where('first_release_amount', 25000)
+            ->where('second_release_amount', 25000)
             ->etc()
         )
     );
