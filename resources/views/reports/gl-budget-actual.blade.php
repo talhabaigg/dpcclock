@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Income Statement — {{ $monthLabel }}</title>
+    <title>Budget vs Actual — GL Report — {{ $monthLabel }}</title>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -175,7 +175,7 @@
         @endif
     </div>
     <div class="title-block">
-        <div class="name">Income Statement</div>
+        <div class="name">Budget vs Actual — GL Report</div>
         <div class="period">{{ $monthLabel }} &mdash; {{ $fyLabel }} To Date</div>
     </div>
     <div></div>

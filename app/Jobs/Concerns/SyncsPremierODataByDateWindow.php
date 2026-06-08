@@ -171,9 +171,14 @@ trait SyncsPremierODataByDateWindow
         $baseUrl = config('premier.api.base_url').config('premier.endpoints.'.$this->endpointConfigKey());
         $dbDateColumn = $this->dbDateColumn();
         $oDataDateColumn = $this->oDataDateColumn();
-        $insertBatchSize = 100;
-        // Premier's OData reproducibly 500s on certain windows at $top=100/200; $top=50 is most reliable.
-        $pageSize = 50;
+        $insertBatchSize = 500;
+
+        // Adaptive page size:
+        //   Start at 200 (largest payload Premier reliably serves) and halve down to 50
+        //   only when a specific window/endpoint reproducibly 500s at the bigger size.
+        //   The HTTP retry helper already exhausts transient retries before we get here.
+        $pageSize = 200;
+        $minPageSize = 50;
         $skip = 0;
 
         $filterParts = [];
@@ -187,21 +192,35 @@ trait SyncsPremierODataByDateWindow
 
         $fetched = 0;
         $totalCount = null;
+        // When Premier issues a server-side continuation (OData v2 __next URL) we follow it.
+        // That bypasses $skip's O(N) scan cost on the tail of large result sets and is the
+        // dominant speedup on full syncs.
+        $nextUrl = null;
 
         do {
-            $query = [];
-            if ($filterString !== '') {
-                $query[] = '$filter='.rawurlencode($filterString);
+            if ($nextUrl !== null) {
+                $url = $nextUrl;
+            } else {
+                $query = [];
+                if ($filterString !== '') {
+                    $query[] = '$filter='.rawurlencode($filterString);
+                }
+                $query[] = '$top='.$pageSize;
+                $query[] = '$skip='.$skip;
+                // $inlinecount only on the first page — Premier pays server-side aggregation
+                // cost on every page it sees this flag, and we only need the total once.
+                if ($skip === 0 && $totalCount === null) {
+                    $query[] = '$inlinecount=allpages';
+                }
+                $url = $baseUrl.'?'.implode('&', $query);
             }
-            $query[] = '$top='.$pageSize;
-            $query[] = '$skip='.$skip;
-            $query[] = '$inlinecount=allpages';
-            $url = $baseUrl.'?'.implode('&', $query);
 
             Log::info("{$logPrefix}: Fetching page", [
                 'window_start' => $start,
                 'window_end' => $end,
                 'skip' => $skip,
+                'page_size' => $pageSize,
+                'used_next_link' => $nextUrl !== null,
                 'expected_total' => $totalCount,
             ]);
 
@@ -224,6 +243,17 @@ trait SyncsPremierODataByDateWindow
                     ->throw()
                     ->get($url);
             } catch (\Illuminate\Http\Client\RequestException $e) {
+                // Adaptive fallback: persistent 500 at current size → halve and retry the
+                // same offset. Only kicks in for our own $skip-based requests; we can't
+                // reduce page size on a Premier-supplied continuation URL.
+                if ($e->response->serverError() && $pageSize > $minPageSize && $nextUrl === null) {
+                    $newPageSize = max($minPageSize, (int) ($pageSize / 2));
+                    Log::warning("{$logPrefix}: Premier 500ed at \$top={$pageSize}, dropping to {$newPageSize}", [
+                        'skip' => $skip,
+                    ]);
+                    $pageSize = $newPageSize;
+                    continue;
+                }
                 throw new \RuntimeException(
                     "API request failed with status {$e->response->status()} after retries: {$e->response->body()}"
                 );
@@ -238,6 +268,11 @@ trait SyncsPremierODataByDateWindow
 
             $rows = $json['d']['results'] ?? array_values($json['d'] ?? []);
             $totalCount ??= isset($json['d']['__count']) ? (int) $json['d']['__count'] : null;
+            $nextRaw = $json['d']['__next'] ?? null;
+            // Premier may return absolute or relative URLs; normalise.
+            $nextUrl = $nextRaw && ! str_starts_with($nextRaw, 'http')
+                ? rtrim(config('premier.api.base_url'), '/').'/'.ltrim($nextRaw, '/')
+                : $nextRaw;
             unset($json);
 
             if (! is_array($rows)) {
@@ -267,12 +302,23 @@ trait SyncsPremierODataByDateWindow
 
             $totalProcessed += $rowCount;
             $fetched += $rowCount;
-            $skip += $pageSize;
+            // Advance $skip by actual rows received (not assumed $pageSize) so a partial
+            // page doesn't desync us if we ever fall back from __next to $skip mid-window.
+            $skip += $rowCount;
 
             unset($rows);
             gc_collect_cycles();
 
-        } while ($totalCount !== null && $fetched < $totalCount);
+            // Stop conditions:
+            //   1. Premier explicitly told us there are no more rows (no __next, partial page)
+            //   2. Total count from page 1 is satisfied
+            if ($nextUrl === null && $rowCount < $pageSize) {
+                break;
+            }
+            if ($totalCount !== null && $fetched >= $totalCount) {
+                break;
+            }
+        } while (true);
     }
 
     private function buildMonthlyWindows(string $startDate, Carbon $endDate): array

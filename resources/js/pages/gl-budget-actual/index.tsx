@@ -263,7 +263,7 @@ export default function GlBudgetActualReport({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Income Statement" />
+            <Head title="GL Budget vs Actual" />
 
             <div className="mx-auto w-full max-w-7xl p-3 lg:p-4">
                 {/* Toolbar */}
@@ -320,7 +320,7 @@ export default function GlBudgetActualReport({
 
                 {/* Report title */}
                 <div className="mb-3 text-center">
-                    <h2 className="text-foreground text-sm font-bold">Income Statement</h2>
+                    <h2 className="text-foreground text-sm font-bold">Budget vs Actual — GL Report</h2>
                     <p className="text-muted-foreground mt-0.5 text-xs">
                         {monthLabel} &mdash; {fyLabel} To Date
                     </p>
