@@ -115,7 +115,13 @@ class GlBudgetActualReportController extends Controller
         return $actual > 0 ? 100.0 : -100.0;
     }
 
-    private function buildReportData(int $fyYear, string $selectedMonth, bool $showUngrouped = false): array
+    /**
+     * Preferred column order for the per-company view, matching the Premier income statement.
+     * Any other companies discovered in the period append alphabetically at the end.
+     */
+    private const COMPANY_ORDER = ['CMS', 'GREEN', 'SWCP', 'SWCPE'];
+
+    private function buildReportData(int $fyYear, string $selectedMonth, bool $showUngrouped = false, bool $consolidated = true): array
     {
         $monthStart = $selectedMonth.'-01';
         $monthEnd = date('Y-m-t', strtotime($monthStart));
@@ -156,6 +162,36 @@ class GlBudgetActualReportController extends Controller
             ->selectRaw('account, SUM(debit) - SUM(credit) AS net')
             ->pluck('net', 'account');
 
+        // Per-company breakdown only computed when the user un-ticks the consolidated toggle.
+        // Keyed [company_code][account_number] => net.
+        $monthActualByCompanyAndAccount = [];
+        $fyActualByCompanyAndAccount = [];
+        $companies = [];
+        if (! $consolidated) {
+            $monthRows = GlTransactionDetail::whereBetween('transaction_date', [$monthStart, $monthEnd])
+                ->groupBy('company_code', 'account')
+                ->selectRaw('company_code, account, SUM(debit) - SUM(credit) AS net')
+                ->get();
+            foreach ($monthRows as $r) {
+                $monthActualByCompanyAndAccount[$r->company_code ?: '—'][$r->account] = (float) $r->net;
+            }
+
+            $fyRows = GlTransactionDetail::whereBetween('transaction_date', [$fyStart, $monthEnd])
+                ->groupBy('company_code', 'account')
+                ->selectRaw('company_code, account, SUM(debit) - SUM(credit) AS net')
+                ->get();
+            foreach ($fyRows as $r) {
+                $fyActualByCompanyAndAccount[$r->company_code ?: '—'][$r->account] = (float) $r->net;
+            }
+
+            $discovered = array_unique(array_merge(array_keys($monthActualByCompanyAndAccount), array_keys($fyActualByCompanyAndAccount)));
+            // Preferred order first, then anything else alphabetically.
+            $preferred = array_values(array_filter(self::COMPANY_ORDER, fn ($c) => in_array($c, $discovered, true)));
+            $rest = array_values(array_diff($discovered, $preferred));
+            sort($rest);
+            $companies = array_merge($preferred, $rest);
+        }
+
         $activeAccountIds = [];
         foreach ($fyBudgetByAccountId as $id => $_) {
             $activeAccountIds[$id] = true;
@@ -188,7 +224,7 @@ class GlBudgetActualReportController extends Controller
             // Revenue groups override variance $ in flipActualSign() while keeping the
             // same raw-direction formula for %; after the actual is flipped, that naturally
             // reads "exceeded target = positive %".
-            $rows[] = [
+            $row = [
                 'id' => $account->id,
                 'account_number' => $account->account_number,
                 'description' => $account->description,
@@ -205,12 +241,21 @@ class GlBudgetActualReportController extends Controller
                     'variance_pct' => $this->rawDirectionPct($fyActual, $fyBudget),
                 ],
             ];
+            if (! $consolidated) {
+                $row['by_company'] = $this->buildByCompany(
+                    $account->account_number,
+                    $companies,
+                    $monthActualByCompanyAndAccount,
+                    $fyActualByCompanyAndAccount,
+                );
+            }
+            $rows[] = $row;
         }
 
         foreach (array_keys($orphanActualsByNumber) as $accountNumber) {
             $monthActual = (float) ($monthActualByAccountNumber[$accountNumber] ?? 0);
             $fyActual = (float) ($fyActualByAccountNumber[$accountNumber] ?? 0);
-            $rows[] = [
+            $row = [
                 'id' => 'unknown-'.$accountNumber,
                 'account_number' => $accountNumber,
                 'description' => null,
@@ -227,6 +272,15 @@ class GlBudgetActualReportController extends Controller
                     'variance_pct' => $this->rawDirectionPct($fyActual, 0.0),
                 ],
             ];
+            if (! $consolidated) {
+                $row['by_company'] = $this->buildByCompany(
+                    $accountNumber,
+                    $companies,
+                    $monthActualByCompanyAndAccount,
+                    $fyActualByCompanyAndAccount,
+                );
+            }
+            $rows[] = $row;
         }
 
         // Default account-number sort; gets overridden if a row falls into a group with custom sort.
@@ -241,6 +295,8 @@ class GlBudgetActualReportController extends Controller
             'monthLabel' => date('F Y', strtotime($monthStart)),
             'selectedMonth' => $selectedMonth,
             'showUngrouped' => $showUngrouped,
+            'consolidated' => $consolidated,
+            'companies' => $companies,
             'monthStart' => $monthStart,
             'monthEnd' => $monthEnd,
             'fyStart' => $fyStart,
@@ -411,16 +467,28 @@ class GlBudgetActualReportController extends Controller
     private function combine(array $parts): array
     {
         $out = ['month' => ['budget' => 0.0, 'actual' => 0.0], 'fy' => ['budget' => 0.0, 'actual' => 0.0]];
+        $byCompany = [];
+        $hasByCompany = false;
         foreach ($parts as $part) {
             $sign = $part['s'];
             foreach (['month', 'fy'] as $period) {
                 $out[$period]['actual'] += $sign * (float) $part['p'][$period]['actual'];
                 $out[$period]['budget'] += $sign * (float) $part['p'][$period]['budget'];
             }
+            if (isset($part['p']['by_company']) && is_array($part['p']['by_company'])) {
+                $hasByCompany = true;
+                foreach ($part['p']['by_company'] as $co => $vals) {
+                    $byCompany[$co]['month_actual'] = ($byCompany[$co]['month_actual'] ?? 0.0) + $sign * (float) ($vals['month_actual'] ?? 0);
+                    $byCompany[$co]['fy_actual'] = ($byCompany[$co]['fy_actual'] ?? 0.0) + $sign * (float) ($vals['fy_actual'] ?? 0);
+                }
+            }
         }
         foreach (['month', 'fy'] as $period) {
             $out[$period]['variance'] = $out[$period]['actual'] - $out[$period]['budget'];
             $out[$period]['variance_pct'] = $this->rawDirectionPct($out[$period]['actual'], $out[$period]['budget']);
+        }
+        if ($hasByCompany) {
+            $out['by_company'] = $byCompany;
         }
 
         return $out;
@@ -441,6 +509,16 @@ class GlBudgetActualReportController extends Controller
             $row[$period]['variance'] = $actual - $budget;
             $row[$period]['variance_pct'] = $this->rawDirectionPct($actual, $budget);
         }
+        // Flip the per-company actuals too so the per-company columns show revenue as
+        // positive (matches the consolidated Actual column).
+        if (isset($row['by_company']) && is_array($row['by_company'])) {
+            foreach ($row['by_company'] as $co => $vals) {
+                $row['by_company'][$co] = [
+                    'month_actual' => -1 * (float) ($vals['month_actual'] ?? 0),
+                    'fy_actual' => -1 * (float) ($vals['fy_actual'] ?? 0),
+                ];
+            }
+        }
 
         return $row;
     }
@@ -456,6 +534,8 @@ class GlBudgetActualReportController extends Controller
             'month' => ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null],
             'fy' => ['budget' => 0.0, 'actual' => 0.0, 'variance' => 0.0, 'variance_pct' => null],
         ];
+        $byCompany = []; // company => ['month_actual'=>..., 'fy_actual'=>...]
+        $hasByCompany = false;
         foreach ($rows as $row) {
             foreach (['month', 'fy'] as $period) {
                 $totals[$period]['budget'] += (float) $row[$period]['budget'];
@@ -463,26 +543,52 @@ class GlBudgetActualReportController extends Controller
                 // Sum per-row variance $ so each row's polarity (expense vs revenue) is preserved.
                 $totals[$period]['variance'] += (float) $row[$period]['variance'];
             }
+            if (isset($row['by_company']) && is_array($row['by_company'])) {
+                $hasByCompany = true;
+                foreach ($row['by_company'] as $co => $vals) {
+                    $byCompany[$co]['month_actual'] = ($byCompany[$co]['month_actual'] ?? 0.0) + (float) ($vals['month_actual'] ?? 0);
+                    $byCompany[$co]['fy_actual'] = ($byCompany[$co]['fy_actual'] ?? 0.0) + (float) ($vals['fy_actual'] ?? 0);
+                }
+            }
         }
         foreach (['month', 'fy'] as $period) {
-            // Variance % stays in raw direction: (Actual − Budget) / Budget × 100.
-            // Negative for under-spent expense groups, positive for revenue groups
-            // that beat target (revenue actuals are already flipped at the row level).
-            // Returns ±100 if budget=0 but there's activity (helper handles it).
             $totals[$period]['variance_pct'] = $this->rawDirectionPct(
                 (float) $totals[$period]['actual'],
                 (float) $totals[$period]['budget']
             );
         }
+        if ($hasByCompany) {
+            $totals['by_company'] = $byCompany;
+        }
 
         return $totals;
+    }
+
+    /**
+     * Build the per-company actuals block for a single account row.
+     * Always emits a value (0.0) for every active company so the frontend
+     * doesn't need to defend against missing keys.
+     */
+    private function buildByCompany(string $accountNumber, array $companies, array $monthByCompanyAndAccount, array $fyByCompanyAndAccount): array
+    {
+        $out = [];
+        foreach ($companies as $co) {
+            $out[$co] = [
+                'month_actual' => (float) ($monthByCompanyAndAccount[$co][$accountNumber] ?? 0),
+                'fy_actual' => (float) ($fyByCompanyAndAccount[$co][$accountNumber] ?? 0),
+            ];
+        }
+
+        return $out;
     }
 
     public function index(Request $request)
     {
         [$fyYear, $selectedMonth] = $this->resolveFyAndMonth($request);
         $showUngrouped = $request->boolean('show_ungrouped');
-        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped);
+        // Default consolidated unless explicitly disabled.
+        $consolidated = ! $request->has('consolidated') || $request->boolean('consolidated');
+        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped, $consolidated);
 
         return Inertia::render('gl-budget-actual/index', array_merge($data, [
             'availableFys' => $this->buildAvailableFys($this->currentFy()),
@@ -494,7 +600,8 @@ class GlBudgetActualReportController extends Controller
     {
         [$fyYear, $selectedMonth] = $this->resolveFyAndMonth($request);
         $showUngrouped = $request->boolean('show_ungrouped');
-        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped);
+        $consolidated = ! $request->has('consolidated') || $request->boolean('consolidated');
+        $data = $this->buildReportData($fyYear, $selectedMonth, $showUngrouped, $consolidated);
 
         $logoPath = public_path('logo.png');
         if (! file_exists($logoPath)) {

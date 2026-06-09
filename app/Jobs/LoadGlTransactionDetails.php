@@ -106,10 +106,20 @@ class LoadGlTransactionDetails implements ShouldQueue
             return null;
         }
 
+        // Premier's OData v2 returns dates as /Date(<ms-since-epoch>)/. Their reporting DB
+        // emits the calendar day as a timestamp somewhere on that UTC day. Pulling the date
+        // straight off the UTC moment preserves Premier's intended calendar date.
+        // Earlier code shifted to Australia/Brisbane before formatting which pushed any
+        // afternoon-UTC value (== next day Brisbane) forward by one — the cause of an entire
+        // batch of transaction_dates being one day later than Premier's own report.
+        // For time-included fields we still want Brisbane so the timestamp reads as local.
         if (preg_match('/\/Date\((\d+)\)\//', $dateString, $m)) {
-            $carbon = Carbon::createFromTimestampMsUTC((int) $m[1])->setTimezone('Australia/Brisbane');
+            $carbon = Carbon::createFromTimestampMsUTC((int) $m[1]);
+            if ($includeTime) {
+                return $carbon->setTimezone('Australia/Brisbane')->toDateTimeString();
+            }
 
-            return $includeTime ? $carbon->toDateTimeString() : $carbon->toDateString();
+            return $carbon->toDateString();
         }
 
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {

@@ -12,6 +12,7 @@ class GlTransactionDetailReportController extends Controller
     public function index(Request $request)
     {
         $account = trim((string) $request->query('account', ''));
+        $company = trim((string) $request->query('company', ''));
         $from = $this->sanitizeDate($request->query('from'));
         $to = $this->sanitizeDate($request->query('to'));
 
@@ -29,13 +30,20 @@ class GlTransactionDetailReportController extends Controller
         if ($account !== '') {
             $query->where('account', $account);
         }
+        if ($company !== '') {
+            $query->where('company_code', $company);
+        }
 
         $transactions = $query
+            // Group by company first so the page can render per-company sections with
+            // their own running balance and subtotal; chronological inside each company.
+            ->orderBy('company_code')
             ->orderBy('transaction_date')
             ->orderBy('id')
             ->get([
                 'id',
                 'transaction_date',
+                'company_code',
                 'journal_type',
                 'account',
                 'account_name',
@@ -64,6 +72,7 @@ class GlTransactionDetailReportController extends Controller
         return Inertia::render('gl-transaction-detail/index', [
             'filters' => [
                 'account' => $account,
+                'company' => $company,
                 'from' => $from,
                 'to' => $to,
             ],
