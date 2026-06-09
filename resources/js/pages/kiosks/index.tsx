@@ -2,10 +2,11 @@ import InputSearch from '@/components/inputSearch';
 import LoadingDialog from '@/components/loading-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { CheckCircle2, RefreshCcw } from 'lucide-react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { CheckCircle2, Menu } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SelectFilter } from '../purchasing/index-partials/selectFilter';
 import KioskCard from './index-partials/kiosk-card';
@@ -75,7 +76,7 @@ export default function KiosksList() {
             <Head title="Kiosks" />
             <LoadingDialog open={open} setOpen={setOpen} />
 
-            <div className="flex flex-col gap-4 p-4 md:p-6">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 md:p-6">
                 {flash?.success && (
                     <Alert>
                         <CheckCircle2 className="h-4 w-4" />
@@ -94,19 +95,34 @@ export default function KiosksList() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Link href="/kiosks/sync" method="get">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                                <RefreshCcw className="h-4 w-4" />
-                                Sync Kiosks
-                            </Button>
-                        </Link>
-                        <Link href="/employees/kiosks/update" method="get">
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-                                <RefreshCcw className="h-4 w-4" />
-                                Sync Employees
-                            </Button>
-                        </Link>
+                    <div className="flex items-center gap-2 sm:ml-auto">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="More actions">
+                                    <Menu className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-max">
+                                <DropdownMenuItem
+                                    className="whitespace-nowrap"
+                                    onClick={() => {
+                                        setOpen(true);
+                                        router.get('/kiosks/sync');
+                                    }}
+                                >
+                                    Sync Kiosks
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    className="whitespace-nowrap"
+                                    onClick={() => {
+                                        setOpen(true);
+                                        router.get('/employees/kiosks/update');
+                                    }}
+                                >
+                                    Sync Employees
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 
@@ -123,7 +139,7 @@ export default function KiosksList() {
                         )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {filteredKiosks.map((kiosk) => (
                             <KioskCard key={kiosk.id} kiosk={kiosk} />
                         ))}
