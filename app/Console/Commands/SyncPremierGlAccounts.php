@@ -28,6 +28,10 @@ class SyncPremierGlAccounts extends Command
         $totalSynced = 0;
 
         do {
+            // Don't filter by 'Active' — inactive accounts (e.g. 8005 Internal Management
+            // Fee) can still legitimately have journal-entry activity, and without them
+            // in the catalogue they show up as Ungrouped on the P&L report and can't be
+            // assigned to a section in GL Groups.
             $response = Http::withToken($token)
                 ->acceptJson()
                 ->timeout(60)
@@ -35,7 +39,6 @@ class SyncPremierGlAccounts extends Command
                     'parameter.companyId' => self::COMPANY_ID,
                     'parameter.pageSize' => 500,
                     'parameter.pageNumber' => $page,
-                    'parameter.status' => 'Active',
                 ]);
 
             if ($response->failed()) {

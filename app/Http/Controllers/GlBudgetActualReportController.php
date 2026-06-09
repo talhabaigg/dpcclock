@@ -645,11 +645,14 @@ class GlBudgetActualReportController extends Controller
             $browsershot->setChromePath($chromePath);
         }
 
+        // A3 portrait gives enough vertical room for the full P&L on one page. The blade
+        // tightens font sizes and padding so the columns fit comfortably on the narrower
+        // portrait width; when printed to A4 the user's "fit to page" setting scales the
+        // same layout down (so it still prints as a single page, just smaller text).
         $pdf = $browsershot
             ->noSandbox()
-            ->landscape()
-            ->format('A4')
-            ->margins(10, 12, 14, 12, 'mm')
+            ->format('A3')
+            ->margins(8, 10, 12, 10, 'mm')
             ->showBackground()
             ->showBrowserHeaderAndFooter()
             ->headerHtml($headerHtml)

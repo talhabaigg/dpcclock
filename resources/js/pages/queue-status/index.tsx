@@ -492,7 +492,7 @@ export default function QueueStatus({ initialJobs }: QueueStatusProps) {
             />
             {/* Log Viewer Dialog */}
             <Dialog open={logViewer.open} onOpenChange={(open) => !open && setLogViewer((prev) => ({ ...prev, open: false }))}>
-                <DialogContent className="flex h-[90vh] min-w-full flex-col overflow-hidden">
+                <DialogContent className="flex h-[90vh] min-w-[90%] max-w-[90%] flex-col overflow-hidden">
                     <DialogHeader className="shrink-0">
                         <div className="flex items-center justify-between pr-8">
                             <DialogTitle className="flex items-center gap-2">

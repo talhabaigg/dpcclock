@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <title>Budget vs Actual — GL Report — {{ $monthLabel }}</title>
     <style>
+        /* Page size declared up-front so Chromium respects it even when the controller
+           falls back to a default. A3 portrait gives ~297mm width and ~420mm height —
+           plenty of vertical room to keep the entire P&L on a single page. */
+        @page { size: A3 portrait; }
+
+        html, body { margin: 0; padding: 0; }
+
         body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 9px;
+            font-size: 9.5px;
             color: #1e293b;
-            line-height: 1.25;
+            line-height: 1.18;
             font-variant-numeric: tabular-nums;
         }
 
@@ -26,11 +33,11 @@
             color: #0f172a;
         }
         .doc-header .title-block .name {
-            font-size: 9px;
+            font-size: 11px;
             font-weight: 700;
         }
         .doc-header .title-block .period {
-            font-size: 8px;
+            font-size: 9px;
             font-weight: 600;
             color: #475569;
             margin-top: 1px;
@@ -47,7 +54,7 @@
             background: transparent;
             color: #334155;
             font-weight: 700;
-            padding: 3px 5px;
+            padding: 2px 5px;
             text-align: center;
             font-size: 8.5px;
         }
@@ -58,7 +65,7 @@
         table.data thead tr.sub th {
             font-weight: 700;
             font-size: 8px;
-            padding: 2px 5px 4px;
+            padding: 2px 5px 3px;
             color: #475569;
             border-bottom: 1px solid #cbd5e1;
             text-align: right;
@@ -84,21 +91,21 @@
         table.data tbody tr.section-header td {
             font-weight: 700;
             color: #0f172a;
-            padding: 6px 5px 2px;
-            font-size: 9px;
+            padding: 4px 5px 1px;
+            font-size: 9.5px;
             text-transform: uppercase;
             letter-spacing: 0.04em;
         }
         table.data tbody tr.group-header td {
             font-weight: 600;
             color: #475569;
-            padding: 4px 5px 2px 14px;
+            padding: 2px 5px 1px 14px;
             font-size: 8.5px;
         }
         table.data tbody tr.group-subtotal td {
             font-weight: 600;
             color: #334155;
-            padding: 3px 5px;
+            padding: 1.5px 5px;
         }
         table.data tbody tr.group-subtotal td.label { padding-left: 14px; }
         table.data tbody tr.group-subtotal td.num {
@@ -108,7 +115,7 @@
         table.data tbody tr.section-subtotal td {
             font-weight: 700;
             color: #0f172a;
-            padding: 3px 5px;
+            padding: 2px 5px;
         }
         table.data tbody tr.section-subtotal td.num { text-align: right; }
         /* Single-group section subtotal IS the group total — show the borders. */
@@ -119,8 +126,8 @@
         table.data tbody tr.computed td {
             color: #0f172a;
             font-weight: 700;
-            padding: 5px 5px;
-            font-size: 9px;
+            padding: 3px 5px;
+            font-size: 9.5px;
             text-transform: uppercase;
             letter-spacing: 0.03em;
         }
