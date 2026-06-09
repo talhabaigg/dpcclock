@@ -135,7 +135,20 @@ class RetentionReportController extends Controller
             // Manual fields override system data when present
             $customerName = $setting?->manual_customer_name ?? $customerNames[$jobNumber] ?? '';
             $revisedContractValue = (float) ($setting?->manual_contract_value ?? $jobSummary?->current_estimate_revenue ?? 0);
-            $estimatedEndDate = $setting?->manual_estimated_end_date ?? $jobSummary?->estimated_end_date;
+            // Release dates are driven by the *actual* completion date — retention is held until the job is done,
+            // not until the original estimate said it would be. Until Premier records an actual_end_date,
+            // release dates show "TBC" unless the user supplies one via the manual override.
+            $completionDate = $setting?->manual_estimated_end_date ?? $jobSummary?->actual_end_date;
+
+            // System-derived release dates from completion + 30d / +12m. Per-date manual overrides win below.
+            $derivedFirstRelease = $completionDate
+                ? Carbon::parse($completionDate)->addDays(30)->format('Y-m-d')
+                : null;
+            $derivedSecondRelease = $completionDate
+                ? Carbon::parse($completionDate)->addMonths(12)->format('Y-m-d')
+                : null;
+            $firstReleaseDate = $setting?->manual_first_release_date?->format('Y-m-d') ?? $derivedFirstRelease;
+            $secondReleaseDate = $setting?->manual_second_release_date?->format('Y-m-d') ?? $derivedSecondRelease;
 
             $retention5pct = round($revisedContractValue * 0.05, 2);
             $retention2_5pct = round($revisedContractValue * 0.025, 2);
@@ -169,13 +182,11 @@ class RetentionReportController extends Controller
                 // of collapsing it to null via a truthy check.
                 'manual_contract_value' => $setting?->manual_contract_value !== null ? (float) $setting->manual_contract_value : null,
                 'manual_estimated_end_date' => $setting?->manual_estimated_end_date?->format('Y-m-d'),
-                'first_release_date' => $estimatedEndDate
-                    ? Carbon::parse($estimatedEndDate)->addDays(30)->format('Y-m-d')
-                    : null,
+                'manual_first_release_date' => $setting?->manual_first_release_date?->format('Y-m-d'),
+                'manual_second_release_date' => $setting?->manual_second_release_date?->format('Y-m-d'),
+                'first_release_date' => $firstReleaseDate,
                 'first_release_amount' => $firstReleaseAmount,
-                'second_release_date' => $estimatedEndDate
-                    ? Carbon::parse($estimatedEndDate)->addMonths(12)->format('Y-m-d')
-                    : null,
+                'second_release_date' => $secondReleaseDate,
                 'second_release_amount' => $secondReleaseAmount,
             ];
         }
@@ -190,12 +201,16 @@ class RetentionReportController extends Controller
 
     public function updateManualRetention(Request $request)
     {
+        // Every field is optional so the inline pencils on individual cells can do partial updates
+        // (e.g. just clearing/setting a release date) without having to round-trip the rest of the row.
         $validated = $request->validate([
             'job_number' => 'required|string',
-            'manual_retention_held' => 'required|numeric',
+            'manual_retention_held' => 'nullable|numeric',
             'manual_customer_name' => 'nullable|string|max:255',
             'manual_contract_value' => 'nullable|numeric',
             'manual_estimated_end_date' => 'nullable|date',
+            'manual_first_release_date' => 'nullable|date',
+            'manual_second_release_date' => 'nullable|date',
         ]);
 
         $setting = JobRetentionSetting::firstOrCreate(
@@ -203,12 +218,19 @@ class RetentionReportController extends Controller
             ['retention_rate' => 0.0500, 'retention_cap_pct' => 0.0500]
         );
 
-        $setting->update([
-            'manual_retention_held' => $validated['manual_retention_held'],
-            'manual_customer_name' => $validated['manual_customer_name'] ?? $setting->manual_customer_name,
-            'manual_contract_value' => $validated['manual_contract_value'] ?? $setting->manual_contract_value,
-            'manual_estimated_end_date' => $validated['manual_estimated_end_date'] ?? $setting->manual_estimated_end_date,
-        ]);
+        // Only overwrite fields the caller actually sent. `array_key_exists` (not isset) so that an
+        // explicit `null` from the client — "clear this override" — beats the existing value.
+        $updates = [];
+        foreach (['manual_retention_held', 'manual_customer_name', 'manual_contract_value',
+                  'manual_estimated_end_date', 'manual_first_release_date', 'manual_second_release_date'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $updates[$field] = $validated[$field];
+            }
+        }
+
+        if (!empty($updates)) {
+            $setting->update($updates);
+        }
 
         return back();
     }
@@ -227,6 +249,8 @@ class RetentionReportController extends Controller
                 'manual_customer_name' => null,
                 'manual_contract_value' => null,
                 'manual_estimated_end_date' => null,
+                'manual_first_release_date' => null,
+                'manual_second_release_date' => null,
             ]);
         }
 

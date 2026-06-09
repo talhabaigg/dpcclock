@@ -23,6 +23,8 @@ class JobRetentionSetting extends Model
         'manual_customer_name',
         'manual_contract_value',
         'manual_estimated_end_date',
+        'manual_first_release_date',
+        'manual_second_release_date',
     ];
 
     protected $casts = [
@@ -33,6 +35,8 @@ class JobRetentionSetting extends Model
         'manual_retention_held' => 'decimal:2',
         'manual_contract_value' => 'decimal:2',
         'manual_estimated_end_date' => 'date',
+        'manual_first_release_date' => 'date',
+        'manual_second_release_date' => 'date',
     ];
 
     public function getActivitylogOptions(): LogOptions

@@ -24,7 +24,7 @@ function createJobWithRetention(array $overrides = []): array
         'job_name' => 'Test Project',
         'eh_parent_id' => '1249093',
         'current_estimate_revenue' => 1000000,
-        'estimated_end_date' => '2026-06-30',
+        'actual_end_date' => '2026-06-30',
         'retainage_to_date' => 25000,
         'customer_name' => 'Test Customer',
         'manual_retention_held' => null,
@@ -43,7 +43,7 @@ function createJobWithRetention(array $overrides = []): array
         'job_number' => $data['job_number'],
         'company_code' => 'TEST',
         'current_estimate_revenue' => $data['current_estimate_revenue'],
-        'estimated_end_date' => $data['estimated_end_date'],
+        'actual_end_date' => $data['actual_end_date'],
     ]);
 
     ArProgressBillingSummary::create([
@@ -119,12 +119,12 @@ test('retention calculations are correct', function () {
     );
 });
 
-test('release dates are calculated correctly from estimated end date', function () {
+test('release dates are calculated correctly from actual completion date', function () {
     $user = User::factory()->create();
     $user->givePermissionTo(['reports.retention', 'locations.view-all']);
 
     createJobWithRetention([
-        'estimated_end_date' => '2026-06-30',
+        'actual_end_date' => '2026-06-30',
     ]);
 
     $response = $this->actingAs($user)->get('/retention-report');
@@ -138,12 +138,12 @@ test('release dates are calculated correctly from estimated end date', function 
     );
 });
 
-test('release dates show null when estimated end date is missing', function () {
+test('release dates show null when actual completion date is missing', function () {
     $user = User::factory()->create();
     $user->givePermissionTo(['reports.retention', 'locations.view-all']);
 
     createJobWithRetention([
-        'estimated_end_date' => null,
+        'actual_end_date' => null,
     ]);
 
     $response = $this->actingAs($user)->get('/retention-report');
@@ -299,6 +299,112 @@ test('manual retention update is logged by spatie activity log', function () {
     $lastActivity = $activities->last();
     expect($lastActivity->properties['old']['manual_retention_held'] ?? null)->not->toBeNull();
     expect($lastActivity->properties['attributes']['manual_retention_held'])->toBe('9000.00');
+});
+
+test('manual first release date overrides the derived date', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(['reports.retention', 'locations.view-all']);
+
+    createJobWithRetention(['actual_end_date' => '2026-06-30']);
+    JobRetentionSetting::create([
+        'job_number' => 'JOB-001',
+        'manual_first_release_date' => '2026-08-15',
+    ]);
+
+    $response = $this->actingAs($user)->get('/retention-report');
+
+    $response->assertInertia(fn ($page) => $page
+        ->has('retentionData', 1, fn ($row) => $row
+            ->where('first_release_date', '2026-08-15')
+            ->where('second_release_date', '2027-06-30')
+            ->where('manual_first_release_date', '2026-08-15')
+            ->where('manual_second_release_date', null)
+            ->etc()
+        )
+    );
+});
+
+test('manual second release date overrides the derived date', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(['reports.retention', 'locations.view-all']);
+
+    createJobWithRetention(['actual_end_date' => '2026-06-30']);
+    JobRetentionSetting::create([
+        'job_number' => 'JOB-001',
+        'manual_second_release_date' => '2028-01-01',
+    ]);
+
+    $response = $this->actingAs($user)->get('/retention-report');
+
+    $response->assertInertia(fn ($page) => $page
+        ->has('retentionData', 1, fn ($row) => $row
+            ->where('first_release_date', '2026-07-30')
+            ->where('second_release_date', '2028-01-01')
+            ->etc()
+        )
+    );
+});
+
+test('manual release date applies even when actual end date is missing', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(['reports.retention', 'locations.view-all']);
+
+    createJobWithRetention(['actual_end_date' => null]);
+    JobRetentionSetting::create([
+        'job_number' => 'JOB-001',
+        'manual_first_release_date' => '2026-09-30',
+    ]);
+
+    $response = $this->actingAs($user)->get('/retention-report');
+
+    $response->assertInertia(fn ($page) => $page
+        ->has('retentionData', 1, fn ($row) => $row
+            ->where('first_release_date', '2026-09-30')
+            ->where('second_release_date', null)
+            ->etc()
+        )
+    );
+});
+
+test('partial update can set a release date without touching retention amount', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(['reports.retention', 'reports.retention.edit']);
+
+    JobRetentionSetting::create([
+        'job_number' => 'JOB-001',
+        'manual_retention_held' => 9000,
+    ]);
+
+    $response = $this->actingAs($user)->post('/retention-report/manual', [
+        'job_number' => 'JOB-001',
+        'manual_first_release_date' => '2026-08-15',
+    ]);
+
+    $response->assertRedirect();
+
+    $setting = JobRetentionSetting::where('job_number', 'JOB-001')->first();
+    expect($setting->manual_first_release_date?->format('Y-m-d'))->toBe('2026-08-15');
+    expect((float) $setting->manual_retention_held)->toBe(9000.0);
+});
+
+test('release date override can be cleared by sending null', function () {
+    $user = User::factory()->create();
+    $user->givePermissionTo(['reports.retention', 'reports.retention.edit']);
+
+    JobRetentionSetting::create([
+        'job_number' => 'JOB-001',
+        'manual_first_release_date' => '2026-08-15',
+    ]);
+
+    $response = $this->actingAs($user)->post('/retention-report/manual', [
+        'job_number' => 'JOB-001',
+        'manual_first_release_date' => null,
+    ]);
+
+    $response->assertRedirect();
+
+    $setting = JobRetentionSetting::where('job_number', 'JOB-001')->first();
+    expect($setting->manual_first_release_date)->toBeNull();
 });
 
 test('customer name is pulled from ar posted invoices', function () {

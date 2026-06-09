@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Download, Check, X, Pencil, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2, RotateCcw } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,6 +16,8 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SearchSelect } from '@/components/search-select';
 import { DatePickerDemo } from '@/components/date-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
 interface RetentionRow {
@@ -32,11 +34,15 @@ interface RetentionRow {
     manual_customer_name: string | null;
     manual_contract_value: number | null;
     manual_estimated_end_date: string | null;
+    manual_first_release_date: string | null;
+    manual_second_release_date: string | null;
     first_release_date: string | null;
     first_release_amount: number;
     second_release_date: string | null;
     second_release_amount: number;
 }
+
+type ReleaseField = 'first' | 'second';
 
 interface AvailableLocation {
     id: number;
@@ -89,7 +95,13 @@ function toDateObj(dateStr: string | null | undefined): Date | undefined {
 
 function toDateStr(date: Date | undefined): string | null {
     if (!date) return null;
-    return date.toISOString().slice(0, 10);
+    // Use local-time components (not toISOString) so the date the user clicked
+    // is preserved across the AEST → UTC shift. Otherwise picking 30 June in
+    // Sydney serialises as 29 June and the server stores the wrong day.
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 function computeTotals(data: RetentionRow[]) {
@@ -107,6 +119,75 @@ const ERP_HEAD = 'h-7 px-2 py-1 text-right text-[11px] font-semibold text-muted-
 const ERP_HEAD_LEFT = 'h-7 px-2 py-1 text-left text-[11px] font-semibold text-muted-foreground border-b border-border';
 const ERP_CELL = 'py-0.5 px-2 text-xs';
 
+interface ReleaseDateCellProps {
+    row: RetentionRow;
+    field: ReleaseField;
+    canEdit: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (date: Date | undefined) => void;
+    onRevert: () => void;
+}
+
+function ReleaseDateCell({ row, field, canEdit, open, onOpenChange, onSave, onRevert }: ReleaseDateCellProps) {
+    const displayDate = field === 'first' ? row.first_release_date : row.second_release_date;
+    const overrideDate = field === 'first' ? row.manual_first_release_date : row.manual_second_release_date;
+    const hasOverride = overrideDate !== null;
+    const calendarDefault = toDateObj(displayDate);
+
+    const tone = !displayDate
+        ? 'text-amber-600 font-medium dark:text-amber-500'
+        : hasOverride ? 'italic' : '';
+
+    if (!canEdit) {
+        return (
+            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', tone)}>
+                {formatDate(displayDate)}
+            </TableCell>
+        );
+    }
+
+    return (
+        <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', tone)}>
+            <Popover open={open} onOpenChange={onOpenChange}>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className={cn(
+                            'tabular-nums cursor-pointer rounded px-1 -mx-1 hover:bg-muted hover:text-foreground transition-colors',
+                            hasOverride && 'italic',
+                        )}
+                        title={hasOverride ? 'Manually set — click to change' : 'Click to override'}
+                    >
+                        {formatDate(displayDate)}
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                        mode="single"
+                        selected={calendarDefault}
+                        defaultMonth={calendarDefault}
+                        onSelect={onSave}
+                    />
+                    {hasOverride && (
+                        <div className="border-t border-border p-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full h-7 text-xs justify-start text-muted-foreground hover:text-foreground"
+                                onClick={onRevert}
+                            >
+                                <RotateCcw className="mr-1.5 h-3 w-3" />
+                                Revert to system value
+                            </Button>
+                        </div>
+                    )}
+                </PopoverContent>
+            </Popover>
+        </TableCell>
+    );
+}
+
 export default function RetentionReport({ retentionData, filters, companies, availableLocations }: RetentionProps) {
     const { auth } = usePage<{ auth: { permissions?: string[] } }>().props as { auth: { permissions?: string[] } };
     const permissions: string[] = auth?.permissions ?? [];
@@ -115,6 +196,9 @@ export default function RetentionReport({ retentionData, filters, companies, ava
     // Inline edit for cash holding on non-manual rows
     const [editingJob, setEditingJob] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+
+    // Open state for the per-cell date override popover (one open at a time).
+    const [openDatePopover, setOpenDatePopover] = useState<{ jobNumber: string; field: ReleaseField } | null>(null);
 
     // Manual entry dialog (add + edit)
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -256,7 +340,34 @@ export default function RetentionReport({ retentionData, filters, companies, ava
         router.post('/retention-report/manual', {
             job_number: row.job_number,
             manual_retention_held: 0,
-        }, { preserveScroll: true });
+        }, {
+            preserveScroll: true,
+            onSuccess: cancelEditing,
+        });
+    }, [cancelEditing]);
+
+    const saveReleaseDate = useCallback((row: RetentionRow, field: ReleaseField, date: Date | undefined) => {
+        if (!date) return;
+        const payloadKey = field === 'first' ? 'manual_first_release_date' : 'manual_second_release_date';
+        router.post('/retention-report/manual', {
+            job_number: row.job_number,
+            [payloadKey]: toDateStr(date),
+        }, {
+            preserveScroll: true,
+            onSuccess: () => setOpenDatePopover(null),
+        });
+    }, []);
+
+    // Clear an override and fall back to the system-derived (completion + 30d / +12m) date.
+    const revertReleaseDate = useCallback((row: RetentionRow, field: ReleaseField) => {
+        const payloadKey = field === 'first' ? 'manual_first_release_date' : 'manual_second_release_date';
+        router.post('/retention-report/manual', {
+            job_number: row.job_number,
+            [payloadKey]: null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => setOpenDatePopover(null),
+        });
     }, []);
 
     const exportToExcel = useCallback(async () => {
@@ -426,94 +537,92 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                 {formatCurrency(row.retention_2_5pct)}
                                             </TableCell>
                                             <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
-                                                {row.is_manual_entry ? (
-                                                    <span>{formatCurrency(row.current_cash_holding)}</span>
-                                                ) : editingJob === row.job_number ? (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Input
-                                                            type="number"
-                                                            step="0.01"
-                                                            value={editValue}
-                                                            onChange={(e) => setEditValue(e.target.value)}
-                                                            className="w-28 h-7 px-2 text-right text-xs md:text-xs"
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') saveManualRetention(row);
-                                                                if (e.key === 'Escape') cancelEditing();
-                                                            }}
-                                                            autoFocus
-                                                        />
-                                                        <TooltipProvider>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button variant="default" size="icon" className="h-7 w-7" onClick={() => saveManualRetention(row)}>
-                                                                        <Check className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>Save</TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                        <TooltipProvider>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={cancelEditing}>
-                                                                        <X className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>Cancel</TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                    </div>
+                                                {!canEdit || row.is_manual_entry ? (
+                                                    <span className={cn(row.manual_retention_held !== 0 && 'italic')}>
+                                                        {formatCurrency(row.current_cash_holding)}
+                                                    </span>
                                                 ) : (
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <span>{formatCurrency(row.current_cash_holding)}</span>
-                                                        {canEdit && (
-                                                            <>
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                                                                onClick={() => startEditing(row)}
-                                                                            >
-                                                                                <Pencil className="h-3 w-3" />
-                                                                            </Button>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>Adjust retention</TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                                {row.manual_retention_held !== 0 && (
-                                                                    <TooltipProvider>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                                                                    onClick={() => revertToSystem(row)}
-                                                                                >
-                                                                                    <RotateCcw className="h-3 w-3" />
-                                                                                </Button>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent>Revert to system value</TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
+                                                    <Popover
+                                                        open={editingJob === row.job_number}
+                                                        onOpenChange={(open) => {
+                                                            if (open) startEditing(row);
+                                                            else cancelEditing();
+                                                        }}
+                                                    >
+                                                        <PopoverTrigger asChild>
+                                                            <button
+                                                                type="button"
+                                                                className={cn(
+                                                                    'tabular-nums cursor-pointer rounded px-1 -mx-1 hover:bg-muted hover:text-foreground transition-colors',
+                                                                    row.manual_retention_held !== 0 && 'italic',
                                                                 )}
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                                title={row.manual_retention_held !== 0 ? 'Manually adjusted — click to change' : 'Click to adjust retention'}
+                                                            >
+                                                                {formatCurrency(row.current_cash_holding)}
+                                                            </button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-56 p-0" align="end">
+                                                            <div className="p-3">
+                                                                <Label className="text-xs">Cash holding (excl GST)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    value={editValue}
+                                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                                    className="mt-1.5 h-7 px-2 text-right text-xs md:text-xs"
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') saveManualRetention(row);
+                                                                        if (e.key === 'Escape') cancelEditing();
+                                                                    }}
+                                                                    autoFocus
+                                                                />
+                                                                <div className="mt-2 flex justify-end gap-1">
+                                                                    <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={cancelEditing}>
+                                                                        Cancel
+                                                                    </Button>
+                                                                    <Button size="sm" className="h-7 text-xs px-2.5" onClick={() => saveManualRetention(row)}>
+                                                                        Save
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                            {row.manual_retention_held !== 0 && (
+                                                                <div className="border-t border-border p-2">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="w-full h-7 text-xs justify-start text-muted-foreground hover:text-foreground"
+                                                                        onClick={() => revertToSystem(row)}
+                                                                    >
+                                                                        <RotateCcw className="mr-1.5 h-3 w-3" />
+                                                                        Revert to system value
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </PopoverContent>
+                                                    </Popover>
                                                 )}
                                             </TableCell>
-                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !row.first_release_date && 'text-amber-600 font-medium dark:text-amber-500')}>
-                                                {formatDate(row.first_release_date)}
-                                            </TableCell>
+                                            <ReleaseDateCell
+                                                row={row}
+                                                field="first"
+                                                canEdit={canEdit}
+                                                open={openDatePopover?.jobNumber === row.job_number && openDatePopover.field === 'first'}
+                                                onOpenChange={(open) => setOpenDatePopover(open ? { jobNumber: row.job_number, field: 'first' } : null)}
+                                                onSave={(date) => saveReleaseDate(row, 'first', date)}
+                                                onRevert={() => revertReleaseDate(row, 'first')}
+                                            />
                                             <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
                                                 {formatCurrency(row.first_release_amount)}
                                             </TableCell>
-                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !row.second_release_date && 'text-amber-600 font-medium dark:text-amber-500')}>
-                                                {formatDate(row.second_release_date)}
-                                            </TableCell>
+                                            <ReleaseDateCell
+                                                row={row}
+                                                field="second"
+                                                canEdit={canEdit}
+                                                open={openDatePopover?.jobNumber === row.job_number && openDatePopover.field === 'second'}
+                                                onOpenChange={(open) => setOpenDatePopover(open ? { jobNumber: row.job_number, field: 'second' } : null)}
+                                                onSave={(date) => saveReleaseDate(row, 'second', date)}
+                                                onRevert={() => revertReleaseDate(row, 'second')}
+                                            />
                                             <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !canEdit && 'pr-3')}>
                                                 {formatCurrency(row.second_release_amount)}
                                             </TableCell>
@@ -649,14 +758,14 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                             </p>
                         </div>
                         <div className="flex flex-col gap-2">
-                            <Label className="text-xs">Estimated Completion Date</Label>
+                            <Label className="text-xs">Actual Completion Date</Label>
                             <DatePickerDemo
                                 value={dialogForm.estimated_end_date}
                                 onChange={(date) => setDialogForm((f) => ({ ...f, estimated_end_date: date }))}
                                 placeholder="Pick a date (optional)"
                             />
                             <p className="text-xs text-muted-foreground">
-                                Leave blank to show "TBC" for release dates.
+                                Release dates show "TBC" until a completion date is recorded in Premier or set here.
                             </p>
                         </div>
                     </div>
