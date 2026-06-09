@@ -168,7 +168,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
             <div className="mx-auto w-full max-w-6xl p-4">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     <div className="space-y-4 lg:col-span-2">
-                        <Card>
+                        <Card className="gap-0 pb-0">
                             <CardHeader className="border-b">
                                 <CardTitle>Employee Zones</CardTitle>
                                 <CardDescription>Assign each employee to a zone and control RDO top-up.</CardDescription>
@@ -180,12 +180,12 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                                     />
                                 </CardAction>
                             </CardHeader>
-                            <CardContent className="pt-4">
+                            <CardContent className="p-0">
                                 {employees.length === 0 ? (
-                                    <p className="text-muted-foreground text-sm">No employees assigned. Use the button above to add some.</p>
+                                    <p className="text-muted-foreground p-4 text-sm">No employees assigned. Use the button above to add some.</p>
                                 ) : (
-                                    <form onSubmit={onSubmitZones} className="space-y-3">
-                                        <div className="divide-y rounded-lg border">
+                                    <form onSubmit={onSubmitZones}>
+                                        <div className="divide-y">
                                             {employees.map((emp, idx) => (
                                                 <div
                                                     key={emp.id}
@@ -252,7 +252,7 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                                         </div>
 
                                         {isDirty && (
-                                            <div className="sticky bottom-4 z-10 flex flex-col items-stretch justify-between gap-2 rounded-lg border bg-card p-3 shadow-md ring-1 ring-foreground/10 sm:flex-row sm:items-center">
+                                            <div className="sticky bottom-4 z-10 mx-4 mt-3 mb-4 flex flex-col items-stretch justify-between gap-2 rounded-lg border bg-card p-3 shadow-md ring-1 ring-foreground/10 sm:flex-row sm:items-center">
                                                 <span className="text-muted-foreground text-sm">You have unsaved zone changes.</span>
                                                 <div className="flex gap-2">
                                                     <Button type="button" variant="outline" onClick={() => reset()} disabled={processing}>
@@ -319,28 +319,30 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                             </CardContent>
                         </Card>
 
-                        <Card>
+                        <Card className="gap-0 pb-0">
                             <CardHeader className="border-b">
                                 <CardTitle>Allowances</CardTitle>
                                 <CardDescription>Toggle which allowance prompts appear on this kiosk.</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-2 pt-4">
-                                {allowances.map((a) => (
-                                    <div key={a.key} className="flex items-center justify-between rounded-md border p-3">
-                                        <Label htmlFor={`allowance-${a.key}`} className="text-sm">
-                                            {a.label}
-                                        </Label>
-                                        <Switch
-                                            id={`allowance-${a.key}`}
-                                            checked={a.enabled}
-                                            onCheckedChange={() => toggleAllowance(a.key)}
-                                        />
-                                    </div>
-                                ))}
+                            <CardContent className="p-0">
+                                <div className="divide-y">
+                                    {allowances.map((a) => (
+                                        <div key={a.key} className="flex items-center justify-between p-3">
+                                            <Label htmlFor={`allowance-${a.key}`} className="text-sm">
+                                                {a.label}
+                                            </Label>
+                                            <Switch
+                                                id={`allowance-${a.key}`}
+                                                checked={a.enabled}
+                                                onCheckedChange={() => toggleAllowance(a.key)}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </CardContent>
                         </Card>
 
-                        <Card>
+                        <Card className="gap-0 pb-0">
                             <CardHeader className="border-b">
                                 <CardTitle>Managers</CardTitle>
                                 <CardDescription>Users who can review timesheets from this kiosk.</CardDescription>
@@ -352,17 +354,17 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
                                     />
                                 </CardAction>
                             </CardHeader>
-                            <CardContent className="pt-4">
+                            <CardContent className="p-0">
                                 {!kiosk.managers?.length ? (
-                                    <p className="text-muted-foreground text-sm">No managers assigned.</p>
+                                    <p className="text-muted-foreground p-4 text-sm">No managers assigned.</p>
                                 ) : (
-                                    <div className="flex flex-col gap-2">
+                                    <div className="divide-y">
                                         {kiosk.managers.map((m) => (
                                             <div
                                                 key={m.id}
-                                                className="flex items-center justify-between gap-2 rounded-md border p-2"
+                                                className="flex items-center justify-between gap-2 p-3"
                                             >
-                                                <Link href={`/employees/${m.id}`} className="min-w-0 flex-1 hover:underline">
+                                                <Link href={route('users.edit', { user: m.id })} className="flex min-w-0 flex-1 items-center gap-2 hover:underline">
                                                     <UserInfo
                                                         user={{
                                                             ...m,

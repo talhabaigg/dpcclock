@@ -34,21 +34,21 @@ const stateClass = (state?: string) => STATE_STYLES[state?.toLowerCase() ?? ''] 
 
 const GenerateTimesheetsAvailableEventsCard = ({ events, employees, kioskId }: Props) => {
     return (
-        <Card>
+        <Card className="gap-0 pb-0">
             <CardHeader className="border-b">
                 <CardTitle>Available Events</CardTitle>
                 <CardDescription>
                     Generate timesheets from kiosk events. {events.length > 0 && `${events.length} event${events.length === 1 ? '' : 's'} ready.`}
                 </CardDescription>
             </CardHeader>
-            <CardContent className="pt-4">
+            <CardContent className="p-0">
                 {events.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-6 text-center">
+                    <div className="m-4 flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-6 text-center">
                         <p className="text-sm font-medium">No events available</p>
                         <p className="text-muted-foreground text-xs">Events appear here when employees have clocked in or out on this kiosk.</p>
                     </div>
                 ) : (
-                    <ul className="divide-y rounded-lg border">
+                    <ul className="divide-y">
                         {events.map((event) => (
                             <li
                                 key={event.id}

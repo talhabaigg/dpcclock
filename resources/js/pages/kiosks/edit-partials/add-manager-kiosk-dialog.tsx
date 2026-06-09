@@ -1,104 +1,89 @@
+import { DualListAssign } from '@/components/dual-list-assign';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { UserInfo } from '@/components/user-info';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useForm } from '@inertiajs/react';
-import { PlusCircle } from 'lucide-react';
-import { useState } from 'react';
+import { Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-interface Employee {
+interface User {
     id: number;
     name: string;
 }
+
 interface Kiosk {
     id: number;
     name: string;
 }
 
-const AddManagerKioskDialog = ({ kiosk, users, existingManagerIds }: { kiosk: Kiosk; users: Employee[]; existingManagerIds: number[] }) => {
-    const initialSelected = existingManagerIds ?? [];
+interface AddManagerKioskDialogProps {
+    kiosk: Kiosk;
+    users: User[];
+    existingManagerIds: number[];
+}
 
-    const [selectedIds, setSelectedIds] = useState<number[]>(initialSelected);
+const AddManagerKioskDialog = ({ kiosk, users, existingManagerIds }: AddManagerKioskDialogProps) => {
+    const [open, setOpen] = useState(false);
+    const [assignedIds, setAssignedIds] = useState<number[]>(existingManagerIds ?? []);
 
-    const form = useForm<{ managerIds: number[]; kioskId: number }>({
-        managerIds: initialSelected,
-        kioskId: kiosk.id,
-    });
+    useEffect(() => {
+        if (open) {
+            setAssignedIds(existingManagerIds ?? []);
+        }
+    }, [open, existingManagerIds]);
 
-    const updateSelection = (updater: (prev: number[]) => number[]) => {
-        setSelectedIds((prev) => {
-            const next = updater(prev);
-            form.setData('managerIds', next);
-            return next;
+    const form = useForm<{ managerIds: number[] }>({ managerIds: [] });
+
+    const initialSet = new Set(existingManagerIds ?? []);
+    const currentSet = new Set(assignedIds);
+    const isDirty = initialSet.size !== currentSet.size || [...currentSet].some((id) => !initialSet.has(id));
+
+    const handleSave = () => {
+        form.transform((d) => ({ ...d, managerIds: assignedIds }));
+        form.post(route('kiosks.syncManagers', { kiosk: kiosk.id }), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setOpen(false);
+            },
         });
     };
 
-    const toggleUser = (userId: number, checked: boolean | 'indeterminate') => {
-        if (checked === true) {
-            updateSelection((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
-        } else {
-            updateSelection((prev) => prev.filter((id) => id !== userId));
-        }
-    };
-
-    const submit = () => {
-        if (selectedIds.length === 0) return;
-        form.post(route('kiosks.manager.store', kiosk.id));
-    };
+    const items = users.map((u) => ({ id: u.id, label: u.name }));
 
     return (
-        <div>
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button size="sm" variant="outline">
-                        <PlusCircle /> Add Manager
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    <Users /> Manage Managers
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[85vh] min-w-[90%] overflow-y-auto sm:max-w-[90%]">
+                <DialogHeader>
+                    <DialogTitle>Manage kiosk managers</DialogTitle>
+                    <DialogDescription>Click a user to move them between lists, then Save.</DialogDescription>
+                </DialogHeader>
+
+                <DualListAssign
+                    items={items}
+                    assignedIds={assignedIds}
+                    onChange={setAssignedIds}
+                    availableLabel="All users"
+                    assignedLabel="On this kiosk"
+                    searchPlaceholder="Search users..."
+                    emptyAvailableText="All users assigned"
+                    emptyAssignedText="No managers on this kiosk"
+                    disabled={form.processing}
+                />
+
+                <DialogFooter className="border-t pt-3">
+                    <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={form.processing}>
+                        Cancel
                     </Button>
-                </DialogTrigger>
-
-                <DialogContent className="max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Add manager to Kiosk</DialogTitle>
-                        <DialogDescription>Select managers to attach.</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="mt-3 flex items-center justify-between">
-                        <span className="text-muted-foreground text-sm">{selectedIds.length} selected</span>
-                        <Button onClick={submit} disabled={form.processing || selectedIds.length === 0}>
-                            Add selected
-                        </Button>
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                        {users.map((user) => {
-                            const isSelected = selectedIds.includes(user.id);
-
-                            return (
-                                <Label
-                                    key={user.id}
-                                    className="hover:bg-accent/50 flex w-full items-center rounded-lg border p-3 has-[[data-state=checked]]:border-blue-600 has-[[data-state=checked]]:bg-blue-50 dark:has-[[data-state=checked]]:border-blue-900 dark:has-[[data-state=checked]]:bg-blue-950"
-                                >
-                                    <div className="flex flex-row items-center gap-2">
-                                        <UserInfo
-                                            user={{
-                                                ...user,
-                                                email: '',
-                                                email_verified_at: '',
-                                                created_at: '',
-                                                updated_at: '',
-                                                phone: '',
-                                            }}
-                                        />
-                                    </div>
-
-                                    <Checkbox className="ml-auto" checked={isSelected} onCheckedChange={(checked) => toggleUser(user.id, checked)} />
-                                </Label>
-                            );
-                        })}
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
+                    <Button type="button" onClick={handleSave} disabled={form.processing || !isDirty}>
+                        {form.processing ? 'Saving...' : 'Save'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
 

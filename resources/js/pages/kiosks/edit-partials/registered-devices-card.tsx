@@ -86,7 +86,7 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
 
     return (
         <>
-            <Card>
+            <Card className="gap-0 pb-0">
                 <CardHeader className="border-b">
                     <CardTitle>Registered Devices</CardTitle>
                     <CardDescription>Lock a browser to this kiosk via a registration link.</CardDescription>
@@ -97,14 +97,14 @@ export default function RegisteredDevicesCard({ kioskId, devices }: RegisteredDe
                         </Button>
                     </CardAction>
                 </CardHeader>
-                <CardContent className="pt-4">
+                <CardContent className="p-0">
                     {devices.length === 0 && (
-                        <p className="text-muted-foreground text-sm">No devices registered. Generate a registration link to lock a device to this kiosk.</p>
+                        <p className="text-muted-foreground p-4 text-sm">No devices registered. Generate a registration link to lock a device to this kiosk.</p>
                     )}
                     {devices.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="divide-y">
                             {devices.map((device) => (
-                                <div key={device.id} className="flex items-center justify-between rounded-lg border p-3">
+                                <div key={device.id} className="flex items-center justify-between p-3">
                                     <div className="flex items-center gap-3">
                                         <div className={`h-2 w-2 rounded-full ${device.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`} />
                                         <div>

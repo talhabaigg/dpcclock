@@ -160,6 +160,22 @@ class KioskController extends Controller
         return redirect()->back()->with('success', "{$employee->name} removed from kiosk. They will reappear if synced from Employment Hero.");
     }
 
+    public function syncEmployeesOnKiosk(Request $request, Kiosk $kiosk)
+    {
+        $data = $request->validate([
+            'employeeIds' => 'array',
+            'employeeIds.*' => 'exists:employees,id',
+        ]);
+
+        $employeeEhIds = Employee::whereIn('id', $data['employeeIds'] ?? [])
+            ->pluck('eh_employee_id')
+            ->toArray();
+
+        $kiosk->employees()->sync($employeeEhIds);
+
+        return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Kiosk employees updated successfully.');
+    }
+
     public function updateZones(Request $request, Kiosk $kiosk)
     {
         $data = $request->validate([
@@ -371,5 +387,17 @@ class KioskController extends Controller
         $kiosk->managers()->syncWithoutDetaching($data['managerIds']);
 
         return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Managers added to kiosk successfully.');
+    }
+
+    public function syncManagersOnKiosk(Request $request, Kiosk $kiosk)
+    {
+        $data = $request->validate([
+            'managerIds' => 'array',
+            'managerIds.*' => 'exists:users,id',
+        ]);
+
+        $kiosk->managers()->sync($data['managerIds'] ?? []);
+
+        return redirect()->route('kiosks.edit', $kiosk)->with('success', 'Kiosk managers updated successfully.');
     }
 }

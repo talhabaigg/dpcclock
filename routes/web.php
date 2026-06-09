@@ -684,9 +684,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.edit');
     Route::post('/kiosks/{kiosk}/add-employees', [KioskController::class, 'addEmployeesToKiosk'])->name('kiosks.addEmployees')
         ->middleware('permission:kiosks.manage-employees');
+    Route::post('/kiosks/{kiosk}/sync-employees', [KioskController::class, 'syncEmployeesOnKiosk'])->name('kiosks.syncEmployees')
+        ->middleware('permission:kiosks.manage-employees');
     Route::delete('/kiosks/{kiosk}/employees/{employee}', [KioskController::class, 'removeEmployeeFromKiosk'])->name('kiosks.removeEmployee')
         ->middleware('permission:kiosks.manage-employees');
     Route::post('/kiosks/manager/store', [KioskController::class, 'storeManager'])->name('kiosks.manager.store')
+        ->middleware('permission:kiosks.manage-managers');
+    Route::post('/kiosks/{kiosk}/sync-managers', [KioskController::class, 'syncManagersOnKiosk'])->name('kiosks.syncManagers')
         ->middleware('permission:kiosks.manage-managers');
     Route::post('/kiosks/{kioskId}/update-start-time', [ClockController::class, 'updateStartTimeForEmployees'])->name('clocks.updateStartTimeForEmployees')
         ->middleware('permission:clocks.manage');
