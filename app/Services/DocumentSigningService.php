@@ -10,6 +10,7 @@ use App\Models\SigningRequest;
 use App\Models\User;
 use App\Notifications\DocumentSignedNotification;
 use App\Notifications\DocumentSigningNotification;
+use App\Notifications\DocumentSigningSmsNotification;
 use App\Notifications\InfoDocumentNotification;
 use App\Notifications\InternalSignatureRequestedNotification;
 use App\Notifications\SignedDocumentNotification;
@@ -599,13 +600,20 @@ class DocumentSigningService
         $signingRequest->logEvent('cancelled', 'admin', $admin->id);
     }
 
-    public function resend(SigningRequest $signingRequest, User $admin): SigningRequest
+    public function resend(SigningRequest $signingRequest, User $admin, array $channels = ['email']): SigningRequest
     {
+        $channels = array_values(array_intersect(['email', 'sms'], $channels));
+        if (empty($channels)) {
+            $channels = ['email'];
+        }
+        $sendEmail = in_array('email', $channels, true);
+        $sendSms = in_array('sms', $channels, true);
+
         $this->cancel($signingRequest, $admin);
 
         $template = $signingRequest->documentTemplate;
 
-        return $this->createAndSend(
+        $new = $this->createAndSend(
             template: $template,
             deliveryMethod: $signingRequest->delivery_method,
             admin: $admin,
@@ -618,7 +626,47 @@ class DocumentSigningService
             documentHtml: $template ? null : $signingRequest->document_html,
             documentTitle: $template ? null : $signingRequest->document_title,
             senderPosition: $signingRequest->sender_position,
+            suppressDelivery: ! $sendEmail,
         );
+
+        // When email is suppressed, createAndSend leaves status='pending'. Mark
+        // sent so the row appears as a live signing request and SMS counts as
+        // the delivery channel.
+        if (! $sendEmail && $new->status === 'pending') {
+            $new->update(['status' => 'sent']);
+        }
+
+        if ($sendSms) {
+            $phone = $this->resolveRecipientPhone($new);
+            if ($phone) {
+                Notification::route('clicksend', $phone)
+                    ->notify(new DocumentSigningSmsNotification($new));
+                $new->logEvent('sent', 'system', null, null, [
+                    'method' => 'sms',
+                    'to' => $phone,
+                ]);
+            } else {
+                $new->logEvent('sms_skipped_no_phone', 'system');
+            }
+        }
+
+        return $new;
+    }
+
+    /**
+     * Resolve the recipient's mobile number from the signable (e.g. Employee).
+     * Falls back to null when no usable AU mobile is on file.
+     */
+    private function resolveRecipientPhone(SigningRequest $signingRequest): ?string
+    {
+        $signable = $signingRequest->signable;
+        if (! $signable) {
+            return null;
+        }
+
+        $raw = $signable->mobile_number ?? $signable->phone ?? null;
+
+        return User::normaliseAuMobile($raw);
     }
 
     /**

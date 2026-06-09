@@ -117,6 +117,9 @@ Route::middleware('throttle:30,1')->group(function () {
     Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
     Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
     Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
+    Route::get('/sign-batch/{token}', [\App\Http\Controllers\SigningBatchController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]+')
+        ->name('signing.batch');
 });
 
 // Toolbox Sign-In — public routes (token-based, no auth)
@@ -139,6 +142,13 @@ Route::middleware('throttle:120,1')->group(function () {
     Route::get('/public/sds', [SafetyDataSheetController::class, 'publicIndex'])->name('sds.public.index');
     Route::get('/public/sds/{sd}/download', [SafetyDataSheetController::class, 'publicDownload'])->name('sds.public.download');
     Route::get('/public/sds/{sd}/files/{mediaId}', [SafetyDataSheetController::class, 'publicDownloadOtherFile'])->name('sds.public.download-file');
+});
+
+// Generic short-link redirect (SMS-friendly URLs)
+Route::middleware('throttle:120,1')->group(function () {
+    Route::get('/l/{code}', [\App\Http\Controllers\ShortLinkController::class, 'redirect'])
+        ->where('code', '[A-Za-z0-9]+')
+        ->name('short-link.redirect');
 });
 
 Route::get('/notifications/mark-all-read', function () {

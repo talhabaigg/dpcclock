@@ -107,6 +107,7 @@ interface Employee {
     name: string;
     preferred_name: string | null;
     email: string;
+    mobile_number?: string | null;
     pin: string;
     external_id?: string;
     eh_employee_id?: string;
@@ -184,6 +185,27 @@ export default function EmployeeShow() {
     const [selectedSigningIds, setSelectedSigningIds] = useState<Set<number>>(new Set());
     const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
     const [confirmBulkResend, setConfirmBulkResend] = useState(false);
+    const [bulkResendChannels, setBulkResendChannels] = useState<{ email: boolean; sms: boolean }>({ email: true, sms: false });
+    const [resendTarget, setResendTarget] = useState<SigningRequestSummary | null>(null);
+    const [resendChannels, setResendChannels] = useState<{ email: boolean; sms: boolean }>({ email: true, sms: false });
+    const hasMobile = Boolean(emp.mobile_number && emp.mobile_number.trim());
+
+    const openResendDialog = useCallback((sr: SigningRequestSummary) => {
+        setResendChannels({ email: true, sms: false });
+        setResendTarget(sr);
+    }, []);
+
+    const runResend = useCallback(() => {
+        if (!resendTarget) return;
+        const channels: ('email' | 'sms')[] = [];
+        if (resendChannels.email) channels.push('email');
+        if (resendChannels.sms) channels.push('sms');
+        if (channels.length === 0) return;
+        router.post(`/signing-requests/${resendTarget.id}/resend`, { channels }, {
+            preserveScroll: true,
+            onSuccess: () => setResendTarget(null),
+        });
+    }, [resendTarget, resendChannels]);
 
     const toggleSigningSelected = useCallback((id: number) => {
         setSelectedSigningIds((prev) => {
@@ -242,14 +264,18 @@ export default function EmployeeShow() {
             setConfirmBulkResend(false);
             return;
         }
-        router.post('/signing-requests/bulk-resend', { ids }, {
+        const channels: ('email' | 'sms')[] = [];
+        if (bulkResendChannels.email) channels.push('email');
+        if (bulkResendChannels.sms) channels.push('sms');
+        if (channels.length === 0) return;
+        router.post('/signing-requests/bulk-resend', { ids, channels }, {
             preserveScroll: true,
             onSuccess: () => {
                 clearSigningSelection();
                 setConfirmBulkResend(false);
             },
         });
-    }, [selectedSigningRequests, resendableStatuses, clearSigningSelection]);
+    }, [selectedSigningRequests, resendableStatuses, clearSigningSelection, bulkResendChannels]);
 
     const runBulkDownload = useCallback(() => {
         const ids = selectedSigningRequests.filter((sr) => downloadableStatuses.has(sr.status)).map((sr) => sr.id);
@@ -728,7 +754,10 @@ export default function EmployeeShow() {
                                                             size="sm"
                                                             className="h-7 text-xs"
                                                             disabled={resendableSelectedCount === 0}
-                                                            onClick={() => setConfirmBulkResend(true)}
+                                                            onClick={() => {
+                                                                setBulkResendChannels({ email: true, sms: false });
+                                                                setConfirmBulkResend(true);
+                                                            }}
                                                         >
                                                             Resend ({resendableSelectedCount})
                                                         </Button>
@@ -840,7 +869,7 @@ export default function EmployeeShow() {
                                                                                             )}
                                                                                             <DropdownMenuItem
                                                                                                 className="whitespace-nowrap"
-                                                                                                onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                                onClick={() => openResendDialog(sr)}
                                                                                             >
                                                                                                 Resend
                                                                                             </DropdownMenuItem>
@@ -955,7 +984,7 @@ export default function EmployeeShow() {
                                                                                         )}
                                                                                         <DropdownMenuItem
                                                                                             className="whitespace-nowrap"
-                                                                                            onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
+                                                                                            onClick={() => openResendDialog(sr)}
                                                                                         >
                                                                                             Resend
                                                                                         </DropdownMenuItem>
@@ -1231,6 +1260,58 @@ export default function EmployeeShow() {
                 </DialogContent>
             </Dialog>
 
+            {/* Single-row resend with delivery method picker */}
+            <Dialog open={resendTarget !== null} onOpenChange={(open) => !open && setResendTarget(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Resend document</DialogTitle>
+                        <DialogDescription>
+                            Choose how to notify {resendTarget?.recipient_name || 'the recipient'}. A fresh signing link will be issued; the previous request will be cancelled.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <label className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40">
+                            <Checkbox
+                                checked={resendChannels.email}
+                                onCheckedChange={(c) => setResendChannels((prev) => ({ ...prev, email: Boolean(c) }))}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Email</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {resendTarget?.recipient_email || 'No email on file'}
+                                </p>
+                            </div>
+                        </label>
+                        <label className={`flex items-start gap-3 rounded-md border p-3 ${hasMobile ? 'cursor-pointer hover:bg-muted/40' : 'opacity-60 cursor-not-allowed'}`}>
+                            <Checkbox
+                                checked={resendChannels.sms}
+                                disabled={!hasMobile}
+                                onCheckedChange={(c) => setResendChannels((prev) => ({ ...prev, sms: Boolean(c) }))}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">SMS</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {hasMobile
+                                        ? `${emp.mobile_number} — sends a text with a short signing link`
+                                        : 'No mobile number on file for this employee'}
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setResendTarget(null)}>Cancel</Button>
+                        <Button
+                            onClick={runResend}
+                            disabled={!resendChannels.email && !resendChannels.sms}
+                        >
+                            Resend
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Bulk cancel confirmation */}
             <AlertDialog open={confirmBulkCancel} onOpenChange={setConfirmBulkCancel}>
                 <AlertDialogContent>
@@ -1248,20 +1329,56 @@ export default function EmployeeShow() {
             </AlertDialog>
 
             {/* Bulk resend confirmation */}
-            <AlertDialog open={confirmBulkResend} onOpenChange={setConfirmBulkResend}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Resend / remind {resendableSelectedCount} signing request{resendableSelectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Recipients get a resent signing email; rows awaiting an internal signer get a reminder to the assigned signer. One email per recipient / signer.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={runBulkResend}>Send</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            <Dialog open={confirmBulkResend} onOpenChange={setConfirmBulkResend}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Resend / remind {resendableSelectedCount} signing request{resendableSelectedCount === 1 ? '' : 's'}?
+                        </DialogTitle>
+                        <DialogDescription>
+                            Recipients get fresh signing links; rows awaiting an internal signer get a reminder to the assigned signer (internal reminders always email regardless of the choice below).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <label className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40">
+                            <Checkbox
+                                checked={bulkResendChannels.email}
+                                onCheckedChange={(c) => setBulkResendChannels((prev) => ({ ...prev, email: Boolean(c) }))}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Email</p>
+                                <p className="text-xs text-muted-foreground">One consolidated email per recipient.</p>
+                            </div>
+                        </label>
+                        <label className={`flex items-start gap-3 rounded-md border p-3 ${hasMobile ? 'cursor-pointer hover:bg-muted/40' : 'opacity-60 cursor-not-allowed'}`}>
+                            <Checkbox
+                                checked={bulkResendChannels.sms}
+                                disabled={!hasMobile}
+                                onCheckedChange={(c) => setBulkResendChannels((prev) => ({ ...prev, sms: Boolean(c) }))}
+                                className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">SMS</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {hasMobile
+                                        ? `One text per document with a short signing link (to ${emp.mobile_number}).`
+                                        : 'No mobile number on file for this employee.'}
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmBulkResend(false)}>Cancel</Button>
+                        <Button
+                            onClick={runBulkResend}
+                            disabled={!bulkResendChannels.email && !bulkResendChannels.sms}
+                        >
+                            Send
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
         </AppLayout>
     );

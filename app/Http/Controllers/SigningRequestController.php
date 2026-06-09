@@ -936,6 +936,7 @@ class SigningRequestController extends Controller
         string $deliveryMethod,
         ?\App\Models\User $internalSigner,
         \App\Models\User $admin,
+        array $channels = ['email'],
     ): void {
         if ($batch->isEmpty()) {
             return;
@@ -954,8 +955,11 @@ class SigningRequestController extends Controller
             return;
         }
 
+        $sendEmail = in_array('email', $channels, true);
+        $sendSms = in_array('sms', $channels, true);
+
         // Standard email delivery: one consolidated email to the recipient.
-        if ($deliveryMethod === 'email' && ! empty($recipient['email'])) {
+        if ($sendEmail && $deliveryMethod === 'email' && ! empty($recipient['email'])) {
             \Illuminate\Support\Facades\Notification::route('mail', $recipient['email'])
                 ->notify(new \App\Notifications\BatchSigningNotification($recipient['name'], $batch));
 
@@ -971,6 +975,49 @@ class SigningRequestController extends Controller
                     'batched' => true,
                 ]);
             }
+        }
+
+        // SMS: one text per recipient with a single short link to a landing
+        // page that lists every document in the batch.
+        if ($sendSms) {
+            $signable = $recipient['signable'] ?? null;
+            $phone = \App\Models\User::normaliseAuMobile($signable->mobile_number ?? $signable->phone ?? null);
+
+            foreach ($batch as $sr) {
+                if ($sr->status === 'pending') {
+                    $sr->update(['status' => 'sent']);
+                }
+            }
+
+            if ($phone) {
+                $batchUrl = app(\App\Services\SigningBatchLinkService::class)->create($batch);
+                $shortUrl = app(\App\Services\ShortLinkService::class)->create($batchUrl, 60 * 24 * 7);
+
+                $senderName = $batch->first()?->sentBy?->name ?? 'Your employer';
+                \Illuminate\Support\Facades\Notification::route('clicksend', $phone)
+                    ->notify(new \App\Notifications\BatchSigningSmsNotification(
+                        senderName: $senderName,
+                        documentCount: $batch->count(),
+                        shortUrl: $shortUrl,
+                    ));
+
+                foreach ($batch as $sr) {
+                    $sr->logEvent('sent', 'system', null, null, [
+                        'method' => 'sms',
+                        'to' => $phone,
+                        'batched' => true,
+                        'batch_size' => $batch->count(),
+                    ]);
+                }
+            } else {
+                foreach ($batch as $sr) {
+                    $sr->logEvent('sms_skipped_no_phone', 'system');
+                }
+            }
+            return;
+        }
+
+        if ($sendEmail) {
             return;
         }
 
@@ -1327,9 +1374,18 @@ class SigningRequestController extends Controller
             );
         }
 
-        $this->signingService->resend($signingRequest, $request->user());
+        $data = $request->validate([
+            'channels' => 'sometimes|array|min:1',
+            'channels.*' => 'in:email,sms',
+        ]);
+        $channels = $data['channels'] ?? ['email'];
 
-        return redirect()->back()->with('success', 'Document resent for signing.');
+        $this->signingService->resend($signingRequest, $request->user(), $channels);
+
+        $labels = array_map(fn ($c) => $c === 'sms' ? 'SMS' : 'email', $channels);
+        $label = count($labels) === 1 ? $labels[0] : implode(' and ', $labels);
+
+        return redirect()->back()->with('success', "Document resent for signing via {$label}.");
     }
 
     public function resendSignedCopy(Request $request, SigningRequest $signingRequest)
@@ -1376,7 +1432,13 @@ class SigningRequestController extends Controller
         $data = $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:signing_requests,id',
+            'channels' => 'sometimes|array|min:1',
+            'channels.*' => 'in:email,sms',
         ]);
+        $channels = array_values(array_intersect(['email', 'sms'], $data['channels'] ?? ['email']));
+        if (empty($channels)) {
+            $channels = ['email'];
+        }
 
         $resendableStatuses = ['sent', 'opened', 'viewed'];
         $requests = SigningRequest::query()->whereIn('id', $data['ids'])->with('internalSigner')->get();
@@ -1441,6 +1503,7 @@ class SigningRequestController extends Controller
                 $first->delivery_method,
                 null,
                 $request->user(),
+                $channels,
             );
         }
 
