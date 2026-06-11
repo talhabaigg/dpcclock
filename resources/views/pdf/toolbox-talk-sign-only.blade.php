@@ -102,7 +102,7 @@
             @foreach($employees as $index => $emp)
                 <tr>
                     <td>{{ $index + 1 }}</td>
-                    <td>{{ $emp->preferred_name ?? $emp->name }}</td>
+                    <td>{{ $emp->name }}</td>
                     <td></td>
                     <td></td>
                 </tr>

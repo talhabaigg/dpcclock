@@ -367,7 +367,7 @@ class ToolboxTalkController extends Controller
             ->orderBy('signed_at')
             ->get()
             ->map(function (ToolboxTalkAttendee $a) use ($signatureMediaByAttendee) {
-                $name = $a->employee?->preferred_name ?? $a->employee?->name ?? 'Unknown';
+                $name = $a->employee?->name ?? 'Unknown';
                 $signatureDataUri = null;
 
                 $media = $signatureMediaByAttendee->get($a->employee_id);
