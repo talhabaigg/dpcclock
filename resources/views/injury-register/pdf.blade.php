@@ -12,6 +12,11 @@
 
     $employee = $injury->employee;
     $location = $injury->location;
+    $projectAddress = $location ? trim(implode(', ', array_filter([
+        $location->address_line1,
+        $location->city,
+        trim(($location->state_code ?? '') . ' ' . ($location->zip_code ?? '')) ?: null,
+    ]))) : '';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -55,6 +60,10 @@
             padding: 5px 8px;
             margin-top: 16px;
             margin-bottom: 8px;
+            page-break-after: avoid;
+        }
+        .section {
+            page-break-inside: avoid;
         }
 
         table.fields {
@@ -116,6 +125,7 @@
             border-radius: 6px;
             padding: 10px;
             margin-bottom: 10px;
+            page-break-inside: avoid;
         }
         .signature-block .sig-label {
             font-size: 10px;
@@ -141,12 +151,15 @@
 <body>
 
     {{-- Type of Incident --}}
+    <div class="section">
     <h2>Type of Incident Being Reported</h2>
     <div style="padding: 4px 8px; font-size: 11px; margin-bottom: 10px;">
         {{ Injury::INCIDENT_OPTIONS[$injury->incident] ?? $injury->incident }}@if($injury->incident === 'other' && $injury->incident_other) — {{ $injury->incident_other }}@endif
     </div>
+    </div>
 
     {{-- Involved Worker Details --}}
+    <div class="section">
     <h2>Involved Worker Details</h2>
     <table class="fields">
         <tr>
@@ -174,8 +187,10 @@
             <td class="value">{{ $employee?->employment_type ?? '—' }}</td>
         </tr>
     </table>
+    </div>
 
     {{-- Incident / Event Details --}}
+    <div class="section">
     <h2>Incident / Event Details</h2>
     <table class="fields">
         <tr>
@@ -200,37 +215,53 @@
         </tr>
         <tr>
             <td class="label">Project Address</td>
+            <td class="value">{{ $projectAddress ?: '—' }}</td>
+        </tr>
+        <tr>
+            <td class="label">Location of Incident</td>
             <td class="value">{{ $injury->location_of_incident ?? '—' }}</td>
         </tr>
     </table>
+    </div>
 
     {{-- Nature of Injury --}}
+    <div class="section">
     <h2>Nature of Injury / Illness</h2>
     <div class="badge-section">{!! $badgeList($injury->natures, Injury::NATURE_OPTIONS) !!}</div>
     @if($injury->natures_comments)<div class="comments-box">{{ $injury->natures_comments }}</div>@endif
+    </div>
 
     {{-- Mechanism of Injury --}}
+    <div class="section">
     <h2>Mechanism of Injury</h2>
     <div class="badge-section">{!! $badgeList($injury->mechanisms, Injury::MECHANISM_OPTIONS) !!}</div>
     @if($injury->mechanisms_comments)<div class="comments-box">{{ $injury->mechanisms_comments }}</div>@endif
+    </div>
 
     {{-- Agency of Incident --}}
+    <div class="section">
     <h2>Agency of Incident</h2>
     <div class="badge-section">{!! $badgeList($injury->agencies, Injury::AGENCY_OPTIONS) !!}</div>
     @if($injury->agencies_comments)<div class="comments-box">{{ $injury->agencies_comments }}</div>@endif
+    </div>
 
     {{-- Contributing Factors --}}
+    <div class="section">
     <h2>Contributing Factors</h2>
     <div class="badge-section">{!! $badgeList($injury->contributions, Injury::CONTRIBUTION_OPTIONS) !!}</div>
     @if($injury->contributions_comments)<div class="comments-box">{{ $injury->contributions_comments }}</div>@endif
+    </div>
 
     {{-- Corrective Actions --}}
+    <div class="section">
     <h2>Corrective Actions to Prevent Reoccurrence</h2>
     <div class="badge-section">{!! $badgeList($injury->corrective_actions, Injury::CORRECTIVE_ACTION_OPTIONS) !!}</div>
     @if($injury->corrective_actions_comments)<div class="comments-box">{{ $injury->corrective_actions_comments }}</div>@endif
+    </div>
 
     {{-- Incident Files --}}
     @if($injury->getMedia('files')->count() > 0)
+    <div class="section">
     <h2>Incident Files</h2>
     <table class="fields">
         @foreach($injury->getMedia('files') as $media)
@@ -240,10 +271,12 @@
         </tr>
         @endforeach
     </table>
+    </div>
     @endif
 
     {{-- Body Location --}}
     @if(isset($bodyLocationPaths) && $bodyLocationPaths && isset($bodyOutlineBase64) && $bodyOutlineBase64 && isset($bodyImageDims) && $bodyImageDims)
+    <div class="section">
     @php
         // Replicate the exact same centering logic as the frontend canvas (800x600 logical space, 90% fit)
         $W = 800;
@@ -288,13 +321,17 @@
             @endforeach
         </svg>
     </div>
+    </div>
     @endif
 
     {{-- Detailed Account --}}
+    <div class="section">
     <h2>Detailed Account of What Occurred From the Person Involved in the Incident</h2>
     <div class="description-box">{{ $injury->description ?? '—' }}</div>
+    </div>
 
     {{-- Emergency Services --}}
+    <div class="section">
     <h2>Were Emergency Services Called to the Incident?</h2>
     <table class="fields">
         <tr>
@@ -308,8 +345,10 @@
         </tr>
         @endif
     </table>
+    </div>
 
     {{-- Treatment --}}
+    <div class="section">
     <h2>Treatment</h2>
     <table class="fields">
         <tr>
@@ -340,16 +379,20 @@
             </tr>
         @endif
     </table>
+    </div>
 
     {{-- Witnesses --}}
     @if($injury->witnesses)
+    <div class="section">
     <h2>Were there any witnesses to the reported event?</h2>
     <div class="description-box">{{ $injury->witness_details ?? '—' }}</div>
+    </div>
     @endif
 
     {{-- Worker Signature --}}
     @if($injury->worker_signature)
     @php $workerSignedAt = $injury->worker_signed_at ?? $injury->created_at; @endphp
+    <div class="section">
     <h2>Worker Signature</h2>
     <div class="signature-block">
         <img src="{{ $injury->worker_signature }}" />
@@ -358,11 +401,13 @@
             &bull; Signed {{ $workerSignedAt ? Carbon::parse($workerSignedAt)->format('d/m/Y h:i A') : '' }}
         </div>
     </div>
+    </div>
     @endif
 
     {{-- SWCP Representative Signature --}}
     @if($injury->representative_signature)
     @php $repSignedAt = $injury->representative_signed_at ?? $injury->created_at; @endphp
+    <div class="section">
     <h2>SWCP Representative Sign-off</h2>
     <div class="signature-block">
         <img src="{{ $injury->representative_signature }}" />
@@ -371,12 +416,15 @@
             &bull; Signed {{ $repSignedAt ? Carbon::parse($repSignedAt)->format('d/m/Y h:i A') : '' }}
         </div>
     </div>
+    </div>
     @endif
 
     {{-- Follow Up --}}
     @if($injury->follow_up)
+    <div class="section">
     <h2>Follow Up Notes</h2>
     <div class="description-box">{{ $injury->follow_up_notes ?? '—' }}</div>
+    </div>
     @endif
 
 
