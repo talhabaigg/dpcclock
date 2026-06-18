@@ -577,6 +577,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'forecast.approve',
             'forecast.reject',
             'forecast-projects.view',
+            'forecast-projects.create',
+            'forecast-projects.edit',
+            'forecast-projects.delete',
             'turnover-forecast.view',
             'cash-forecast.view',
             // Budget
