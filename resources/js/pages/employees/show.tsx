@@ -16,7 +16,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
-import { AlertTriangle, BookOpen, Check, Clock, EllipsisVertical, FileIcon, FilePlus2, FileSignature, FolderOpen, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Clock, EllipsisVertical, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2, User, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -216,7 +216,18 @@ export default function EmployeeShow() {
         });
     }, []);
 
-    const allSigningIds = useMemo(() => signingRequests.map((sr) => sr.id), [signingRequests]);
+    // Signed/stored PDFs (Documents archive) and active workflow items (Signature Requests).
+    // Declared early because allSigningIds + bulk action memos depend on activeSigningRequests.
+    const signedDocuments = useMemo(
+        () => signingRequests.filter((sr) => sr.status === 'signed' || sr.status === 'delivered'),
+        [signingRequests],
+    );
+    const activeSigningRequests = useMemo(
+        () => signingRequests.filter((sr) => sr.status !== 'signed' && sr.status !== 'delivered'),
+        [signingRequests],
+    );
+
+    const allSigningIds = useMemo(() => activeSigningRequests.map((sr) => sr.id), [activeSigningRequests]);
     const allSelectedOnPage = allSigningIds.length > 0 && allSigningIds.every((id) => selectedSigningIds.has(id));
     const someSelectedOnPage = allSigningIds.some((id) => selectedSigningIds.has(id));
 
@@ -475,16 +486,99 @@ export default function EmployeeShow() {
         }
     }, [locationDialogOpen]);
 
+    // Section nav (master-detail layout)
+    const sections = useMemo(() => {
+        const all = [
+            { id: 'overview', label: 'Overview', icon: User, visible: true, count: undefined as number | undefined },
+            { id: 'journal', label: 'Journal', icon: BookOpen, visible: true, count: journal?.length || undefined },
+            { id: 'documents', label: 'Documents', icon: FileText, visible: canSendDocuments, count: signedDocuments.length || undefined },
+            { id: 'signing-requests', label: 'Signature Requests', icon: FileSignature, visible: canSendDocuments, count: activeSigningRequests.length || undefined },
+            { id: 'files', label: 'Licences & Training', icon: GraduationCap, visible: !emp.is_office_staff, count: undefined as number | undefined },
+            { id: 'projects', label: 'Projects', icon: FolderOpen, visible: !emp.is_office_staff, count: projects?.length || undefined },
+            { id: 'timesheets', label: 'Timesheets', icon: Clock, visible: !emp.is_office_staff, count: undefined as number | undefined },
+            { id: 'injuries', label: 'Injury Register', icon: AlertTriangle, visible: !emp.is_office_staff, count: emp.incident_reports?.length || undefined },
+        ];
+        return all.filter((s) => s.visible);
+    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, signingRequests, signedDocuments, activeSigningRequests, projects]);
+
+    const [activeSection, setActiveSection] = useState<string>(() => {
+        if (typeof window === 'undefined') return 'overview';
+        const hash = window.location.hash.replace('#', '');
+        return hash || 'overview';
+    });
+
+    // Drop the hash back to overview if the section is hidden (e.g. office staff loading a site-only deep link)
+    useEffect(() => {
+        if (!sections.some((s) => s.id === activeSection)) {
+            setActiveSection('overview');
+        }
+    }, [sections, activeSection]);
+
+    // Keep URL hash in sync so deep-links and refresh land on the same section
+    useEffect(() => {
+        const current = window.location.hash.replace('#', '');
+        if (current !== activeSection) {
+            history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${activeSection}`);
+        }
+    }, [activeSection]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={emp.display_name || emp.name} />
 
             <div className="flex flex-col gap-4 p-3 sm:p-4">
-                {/* Two-column layout */}
-                <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-                    {/* LEFT COLUMN */}
-                    <div className="flex flex-col gap-4">
-                        {/* About Card */}
+                {/* Master-detail layout */}
+                <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+                    {/* Sidebar rail */}
+                    <aside className="shrink-0 lg:w-60">
+                        {/* Profile header (desktop only) */}
+                        <div className="hidden flex-col items-center gap-2 pb-6 lg:flex">
+                            <Avatar className="h-20 w-20">
+                                <AvatarFallback className="bg-muted text-muted-foreground text-lg font-semibold">
+                                    {getInitials(emp.name || '??')}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="text-center">
+                                <p className="text-sm font-semibold leading-tight">{emp.display_name || emp.name}</p>
+                                <p className="mt-0.5 text-muted-foreground text-xs">
+                                    {emp.is_office_staff ? 'Office Employee' : 'Site Employee'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Section nav: horizontal scroll on mobile, vertical on desktop */}
+                        <nav className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
+                            {sections.map((s) => {
+                                const Icon = s.icon;
+                                const isActive = activeSection === s.id;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => setActiveSection(s.id)}
+                                        className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors lg:shrink ${
+                                            isActive
+                                                ? 'bg-accent font-medium text-accent-foreground'
+                                                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                                        }`}
+                                    >
+                                        <Icon className="h-4 w-4 shrink-0" />
+                                        <span className="flex-1 whitespace-nowrap">{s.label}</span>
+                                        {typeof s.count === 'number' && s.count > 0 && (
+                                            <Badge variant={isActive ? 'default' : 'secondary'} className="h-4 min-w-4 px-1.5 text-[10px]">
+                                                {s.count}
+                                            </Badge>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </aside>
+
+                    {/* Main pane */}
+                    <main className="min-w-0 flex-1">
+                        {/* OVERVIEW */}
+                        {activeSection === 'overview' && (
                         <Card>
                             <CardHeader>
                                 <div className="flex items-center gap-3">
@@ -539,9 +633,10 @@ export default function EmployeeShow() {
                                 </DetailItem>
                             </CardContent>
                         </Card>
+                        )}
 
-                        {/* Timesheets Card */}
-                        {!emp.is_office_staff && (
+                        {/* TIMESHEETS */}
+                        {activeSection === 'timesheets' && !emp.is_office_staff && (
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-base">
@@ -573,7 +668,8 @@ export default function EmployeeShow() {
                             </Card>
                         )}
 
-                        {/* Journal Card */}
+                        {/* JOURNAL */}
+                        {activeSection === 'journal' && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base">
@@ -706,18 +802,62 @@ export default function EmployeeShow() {
                                 )}
                             </CardContent>
                         </Card>
-                    </div>
+                        )}
 
-                    {/* RIGHT COLUMN */}
-                    <div className="flex flex-col gap-4">
-                        {/* Documents (signing) — visible when the viewer can send documents to this employee */}
-                        {canSendDocuments && (
+                        {/* DOCUMENTS — signed & stored PDFs against the employee record */}
+                        {activeSection === 'documents' && canSendDocuments && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <FileText className="h-4 w-4" />
+                                        Documents
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <Separator className="mb-4" />
+                                    {signedDocuments.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm italic">No signed documents on file yet.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            {signedDocuments.map((sr) => {
+                                                const title = sr.document_template?.name ?? sr.document_title ?? 'Document';
+                                                const signedDate = sr.signed_at ?? sr.updated_at ?? sr.created_at;
+                                                const signerName = sr.signer_full_name ?? sr.recipient_name;
+                                                return (
+                                                    <a
+                                                        key={sr.id}
+                                                        href={`/signing-requests/${sr.id}/download`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="group flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/40"
+                                                    >
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-red-50 dark:bg-red-950/40">
+                                                            <FileText className="h-5 w-5 text-red-600 dark:text-red-400" />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="truncate text-sm font-medium leading-tight">{title}</p>
+                                                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                                                Signed {signedDate ? formatDate(signedDate) : '—'}
+                                                                {signerName ? ` · ${signerName}` : ''}
+                                                            </p>
+                                                        </div>
+                                                    </a>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* SIGNATURE REQUESTS — workflow tracker for outbound signing requests */}
+                        {activeSection === 'signing-requests' && canSendDocuments && (
                             <Card>
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="flex items-center gap-2 text-base">
                                             <FileSignature className="h-4 w-4" />
-                                            Documents
+                                            Signature Requests
                                         </CardTitle>
                                         <Button size="sm" variant="outline" className="gap-1.5" onClick={openSendModal}>
                                             <FilePlus2 className="h-3.5 w-3.5" />
@@ -727,8 +867,11 @@ export default function EmployeeShow() {
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <Separator className="mb-4" />
-                                    {signingRequests.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm italic">No documents sent yet.</p>
+                                    {activeSigningRequests.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm italic">
+                                            No pending signature requests.
+                                            {signedDocuments.length > 0 && ' Signed documents are in the Documents tab.'}
+                                        </p>
                                     ) : (
                                         <>
                                             {selectedSigningIds.size > 0 && (
@@ -794,7 +937,7 @@ export default function EmployeeShow() {
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {signingRequests.map((sr) => {
+                                                        {activeSigningRequests.map((sr) => {
                                                             const isSigned = sr.status === 'signed';
                                                             const isDraft = sr.status === 'draft';
                                                             const docTitle = sr.document_template?.name ?? sr.document_title ?? 'Document';
@@ -914,7 +1057,7 @@ export default function EmployeeShow() {
 
                                             {/* Mobile card layout */}
                                             <div className="flex flex-col gap-2 md:hidden">
-                                                {signingRequests.map((sr) => {
+                                                {activeSigningRequests.map((sr) => {
                                                     const isSigned = sr.status === 'signed';
                                                     const isDraft = sr.status === 'draft';
                                                     const isAwaitingInternal = sr.status === 'awaiting_internal_signature';
@@ -1030,11 +1173,11 @@ export default function EmployeeShow() {
                             </Card>
                         )}
 
-                        {/* Licences, tickets & training */}
-                        {!emp.is_office_staff && <EmployeeFilesCard employeeId={emp.id} />}
+                        {/* FILES */}
+                        {activeSection === 'files' && !emp.is_office_staff && <EmployeeFilesCard employeeId={emp.id} />}
 
-                        {/* Projects Card */}
-                        {!emp.is_office_staff && (
+                        {/* PROJECTS */}
+                        {activeSection === 'projects' && !emp.is_office_staff && (
                             <Card>
                                 <CardHeader>
                                     <div className="flex items-center justify-between">
@@ -1067,8 +1210,8 @@ export default function EmployeeShow() {
                             </Card>
                         )}
 
-                        {/* Injury Register Card */}
-                        {!emp.is_office_staff && (
+                        {/* INJURY REGISTER */}
+                        {activeSection === 'injuries' && !emp.is_office_staff && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base">
@@ -1117,7 +1260,7 @@ export default function EmployeeShow() {
                             </CardContent>
                         </Card>
                         )}
-                    </div>
+                    </main>
                 </div>
             </div>
 
