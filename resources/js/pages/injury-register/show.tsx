@@ -136,92 +136,187 @@ function PdfThumbnail({ url }: { url: string }) {
 function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onPreview: (a: Attachment) => void }) {
     const kind = attachmentKind(attachment.mime_type);
     const Icon = kind === 'pdf' ? FileText : kind === 'image' ? FileImage : FileIcon;
-    const iconColor = 'text-muted-foreground';
-    const typeLabel = kind === 'pdf' ? 'PDF' : kind === 'image' ? 'Image' : (attachment.mime_type.split('/')[1] ?? 'File').toUpperCase();
 
     return (
-        <div className="hover:border-foreground/30 group flex w-44 flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-all hover:shadow-md">
+        <div className="group relative h-32 w-44 overflow-hidden rounded-lg border bg-card shadow-sm transition-all hover:border-foreground/30 hover:shadow-md">
             <button
                 type="button"
                 onClick={() => onPreview(attachment)}
-                className="bg-muted/40 relative flex h-32 items-center justify-center overflow-hidden border-b"
+                className="bg-muted/40 flex h-full w-full items-center justify-center overflow-hidden"
+                title={attachment.file_name}
+                aria-label={`Open ${attachment.file_name}`}
             >
                 {kind === 'pdf' && <PdfThumbnail url={attachment.url} />}
                 {kind === 'image' && (
                     <img src={attachment.url} alt="" className="h-full w-full object-cover" />
                 )}
-                {kind === 'other' && <Icon className="text-muted-foreground h-12 w-12" />}
-                <div className="absolute inset-0 bg-foreground/0 transition-colors group-hover:bg-foreground/5" />
+                {kind === 'other' && <Icon className="text-muted-foreground h-10 w-10" />}
             </button>
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
-                <button
-                    type="button"
-                    onClick={() => onPreview(attachment)}
-                    className="min-w-0 flex-1 text-left"
-                >
-                    <div className="truncate text-xs font-medium leading-tight">{attachment.file_name}</div>
-                    <div className="text-muted-foreground text-[9px] uppercase tracking-wide">{typeLabel}</div>
-                </button>
-                <a
-                    href={attachment.url}
-                    download={attachment.file_name}
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 rounded p-1 transition-colors"
-                    aria-label={`Download ${attachment.file_name}`}
-                    title="Download"
-                >
-                    <Download className="h-3.5 w-3.5" />
-                </a>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="truncate text-[11px] font-medium leading-tight text-white">{attachment.file_name}</div>
             </div>
+            <a
+                href={attachment.url}
+                download={attachment.file_name}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={`Download ${attachment.file_name}`}
+                title="Download"
+            >
+                <Download className="h-3.5 w-3.5" />
+            </a>
         </div>
     );
 }
 
-function AttachmentList({ attachments, onPreview, compact = false }: { attachments: Attachment[]; onPreview: (a: Attachment) => void; compact?: boolean }) {
+interface AttachmentPreviewContext {
+    uploaderName?: string | null;
+    uploadedAt?: string;
+}
+
+interface AttachmentPreview {
+    attachment: Attachment;
+    siblings: Attachment[];
+    context?: AttachmentPreviewContext;
+}
+
+function AttachmentList({ attachments, onPreview, context, compact = false }: {
+    attachments: Attachment[];
+    onPreview: (preview: AttachmentPreview) => void;
+    context?: AttachmentPreviewContext;
+    compact?: boolean;
+}) {
     if (attachments.length === 0) return null;
     return (
         <div className={`flex flex-wrap gap-2 ${compact ? 'mt-1' : 'mt-2'}`}>
             {attachments.map((att) => (
-                <AttachmentCard key={att.id} attachment={att} onPreview={onPreview} />
+                <AttachmentCard
+                    key={att.id}
+                    attachment={att}
+                    onPreview={(a) => onPreview({ attachment: a, siblings: attachments, context })}
+                />
             ))}
         </div>
     );
 }
 
-function AttachmentPreviewDialog({ attachment, onClose }: { attachment: Attachment | null; onClose: () => void }) {
-    const open = attachment !== null;
-    const kind = attachment ? attachmentKind(attachment.mime_type) : 'other';
+function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPreview | null; onClose: () => void }) {
+    const open = preview !== null;
+    const [activeId, setActiveId] = useState<number | null>(null);
+
+    useEffect(() => {
+        setActiveId(preview?.attachment.id ?? null);
+    }, [preview?.attachment.id]);
+
+    const active = preview
+        ? preview.siblings.find((s) => s.id === activeId) ?? preview.attachment
+        : null;
+    const kind = active ? attachmentKind(active.mime_type) : 'other';
+    const imageSiblings = preview ? preview.siblings.filter((s) => attachmentKind(s.mime_type) === 'image') : [];
+    const hasGallery = kind === 'image' && imageSiblings.length > 1;
+    const activeIndex = active ? imageSiblings.findIndex((s) => s.id === active.id) : -1;
+    const typeLabel = kind === 'pdf' ? 'PDF' : kind === 'image' ? 'Image' : active ? (active.mime_type.split('/')[1] ?? 'File').toUpperCase() : '';
+
+    useEffect(() => {
+        if (!open || !hasGallery || activeIndex === -1) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            const next = e.key === 'ArrowRight'
+                ? (activeIndex + 1) % imageSiblings.length
+                : (activeIndex - 1 + imageSiblings.length) % imageSiblings.length;
+            setActiveId(imageSiblings[next].id);
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [open, hasGallery, activeIndex, imageSiblings]);
+
+    const headingText = hasGallery && activeIndex !== -1
+        ? `Photo ${activeIndex + 1} of ${imageSiblings.length}`
+        : kind === 'image' ? 'Photo'
+        : kind === 'pdf' ? 'PDF'
+        : 'File';
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
             <DialogContent
-                className="flex h-[90vh] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+                className="flex h-[90vh] max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl md:flex-row"
                 onCloseAutoFocus={(e) => e.preventDefault()}
             >
-                <DialogHeader className="border-b px-4 py-3 pr-12 space-y-0">
-                    <DialogTitle className="truncate text-sm font-medium">{attachment?.file_name}</DialogTitle>
+                <DialogHeader className="sr-only">
+                    <DialogTitle>{active?.file_name ?? headingText}</DialogTitle>
                 </DialogHeader>
-                <div className="bg-muted/30 flex-1 overflow-auto">
-                    {attachment && kind === 'pdf' && (
-                        <iframe src={attachment.url} title={attachment.file_name} className="h-full w-full bg-white" />
+
+                <div className="bg-muted/30 relative flex flex-1 overflow-hidden md:order-2">
+                    {active && kind === 'pdf' && (
+                        <iframe src={active.url} title={active.file_name} className="h-full w-full bg-white" />
                     )}
-                    {attachment && kind === 'image' && (
-                        <div className="flex h-full items-center justify-center p-4">
-                            <img src={attachment.url} alt={attachment.file_name} className="max-h-full max-w-full object-contain" />
+                    {active && kind === 'image' && (
+                        <div className="flex h-full w-full items-center justify-center p-4">
+                            <img src={active.url} alt={active.file_name} className="max-h-full max-w-full object-contain" />
                         </div>
                     )}
-                    {attachment && kind === 'other' && (
-                        <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">
+                    {active && kind === 'other' && (
+                        <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">
                             <FileIcon className="h-12 w-12 opacity-50" />
                             <p>No preview available for this file type.</p>
-                            <Button variant="outline" size="sm" asChild>
-                                <a href={attachment.url} target="_blank" rel="noopener noreferrer" download={attachment.file_name}>
-                                    <Download className="mr-1 h-3.5 w-3.5" /> Download
-                                </a>
-                            </Button>
                         </div>
                     )}
                 </div>
+
+                {hasGallery && (
+                    <div className="bg-muted/40 flex h-20 shrink-0 gap-2 overflow-x-auto border-t p-2 md:order-1 md:h-auto md:w-20 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-t-0">
+                        {imageSiblings.map((s) => (
+                            <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setActiveId(s.id)}
+                                className={cn(
+                                    'relative aspect-square h-full shrink-0 overflow-hidden rounded border-2 transition-all md:h-auto md:w-full',
+                                    s.id === active?.id
+                                        ? 'border-primary'
+                                        : 'border-transparent hover:border-muted-foreground/30',
+                                )}
+                                aria-label={s.file_name}
+                                aria-current={s.id === active?.id}
+                            >
+                                <img src={s.url} alt="" className="h-full w-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                <aside className="bg-background flex max-h-[35vh] shrink-0 flex-col gap-3 overflow-y-auto border-t p-4 pr-12 md:order-3 md:max-h-none md:w-72 md:gap-5 md:border-l md:border-t-0 md:p-5">
+                    <h2 className="text-base font-semibold leading-tight">{headingText}</h2>
+
+                    <div className="space-y-1.5 md:space-y-2 md:border-t md:pt-4">
+                        <h3 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">Details</h3>
+                        {preview?.context?.uploaderName && (
+                            <p className="text-sm font-medium">Uploaded by {preview.context.uploaderName}</p>
+                        )}
+                        {preview?.context?.uploadedAt && (
+                            <p className="text-muted-foreground text-sm">
+                                Uploaded {new Date(preview.context.uploadedAt).toLocaleString('en-AU')}
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="space-y-1.5 md:space-y-2 md:border-t md:pt-4">
+                        <h3 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">File</h3>
+                        <p className="break-words text-sm">{active?.file_name}</p>
+                        {typeLabel && (
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide">{typeLabel}</p>
+                        )}
+                    </div>
+
+                    {active && (
+                        <Button asChild variant="outline" size="sm" className="mt-1 md:mt-auto">
+                            <a href={active.url} download={active.file_name}>
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> Download
+                            </a>
+                        </Button>
+                    )}
+                </aside>
             </DialogContent>
         </Dialog>
     );
@@ -239,7 +334,7 @@ function AttachmentBadge({ count }: { count: number }) {
 
 function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
     comment: CommentData;
-    onPreviewAttachment: (a: Attachment) => void;
+    onPreviewAttachment: (preview: AttachmentPreview) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
 }) {
     const metadata = comment.metadata as Record<string, unknown> | null;
@@ -273,7 +368,12 @@ function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
                        dangerouslySetInnerHTML={{ __html: comment.body.replace(/\*\*(.+?)\*\*/g, '<strong class="text-foreground font-medium">$1</strong>').replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>') }}
                     />
                 )}
-                <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} compact />
+                <AttachmentList
+                    attachments={comment.attachments}
+                    onPreview={onPreviewAttachment}
+                    context={{ uploaderName: comment.user?.name ?? 'System', uploadedAt: comment.created_at }}
+                    compact
+                />
                 {formSubmittedMeta && onOpenFormResponse && (
                     <button
                         type="button"
@@ -294,7 +394,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
-    onPreviewAttachment: (a: Attachment) => void;
+    onPreviewAttachment: (preview: AttachmentPreview) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
 }) {
     if (comment.metadata) {
@@ -327,7 +427,11 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
                     )}
                 </div>
                 <CommentBody doc={comment.body_json} fallback={comment.body} mentionedUsers={comment.mentioned_users} />
-                <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} />
+                <AttachmentList
+                    attachments={comment.attachments}
+                    onPreview={onPreviewAttachment}
+                    context={{ uploaderName: comment.user?.name ?? 'System', uploadedAt: comment.created_at }}
+                />
                 {comment.replies && comment.replies.length > 0 && (
                     <div className="mt-3 space-y-3 pl-6">
                         {comment.replies.map((reply) => (
@@ -427,9 +531,9 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
     };
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
 
-    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('all');
+    const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('messages');
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
-    const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+    const [preview, setPreview] = useState<AttachmentPreview | null>(null);
     const [removingMediaId, setRemovingMediaId] = useState<number | null>(null);
 
     function confirmRemoveAttachment() {
@@ -443,7 +547,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
     const filteredComments = (() => {
         let result = comments;
         if (commentFilter === 'messages') {
-            result = result.filter((c) => c.metadata === null && c.attachments.length === 0);
+            result = result.filter((c) => c.metadata === null);
         } else if (commentFilter === 'attachments') {
             result = result.filter((c) => c.attachments.length > 0);
         } else if (commentFilter === 'history') {
@@ -608,7 +712,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                                                 currentUserId={currentUserId}
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
-                                                onPreviewAttachment={setPreviewAttachment}
+                                                onPreviewAttachment={setPreview}
                                                 onOpenFormResponse={(id) => {
                                                     const fr = formRequests.find((f) => f.id === id);
                                                     if (fr) setViewingFormRequest(fr);
@@ -627,7 +731,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                                             outputFormat="json"
                                             content={commentDoc}
                                             onChange={setCommentDoc}
-                                            placeholder="Write a comment and mention others with @"
+                                            placeholder="Add a comment…"
                                             enableAttachments
                                             enableMentions
                                             collapseToolbar
@@ -947,7 +1051,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
             </div>
 
             {/* Attachment Preview Dialog */}
-            <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+            <AttachmentPreviewDialog preview={preview} onClose={() => setPreview(null)} />
 
             {/* Send Notification Dialog */}
             <Dialog open={sendOpen} onOpenChange={setSendOpen}>
