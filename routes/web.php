@@ -1372,6 +1372,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Retention Report
     Route::get('/retention-report', [RetentionReportController::class, 'index'])->name('reports.retention')
         ->middleware('permission:reports.retention');
+    Route::get('/retention-report/pdf', [RetentionReportController::class, 'downloadPdf'])->name('reports.retention.pdf')
+        ->middleware('permission:reports.retention');
     Route::post('/retention-report/manual', [RetentionReportController::class, 'updateManualRetention'])->name('reports.retention.updateManual')
         ->middleware('permission:reports.retention.edit');
     Route::delete('/retention-report/manual', [RetentionReportController::class, 'deleteManualRetention'])->name('reports.retention.deleteManual')

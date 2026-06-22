@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Download, Pencil, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { Download, FileText, Pencil, Plus, Trash2, RotateCcw } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -475,6 +475,17 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                     <Button variant="outline" size="sm" className="text-xs h-7 px-2.5" onClick={exportToExcel}>
                         <Download className="mr-1.5 size-3.5" />
                         Export Excel
+                    </Button>
+
+                    <Button variant="outline" size="sm" className="text-xs h-7 px-2.5" asChild>
+                        <a
+                            href={`/retention-report/pdf${filters.company ? `?company=${encodeURIComponent(filters.company)}` : ''}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <FileText className="mr-1.5 size-3.5" />
+                            Export PDF
+                        </a>
                     </Button>
 
                     <span className="text-xs text-muted-foreground ml-auto">
