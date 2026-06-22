@@ -1472,6 +1472,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:prestarts.edit');
         Route::post('/daily-prestarts/{dailyPrestart}/unlock', [DailyPrestartController::class, 'unlock'])->name('daily-prestarts.unlock')
             ->middleware('permission:prestarts.edit');
+        Route::get('/daily-prestarts/{dailyPrestart}/pdf', [DailyPrestartController::class, 'downloadPdf'])->name('daily-prestarts.pdf');
         Route::get('/daily-prestarts/{dailyPrestart}/sign-sheet', [DailyPrestartController::class, 'downloadSignSheet'])->name('daily-prestarts.sign-sheet');
         Route::post('/daily-prestarts/{dailyPrestart}/absence-notes/{employee}', [DailyPrestartController::class, 'updateAbsenceNote'])->name('daily-prestarts.update-absence-note');
         Route::post('/daily-prestarts/{dailyPrestart}/absence-notes-bulk', [DailyPrestartController::class, 'bulkUpdateAbsenceNote'])->name('daily-prestarts.bulk-update-absence-note');

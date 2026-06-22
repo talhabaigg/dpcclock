@@ -243,8 +243,13 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuItem asChild>
-                                                    <a href={`/daily-prestarts/${p.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                                                    <a href={`/daily-prestarts/${p.id}/pdf`} target="_blank" rel="noreferrer">
                                                         Download PDF
+                                                    </a>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem asChild>
+                                                    <a href={`/daily-prestarts/${p.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                                                        Download Sign Sheet
                                                     </a>
                                                 </DropdownMenuItem>
                                                 {can('prestarts.edit') && (

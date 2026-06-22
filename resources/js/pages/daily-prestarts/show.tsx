@@ -468,9 +468,15 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                             </Button>
                         )}
                         <Button variant="outline" size="sm" asChild>
-                            <a href={`/daily-prestarts/${prestart.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                            <a href={`/daily-prestarts/${prestart.id}/pdf`} target="_blank" rel="noreferrer">
                                 <Download className="mr-1.5 h-3.5 w-3.5" />
                                 PDF
+                            </a>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={`/daily-prestarts/${prestart.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Sign Sheet
                             </a>
                         </Button>
                         {can('prestarts.edit') && (

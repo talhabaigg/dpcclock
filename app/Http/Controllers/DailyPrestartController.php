@@ -548,7 +548,7 @@ class DailyPrestartController extends Controller
         return redirect()->back()->with('success', 'Prestart unlocked.');
     }
 
-    public function downloadSignSheet(DailyPrestart $dailyPrestart)
+    public function downloadPdf(DailyPrestart $dailyPrestart)
     {
         $dailyPrestart->load(['location', 'foreman', 'signatures.employee']);
         $dailyPrestart->ensureFreshWeatherQueued();
@@ -612,13 +612,62 @@ class DailyPrestartController extends Controller
             ->footerHtml('<div style="width:100%;text-align:center;font-size:9px;color:#9ca3af;border-top:1px solid #e5e7eb;padding:6px 0;"><span class="pageNumber"></span> of <span class="totalPages"></span></div>')
             ->pdf();
 
-        $filename = 'prestart-sign-sheet-' . $dailyPrestart->work_date . '.pdf';
+        $filename = 'prestart-' . $dailyPrestart->work_date . '.pdf';
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"{$filename}\"",
             'Cache-Control' => 'no-store, no-cache, must-revalidate',
             'Pragma' => 'no-cache',
+        ]);
+    }
+
+    public function downloadSignSheet(DailyPrestart $dailyPrestart)
+    {
+        $dailyPrestart->load('location', 'foreman');
+
+        $employees = collect();
+        $location = $dailyPrestart->location;
+        if ($location) {
+            $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
+            if ($kiosk) {
+                $employees = $kiosk->employees()->orderBy('name')->get(['employees.id', 'name', 'preferred_name']);
+            }
+        }
+
+        $html = view('pdf.prestart-sign-only', [
+            'prestart' => $dailyPrestart,
+            'employees' => $employees,
+        ])->render();
+
+        $browsershot = Browsershot::html($html);
+
+        if ($nodeBinary = env('BROWSERSHOT_NODE_BINARY')) {
+            $browsershot->setNodeBinary($nodeBinary);
+        }
+        if ($npmBinary = env('BROWSERSHOT_NPM_BINARY')) {
+            $browsershot->setNpmBinary($npmBinary);
+        }
+        if ($chromePath = env('BROWSERSHOT_CHROME_PATH')) {
+            $browsershot->setChromePath($chromePath);
+        }
+
+        $pdf = $browsershot
+            ->noSandbox()
+            ->format('A4')
+            ->margins(15, 19, 20, 19, 'mm')
+            ->showBackground()
+            ->showBrowserHeaderAndFooter()
+            ->headerHtml('<div></div>')
+            ->footerHtml('<div style="width:100%;text-align:center;font-size:9px;color:#9ca3af;border-top:1px solid #e5e7eb;padding:6px 0;"><span class="pageNumber"></span> of <span class="totalPages"></span></div>')
+            ->pdf();
+
+        $filename = 'prestart-sign-sheet-' . $dailyPrestart->work_date . '.pdf';
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"{$filename}\"",
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
     }
 
