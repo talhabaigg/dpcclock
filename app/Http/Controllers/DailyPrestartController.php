@@ -30,7 +30,14 @@ class DailyPrestartController extends Controller
         $user = auth()->user();
         $canViewAll = $user->hasPermissionTo('prestarts.view-all');
 
-        $query = DailyPrestart::with(['location', 'foreman', 'createdBy', 'signatures.employee'])
+        $query = DailyPrestart::query()
+            ->select(['id', 'work_date', 'location_id', 'foreman_id', 'is_active', 'locked_at', 'manually_unlocked_at'])
+            ->with([
+                'location:id,name,eh_location_id',
+                'foreman:id,name',
+                'signatures:id,daily_prestart_id,employee_id',
+                'signatures.employee:id,name,preferred_name',
+            ])
             ->withCount('signatures');
 
         if (! $canViewAll) {
@@ -58,16 +65,24 @@ class DailyPrestartController extends Controller
                 'label' => Carbon::parse($d)->format('D d/m/Y'),
             ]);
 
+        // Cache kiosk-employee lookups per location — all 25 prestarts at the same
+        // project share a kiosk, so the original code re-queried it 25 times.
+        $kioskEmployeesCache = [];
+
         // For each prestart, get kiosk employees for that location to determine "not signed"
-        $prestarts->getCollection()->transform(function ($prestart) {
+        $prestarts->getCollection()->transform(function ($prestart) use (&$kioskEmployeesCache) {
             $location = $prestart->location;
             $kioskEmployees = collect();
 
             if ($location) {
-                $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
-                if ($kiosk) {
-                    $kioskEmployees = $kiosk->employees()->get(['employees.id', 'name', 'preferred_name']);
+                $ehLocationId = $location->eh_location_id;
+                if (! array_key_exists($ehLocationId, $kioskEmployeesCache)) {
+                    $kiosk = Kiosk::where('eh_location_id', $ehLocationId)->first();
+                    $kioskEmployeesCache[$ehLocationId] = $kiosk
+                        ? $kiosk->employees()->get(['employees.id', 'name', 'preferred_name'])
+                        : collect();
                 }
+                $kioskEmployees = $kioskEmployeesCache[$ehLocationId];
             }
 
             $signedIds = $prestart->signatures->pluck('employee_id')->toArray();
@@ -83,6 +98,8 @@ class DailyPrestartController extends Controller
                     'id' => $emp->id,
                     'name' => $emp->display_name ?? $emp->name,
                 ])->values();
+
+            $prestart->unsetRelation('signatures');
 
             return $prestart;
         });
