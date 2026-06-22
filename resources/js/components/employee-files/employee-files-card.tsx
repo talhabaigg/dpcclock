@@ -1,10 +1,13 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useInitials } from '@/hooks/use-initials';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { router } from '@inertiajs/react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
@@ -264,6 +267,7 @@ function FileRow({
     onDelete: (id: number) => void;
     onPreview: (url: string, mimeType: string | null, filename: string | null) => void;
 }) {
+    const getInitials = useInitials();
     const isExpired = file.status === 'expired';
     const isExpiring = file.status === 'expiring_soon';
 
@@ -314,6 +318,22 @@ function FileRow({
                     )}
                 </div>
             </div>
+
+            {file.uploaded_by && (
+                <TooltipProvider delay={150}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Avatar size="sm" className="shrink-0">
+                                <AvatarFallback className="text-[10px]">{getInitials(file.uploaded_by)}</AvatarFallback>
+                            </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                            Uploaded by {file.uploaded_by}
+                            <span className="opacity-70"> · {formatDate(file.created_at)}</span>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
 
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>

@@ -73,7 +73,7 @@ class FormService
             'assignee_strategy' => $assigneeStrategy,
             'assignee_permission' => $assigneePermission,
             'assignee_user_id' => $assigneeUserId,
-            'expires_at' => now()->addDays(7),
+            'expires_at' => $deliveryMethod === 'email' ? now()->addDays(7) : null,
         ]);
 
         // Deliver based on method. Email path notifies the recipient; in-person

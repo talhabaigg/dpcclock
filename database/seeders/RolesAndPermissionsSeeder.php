@@ -320,6 +320,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'Document Templates' => [
             'document-templates.manage' => 'Create and manage document templates for signing',
             'signing-requests.view' => 'View the central signing-requests tracking page',
+            'form-requests.view' => 'View the central form-requests tracking page',
         ],
 
         // ============================================

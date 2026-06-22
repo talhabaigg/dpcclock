@@ -435,6 +435,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Form Requests (admin actions)
+    Route::middleware('permission:form-requests.view')->group(function () {
+        Route::get('/form-requests', [FormRequestController::class, 'index'])->name('form-requests.index');
+    });
     Route::post('/form-requests/{formRequest}/cancel', [FormRequestController::class, 'cancel'])->name('form-requests.cancel');
     Route::post('/form-requests/{formRequest}/resend', [FormRequestController::class, 'resend'])->name('form-requests.resend');
     Route::post('/form-requests/{formRequest}/submit-internal', [FormRequestController::class, 'submitInternal'])->name('form-requests.submit-internal');

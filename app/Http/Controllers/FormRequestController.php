@@ -19,6 +19,135 @@ class FormRequestController extends Controller
         private FormResolverRegistry $resolverRegistry,
     ) {}
 
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'status' => 'nullable|array',
+            'status.*' => 'string',
+            'delivery_method' => 'nullable|in:email,in_app,in_person',
+            'formable_type' => 'nullable|string',
+            'sent_by' => 'nullable|integer',
+            'recipient' => 'nullable|string|max:255',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date',
+            'q' => 'nullable|string|max:255',
+            'per_page' => 'nullable|integer|in:10,25,50,100',
+        ]);
+
+        $perPage = $filters['per_page'] ?? 25;
+        unset($filters['per_page']);
+
+        $query = FormRequest::query()
+            ->with(['formTemplate:id,name', 'sentBy:id,name', 'assigneeUser:id,name', 'formable'])
+            ->latest();
+
+        if (! empty($filters['status'])) {
+            $query->whereIn('status', $filters['status']);
+        } else {
+            $query->where('status', '!=', 'cancelled');
+        }
+        if (! empty($filters['delivery_method'])) {
+            $query->where('delivery_method', $filters['delivery_method']);
+        }
+        if (! empty($filters['formable_type'])) {
+            $query->where('formable_type', $filters['formable_type']);
+        }
+        if (! empty($filters['sent_by'])) {
+            $query->where('sent_by', $filters['sent_by']);
+        }
+        if (! empty($filters['recipient'])) {
+            $query->where('recipient_name', $filters['recipient']);
+        }
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+        if (! empty($filters['q'])) {
+            $q = $filters['q'];
+            $query->where(function ($qq) use ($q) {
+                $qq->where('recipient_name', 'like', "%{$q}%")
+                    ->orWhere('recipient_email', 'like', "%{$q}%")
+                    ->orWhereHas('formTemplate', fn ($tq) => $tq->where('name', 'like', "%{$q}%"));
+            });
+        }
+
+        $formRequests = $query->paginate($perPage)->withQueryString();
+
+        $senders = \App\Models\User::query()
+            ->whereIn('id', FormRequest::query()->whereNotNull('sent_by')->distinct()->pluck('sent_by'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $recipients = FormRequest::query()
+            ->whereNotNull('recipient_name')
+            ->where('recipient_name', '!=', '')
+            ->distinct()
+            ->orderBy('recipient_name')
+            ->pluck('recipient_name')
+            ->map(fn ($name) => ['value' => $name, 'label' => $name])
+            ->values();
+
+        return \Inertia\Inertia::render('form-requests/index', [
+            'formRequests' => $formRequests->through(fn ($fr) => [
+                'id' => $fr->id,
+                'status' => $fr->status,
+                'delivery_method' => $fr->delivery_method,
+                'recipient_name' => $fr->recipient_name,
+                'recipient_email' => $fr->recipient_email,
+                'created_at' => $fr->created_at?->toISOString(),
+                'submitted_at' => $fr->submitted_at?->toISOString(),
+                'opened_at' => $fr->opened_at?->toISOString(),
+                'expires_at' => $fr->expires_at?->toISOString(),
+                'formable_type' => $fr->formable_type,
+                'formable_id' => $fr->formable_id,
+                'formable_label' => $this->resolveFormableLabel($fr),
+                'formable_url' => $this->resolveFormableUrl($fr),
+                'form_template' => $fr->formTemplate ? [
+                    'id' => $fr->formTemplate->id,
+                    'name' => $fr->formTemplate->name,
+                ] : null,
+                'sent_by' => $fr->sentBy ? ['id' => $fr->sentBy->id, 'name' => $fr->sentBy->name] : null,
+                'assignee_user' => $fr->assigneeUser ? ['id' => $fr->assigneeUser->id, 'name' => $fr->assigneeUser->name] : null,
+                'assignee_permission' => $fr->assignee_permission,
+            ]),
+            'filters' => $filters,
+            'senders' => $senders,
+            'recipients' => $recipients,
+            'formableTypes' => [
+                ['value' => \App\Models\EmploymentApplication::class, 'label' => 'Employment Application'],
+                ['value' => \App\Models\Injury::class, 'label' => 'Injury'],
+            ],
+            'statuses' => ['pending', 'sent', 'opened', 'submitted', 'cancelled'],
+        ]);
+    }
+
+    private function resolveFormableLabel(FormRequest $fr): ?string
+    {
+        $formable = $fr->formable;
+        if (! $formable) return null;
+        if ($formable instanceof \App\Models\EmploymentApplication) {
+            return trim(($formable->first_name ?? '') . ' ' . ($formable->surname ?? '')) ?: null;
+        }
+        if ($formable instanceof \App\Models\Injury) {
+            return method_exists($formable, 'displayLabel') ? $formable->displayLabel() : "Injury #{$formable->id}";
+        }
+        return null;
+    }
+
+    private function resolveFormableUrl(FormRequest $fr): ?string
+    {
+        if (! $fr->formable_id) return null;
+        if ($fr->formable_type === \App\Models\EmploymentApplication::class) {
+            return url("/employment-applications/{$fr->formable_id}");
+        }
+        if ($fr->formable_type === \App\Models\Injury::class) {
+            return url("/injury-register/{$fr->formable_id}");
+        }
+        return null;
+    }
+
     /**
      * Stream a signature image attached to a FormRequest. Redirects to a fresh
      * temporary S3 URL when the media disk supports it, otherwise falls back

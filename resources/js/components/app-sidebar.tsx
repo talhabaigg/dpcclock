@@ -273,6 +273,12 @@ const office = [
                 icon: FileText,
                 permission: 'signing-requests.view',
             },
+            {
+                name: 'Form Requests',
+                url: '/form-requests',
+                icon: FileText,
+                permission: 'form-requests.view',
+            },
         ],
     },
 ];
