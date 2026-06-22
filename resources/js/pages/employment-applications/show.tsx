@@ -51,7 +51,7 @@ import {
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { lazy, Suspense, useCallback, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
     FormFillPane,
     FormResponsePane,
@@ -1264,6 +1264,18 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [showSubmissionPane, setShowSubmissionPane] = useState(false);
     const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
     const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
+
+    // Deep-link from the dashboard: ?form_request=ID auto-opens the fill pane
+    // so users land directly on the form they were sent to complete.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const requestedId = Number(params.get('form_request'));
+        if (!requestedId || !formRequests) return;
+        const target = formRequests.find((fr) => fr.id === requestedId);
+        if (target && target.status !== 'submitted' && target.status !== 'cancelled' && canFillFormRequest(target)) {
+            setFillingFormRequest(target);
+        }
+    }, []);
 
     const [commentBody, setCommentBody] = useState('');
     const [attachments, setAttachments] = useState<File[]>([]);

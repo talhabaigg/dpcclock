@@ -199,7 +199,7 @@ class InjuryController extends Controller
 
     public function show(Injury $injury)
     {
-        $injury->load(['employee', 'location', 'representative', 'creator', 'media', 'formRequests.formTemplate.fields', 'formRequests.media']);
+        $injury->load(['employee', 'location', 'representative', 'creator', 'media', 'formRequests.formTemplate.fields', 'formRequests.media', 'formRequests.assigneeUser:id,name']);
 
         $formRequests = $injury->formRequests->map(fn ($fr) => [
             'id' => $fr->id,
@@ -211,6 +211,7 @@ class InjuryController extends Controller
             'assignee_strategy' => $fr->assignee_strategy,
             'assignee_permission' => $fr->assignee_permission,
             'assignee_user_id' => $fr->assignee_user_id,
+            'assignee_user_name' => $fr->assigneeUser?->name,
             'submitted_at' => $fr->submitted_at?->toISOString(),
             'opened_at' => $fr->opened_at?->toISOString(),
             'expires_at' => $fr->expires_at?->toISOString(),

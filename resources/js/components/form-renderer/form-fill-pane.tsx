@@ -45,6 +45,7 @@ export interface FormRequestData {
     assignee_strategy: string | null;
     assignee_permission: string | null;
     assignee_user_id?: number | null;
+    assignee_user_name?: string | null;
     subject_type?: string | null;
     subject_id?: number | null;
     submitted_at: string | null;
@@ -269,7 +270,13 @@ export function FormFillPane({
                 <div className="min-w-0">
                     <p className="truncate text-xs font-semibold">{formRequest.form_template?.name ?? 'Form'}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                        Originally sent to <span className="text-foreground">{formRequest.recipient_name}</span>
+                        {formRequest.assignee_strategy === 'user' && formRequest.assignee_user_name ? (
+                            <>Assigned to <span className="text-foreground">{formRequest.assignee_user_name}</span></>
+                        ) : formRequest.assignee_strategy === 'permission' && formRequest.assignee_permission ? (
+                            <>Anyone with <span className="text-foreground">{formRequest.assignee_permission}</span></>
+                        ) : (
+                            <>Sent to <span className="text-foreground">{formRequest.recipient_name}</span></>
+                        )}
                     </p>
                 </div>
                 <button

@@ -70,6 +70,11 @@ class FormRequest extends Model implements HasMedia
         return $this->belongsTo(User::class, 'sent_by');
     }
 
+    public function assigneeUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assignee_user_id');
+    }
+
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');

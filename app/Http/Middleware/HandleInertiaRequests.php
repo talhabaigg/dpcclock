@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\KioskDevice;
+use App\Services\InboxService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
@@ -126,6 +127,7 @@ class HandleInertiaRequests extends Middleware
                         'created_at' => $n->created_at,
                     ]),
             ] : ['unreadCount' => 0, 'latest' => []],
+            'inbox' => fn () => app(InboxService::class)->pendingForUser($request->user()),
             'passkeyPrompt' => fn () => $request->user() ? [
                 'hasPasskeys' => $request->user()->passkeys()->exists(),
                 'dismissed' => (bool) $request->user()->passkey_prompt_dismissed,

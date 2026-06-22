@@ -372,6 +372,18 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
 
     const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
     const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
+
+    // Deep-link from the dashboard: ?form_request=ID auto-opens the fill pane
+    // so users land directly on the form they were sent to complete.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const requestedId = Number(params.get('form_request'));
+        if (!requestedId) return;
+        const target = pendingFormRequests.find((fr) => fr.id === requestedId);
+        if (target && canFillFormRequest(target)) {
+            setFillingFormRequest(target);
+        }
+    }, []);
     const [sendingTestNotification, setSendingTestNotification] = useState(false);
     const [testPopoverOpen, setTestPopoverOpen] = useState(false);
     const [testPhone, setTestPhone] = useState('');
@@ -744,7 +756,13 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="min-w-0 flex-1">
                                                             <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
-                                                            <p className="mt-0.5 text-xs text-muted-foreground">Awaiting {fr.recipient_name}</p>
+                                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                                                {fr.assignee_strategy === 'user' && fr.assignee_user_name
+                                                                    ? `Assigned to ${fr.assignee_user_name}`
+                                                                    : fr.assignee_strategy === 'permission' && fr.assignee_permission
+                                                                        ? `Anyone with ${fr.assignee_permission}`
+                                                                        : `Awaiting ${fr.recipient_name}`}
+                                                            </p>
                                                         </div>
                                                         <Badge variant="secondary" className="shrink-0 text-xs">Pending</Badge>
                                                     </div>

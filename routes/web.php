@@ -22,6 +22,7 @@ use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\ToolboxSignController;
 use App\Http\Controllers\ToolboxTalkController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
 use App\Http\Controllers\DrawingController;
@@ -212,16 +213,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/internal-sign/{token}/batch', [\App\Http\Controllers\InternalSignController::class, 'submitBatch'])->name('internal-sign.submit-batch');
 
     // Dashboard - requires dashboard.view permission
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard/main');
-    })->name('dashboard')->middleware('permission:dashboard.view');
+    Route::get('dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard')
+        ->middleware('permission:dashboard.view');
 
     // AI chat conversation deep-link (renders the dashboard with an active conversation)
-    Route::get('ai/chat/{conversationId}', function (string $conversationId) {
-        return Inertia::render('dashboard/main', [
-            'conversationId' => $conversationId,
-        ]);
-    })
+    Route::get('ai/chat/{conversationId}', [DashboardController::class, 'aiChat'])
         ->where('conversationId', '[A-Za-z0-9_-]+')
         ->name('ai.chat.show')
         ->middleware('permission:dashboard.view');
