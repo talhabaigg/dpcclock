@@ -82,7 +82,8 @@ export function RequestSignatureDialog({ open, onOpenChange, locationId, swmsIds
                     swms_ids: swmsIds,
                     employee_ids: Array.from(selectedEmployees),
                     delivery_method: delivery,
-                    recipient_phone: delivery === 'sms' ? phone : null,
+                    recipient_phone:
+                        delivery === 'sms' && selectedEmployees.size === 1 ? phone : null,
                 }),
             });
             if (!res.ok) {
@@ -99,10 +100,7 @@ export function RequestSignatureDialog({ open, onOpenChange, locationId, swmsIds
         }
     };
 
-    const canSubmit =
-        swmsIds.length > 0 &&
-        selectedEmployees.size > 0 &&
-        (delivery !== 'sms' || phone.trim().length > 0);
+    const canSubmit = swmsIds.length > 0 && selectedEmployees.size > 0;
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -179,9 +177,9 @@ export function RequestSignatureDialog({ open, onOpenChange, locationId, swmsIds
                                     onClick={() => setDelivery('sms')}
                                 />
                             </div>
-                            {delivery === 'sms' && (
+                            {delivery === 'sms' && selectedEmployees.size === 1 && (
                                 <div className="mt-3">
-                                    <Label htmlFor="recipient-phone">Mobile number</Label>
+                                    <Label htmlFor="recipient-phone">Override mobile number (optional)</Label>
                                     <Input
                                         id="recipient-phone"
                                         type="tel"
@@ -189,12 +187,15 @@ export function RequestSignatureDialog({ open, onOpenChange, locationId, swmsIds
                                         onChange={(e) => setPhone(e.target.value)}
                                         placeholder="+61..."
                                     />
-                                    {selectedEmployees.size === 1 && (
-                                        <p className="text-muted-foreground mt-1 text-xs">
-                                            Defaults to the selected worker&apos;s mobile if blank.
-                                        </p>
-                                    )}
+                                    <p className="text-muted-foreground mt-1 text-xs">
+                                        Leave blank to text this worker&apos;s saved mobile. Use this only if the number on file is wrong.
+                                    </p>
                                 </div>
+                            )}
+                            {delivery === 'sms' && selectedEmployees.size > 1 && (
+                                <p className="text-muted-foreground mt-2 text-xs">
+                                    Each worker will be texted at their saved mobile number.
+                                </p>
                             )}
                         </div>
 

@@ -37,8 +37,14 @@ class SwmsSigningController extends Controller
             'employee_ids' => 'required|array|min:1',
             'employee_ids.*' => 'integer|exists:employees,id',
             'delivery_method' => 'required|in:ipad,qr,sms',
-            'recipient_phone' => 'required_if:delivery_method,sms|nullable|string|max:32',
+            'recipient_phone' => 'nullable|string|max:32',
         ]);
+
+        // Override phone only makes sense for a single worker — for multi-worker
+        // requests each worker gets the SMS at their own saved mobile.
+        if (! empty($data['recipient_phone']) && count($data['employee_ids']) > 1) {
+            abort(422, 'A custom phone number can only be used when sending to a single worker. Leave it blank to text each worker at their own number.');
+        }
 
         // For each selected SWMS, target its current active version. SWMS without an
         // active version are silently skipped (workers can't sign nothing).
@@ -68,10 +74,25 @@ class SwmsSigningController extends Controller
 
         if ($data['delivery_method'] === SwmsSigningRequest::DELIVERY_SMS) {
             $shortUrl = $this->shortLinks->create($publicUrl, 60 * 24 * 7);
-            $expiry = $signingRequest->expires_at?->format('d/m/Y') ?? '';
-            $body = "SWMS signing requested for {$location->name}. Sign here: {$shortUrl}"
-                . ($expiry ? " (expires {$expiry})" : '');
-            $this->smsService->send($data['recipient_phone'], $body);
+            $expiry = $signingRequest->expires_at?->format('d/m/Y');
+            $senderName = auth()->user()?->name ?? 'Superior Group';
+            $body = "{$senderName} from Superior Group has requested your signature on SWMS for {$location->name}. Sign here: {$shortUrl}"
+                . ($expiry ? ". Expires {$expiry}." : '.');
+
+            $override = trim((string) ($data['recipient_phone'] ?? ''));
+            if ($override !== '') {
+                // Supervisor entered an explicit override — only that number receives the SMS
+                $this->smsService->send($override, $body);
+            } else {
+                // Default: send to every selected worker's mobile_number on file
+                $recipients = \App\Models\Employee::whereIn('id', $data['employee_ids'])
+                    ->whereNotNull('mobile_number')
+                    ->where('mobile_number', '!=', '')
+                    ->pluck('mobile_number');
+                foreach ($recipients as $phone) {
+                    $this->smsService->send($phone, $body);
+                }
+            }
         }
 
         return response()->json([
