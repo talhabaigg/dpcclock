@@ -20,6 +20,8 @@ use App\Http\Controllers\GlMonthSummaryReportController;
 use App\Http\Controllers\GlTransactionDetailReportController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
+use App\Http\Controllers\SwmsController;
+use App\Http\Controllers\SwmsVersionController;
 use App\Http\Controllers\ToolboxSignController;
 use App\Http\Controllers\ToolboxTalkController;
 use App\Http\Controllers\DashboardController;
@@ -1478,6 +1480,49 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/daily-prestarts/{dailyPrestart}/sign-sheet', [DailyPrestartController::class, 'downloadSignSheet'])->name('daily-prestarts.sign-sheet');
         Route::post('/daily-prestarts/{dailyPrestart}/absence-notes/{employee}', [DailyPrestartController::class, 'updateAbsenceNote'])->name('daily-prestarts.update-absence-note');
         Route::post('/daily-prestarts/{dailyPrestart}/absence-notes-bulk', [DailyPrestartController::class, 'bulkUpdateAbsenceNote'])->name('daily-prestarts.bulk-update-absence-note');
+    });
+
+    // ============================================
+    // SWMS (Safety Work Method Statements)
+    // ============================================
+    Route::middleware('permission:swms.view')->group(function () {
+        // Smart entry — redirects to scoped index if user has 1 location, else renders picker
+        Route::get('/swms', [SwmsController::class, 'selectLocation'])->name('swms.select-location');
+
+        // Scoped under a project
+        Route::prefix('/locations/{location}/swms')->name('locations.swms.')->group(function () {
+            Route::get('/', [SwmsController::class, 'index'])->name('index');
+            Route::get('/create', [SwmsController::class, 'create'])->name('create')
+                ->middleware('permission:swms.create');
+            Route::post('/', [SwmsController::class, 'store'])->name('store')
+                ->middleware('permission:swms.create');
+            Route::get('/{swms}', [SwmsController::class, 'show'])->name('show');
+            Route::get('/{swms}/edit', [SwmsController::class, 'edit'])->name('edit')
+                ->middleware('permission:swms.edit');
+            Route::put('/{swms}', [SwmsController::class, 'update'])->name('update')
+                ->middleware('permission:swms.edit');
+            Route::delete('/{swms}', [SwmsController::class, 'destroy'])->name('destroy')
+                ->middleware('permission:swms.delete');
+
+            Route::post('/{swms}/versions', [SwmsVersionController::class, 'store'])->name('versions.store')
+                ->middleware('permission:swms.create');
+
+            // Version-level routes — scoped under location+swms for clearer URLs and consistent breadcrumbs
+            Route::prefix('/{swms}/versions/{version}')->name('versions.')->group(function () {
+                Route::get('/', [SwmsVersionController::class, 'show'])->name('show');
+                Route::put('/', [SwmsVersionController::class, 'update'])->name('update')
+                    ->middleware('permission:swms.edit');
+                Route::post('/archive', [SwmsVersionController::class, 'archive'])->name('archive')
+                    ->middleware('permission:swms.archive');
+                Route::delete('/', [SwmsVersionController::class, 'destroy'])->name('destroy')
+                    ->middleware('permission:swms.delete');
+                Route::get('/document', [SwmsVersionController::class, 'downloadDocument'])->name('document');
+                Route::get('/sign-sheet', [SwmsVersionController::class, 'downloadSignSheet'])->name('sign-sheet');
+                Route::post('/sign', [SwmsVersionController::class, 'sign'])->name('sign')
+                    ->middleware('permission:swms.sign');
+                Route::get('/signatures/{signature}/download', [SwmsVersionController::class, 'downloadSignature'])->name('signatures.download');
+            });
+        });
     });
 
     // ============================================

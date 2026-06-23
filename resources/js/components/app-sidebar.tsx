@@ -302,6 +302,12 @@ const safety = [
                 permission: 'prestarts.view',
             },
             {
+                name: 'SWMS',
+                url: '/swms',
+                icon: ShieldCheck,
+                permission: 'swms.view',
+            },
+            {
                 name: 'Toolbox Talks',
                 url: '/toolbox-talks',
                 icon: HardHat,

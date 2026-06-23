@@ -211,4 +211,9 @@ class Location extends Model
     {
         return $this->hasMany(ProjectNonWorkDay::class);
     }
+
+    public function swms()
+    {
+        return $this->hasMany(Swms::class);
+    }
 }

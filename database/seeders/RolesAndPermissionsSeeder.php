@@ -96,6 +96,19 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // SWMS (Safety Work Method Statements)
+        // ============================================
+        'SWMS' => [
+            'swms.view' => 'View SWMS',
+            'swms.view-all' => 'View all SWMS (across all projects)',
+            'swms.create' => 'Create SWMS and upload new versions',
+            'swms.edit' => 'Edit SWMS metadata',
+            'swms.delete' => 'Delete SWMS or draft versions',
+            'swms.archive' => 'Archive SWMS versions',
+            'swms.sign' => 'Sign SWMS versions on behalf of employees',
+        ],
+
+        // ============================================
         // TRAININGS
         // ============================================
         'Trainings' => [
@@ -487,6 +500,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.create',
             'prestarts.edit',
             'prestarts.delete',
+            // SWMS
+            'swms.view',
+            'swms.view-all',
+            'swms.create',
+            'swms.edit',
+            'swms.delete',
+            'swms.archive',
+            'swms.sign',
             // Trainings
             'trainings.view',
             'trainings.create',
@@ -539,6 +560,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'prestarts.view',
             'prestarts.create',
             'prestarts.edit',
+            // SWMS
+            'swms.view',
+            'swms.create',
+            'swms.edit',
+            'swms.archive',
+            'swms.sign',
             // Trainings
             'trainings.view',
             'trainings.create',
