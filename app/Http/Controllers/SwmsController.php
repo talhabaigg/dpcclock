@@ -71,11 +71,25 @@ class SwmsController extends Controller
 
         $availableLocations = $this->scopedLocations()->orderBy('name')->get(['id', 'name']);
 
+        // Kiosk employees for the "request signatures" bulk dialog
+        $kioskEmployees = collect();
+        $kiosk = Kiosk::where('eh_location_id', $location->eh_location_id)->first();
+        if ($kiosk) {
+            $kioskEmployees = $kiosk->employees()->orderBy('name')
+                ->get(['employees.id', 'name', 'preferred_name', 'mobile_number'])
+                ->map(fn ($e) => [
+                    'id' => $e->id,
+                    'name' => $e->display_name ?? $e->name,
+                    'phone' => $e->mobile_number,
+                ])->values();
+        }
+
         return Inertia::render('swms/index', [
             'location' => ['id' => $location->id, 'name' => $location->name],
             'swms' => $swmsList,
             'filters' => array_merge($request->only(['q']), ['per_page' => $perPage]),
             'availableLocations' => $availableLocations,
+            'kioskEmployees' => $kioskEmployees,
         ]);
     }
 

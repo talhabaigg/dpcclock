@@ -144,10 +144,9 @@
         <thead>
             <tr>
                 <th style="width: 5%">#</th>
-                <th style="width: 30%">Worker</th>
-                <th style="width: 30%">Signature</th>
-                <th style="width: 20%">Signed</th>
-                <th style="width: 15%">Original</th>
+                <th style="width: 35%">Worker</th>
+                <th style="width: 35%">Signature</th>
+                <th style="width: 25%">Signed</th>
             </tr>
         </thead>
         <tbody>
@@ -185,17 +184,10 @@
                         @endif
                     </td>
                     <td>{{ $sig->signed_at ? Carbon::parse($sig->signed_at)->format('d/m/Y H:i') : '' }}</td>
-                    <td>
-                        @if($sig->original_signed_at)
-                            {{ Carbon::parse($sig->original_signed_at)->format('d/m/Y') }}
-                        @else
-                            <span style="color:#9ca3af;">—</span>
-                        @endif
-                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="empty">No signatures recorded for this version yet.</td>
+                    <td colspan="4" class="empty">No signatures recorded for this version yet.</td>
                 </tr>
             @endforelse
         </tbody>

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, EllipsisVertical } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, EllipsisVertical } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface Person {
@@ -295,13 +295,12 @@ export default function SwmsVersionShow({ location, swms, version, signed, unsig
                                     >
                                         Origin <SortIcon k="carried" />
                                     </TableHead>
-                                    <TableHead className="w-24"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sortedSigned.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
+                                        <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
                                             Nobody has signed this version yet.
                                         </TableCell>
                                     </TableRow>
@@ -331,15 +330,6 @@ export default function SwmsVersionShow({ location, swms, version, signed, unsig
                                                 </Link>
                                             ) : (
                                                 <span className="text-muted-foreground">Signed here</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {s.signature_download_url && (
-                                                <Button asChild variant="ghost" size="sm">
-                                                    <a href={s.signature_download_url}>
-                                                        <Download className="h-4 w-4" />
-                                                    </a>
-                                                </Button>
                                             )}
                                         </TableCell>
                                     </TableRow>

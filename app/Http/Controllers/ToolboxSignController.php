@@ -208,36 +208,6 @@ class ToolboxSignController extends Controller
 
     private function checkPin(?Kiosk $kiosk, Employee $employee, string $pin): bool
     {
-        if (env('APP_ENV') === 'local') {
-            return $employee->pin === $pin;
-        }
-
-        if (! $kiosk) {
-            return false;
-        }
-
-        $apiKey = config('services.employment_hero.api_key');
-        $kioskExternalId = $kiosk->eh_kiosk_id;
-        $employeeExternalId = $employee->eh_employee_id;
-
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic '.base64_encode($apiKey.':'),
-            'Content-Type' => 'Application/Json',
-        ])->post("https://api.yourpayroll.com.au/api/v2/business/431152/kiosk/{$kioskExternalId}/checkpin", [
-            'employeeId' => (int) $employeeExternalId,
-            'pin' => (string) $pin,
-        ]);
-
-        if (! $response->successful()) {
-            Log::warning('Toolbox sign-in PIN check failed', [
-                'status' => $response->status(),
-                'kiosk' => $kioskExternalId,
-                'employee' => $employeeExternalId,
-            ]);
-
-            return false;
-        }
-
-        return true;
+        return app(\App\Services\KioskPinService::class)->verify($kiosk, $employee, $pin);
     }
 }

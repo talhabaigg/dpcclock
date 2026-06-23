@@ -21,6 +21,7 @@ use App\Http\Controllers\GlTransactionDetailReportController;
 use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\SwmsController;
+use App\Http\Controllers\SwmsSigningController;
 use App\Http\Controllers\SwmsVersionController;
 use App\Http\Controllers\ToolboxSignController;
 use App\Http\Controllers\ToolboxTalkController;
@@ -131,6 +132,14 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/t/{token}/ipad', [ToolboxSignController::class, 'ipad'])->name('toolbox-sign.ipad');
     Route::post('/t/{token}/verify-pin', [ToolboxSignController::class, 'verifyPin'])->name('toolbox-sign.verify-pin')->middleware('throttle:20,1');
     Route::post('/t/{token}/submit', [ToolboxSignController::class, 'submit'])->name('toolbox-sign.submit')->middleware('throttle:10,1');
+});
+
+// SWMS bulk signing — public routes (token-based, no auth)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/swms-sign/{token}', [SwmsSigningController::class, 'show'])->name('swms-sign.show');
+    Route::get('/swms-sign/{token}/document/{version}', [SwmsSigningController::class, 'downloadDocument'])->name('swms-sign.document');
+    Route::post('/swms-sign/{token}/verify-pin', [SwmsSigningController::class, 'verifyPin'])->name('swms-sign.verify-pin')->middleware('throttle:60,1');
+    Route::post('/swms-sign/{token}/sign', [SwmsSigningController::class, 'sign'])->name('swms-sign.sign')->middleware('throttle:10,1');
 });
 
 // Public form routes (no auth — token-based)
@@ -1506,6 +1515,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::post('/{swms}/versions', [SwmsVersionController::class, 'store'])->name('versions.store')
                 ->middleware('permission:swms.create');
+
+            // Bulk signing request — creates a token URL, optionally sends SMS
+            Route::post('/signing-requests', [SwmsSigningController::class, 'store'])
+                ->name('signing-requests.store')
+                ->middleware('permission:swms.sign');
 
             // Version-level routes — scoped under location+swms for clearer URLs and consistent breadcrumbs
             Route::prefix('/{swms}/versions/{version}')->name('versions.')->group(function () {

@@ -2,6 +2,7 @@ import { SuccessAlertFlash } from '@/components/alert-flash';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -13,8 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, ChevronsLeft, ChevronsRight, ChevronsUpDown, EllipsisVertical, Plus, Signature } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { RequestSignatureDialog, type KioskEmployee } from './request-signature-dialog';
 
 const LAST_LOCATION_KEY = 'swms.lastLocationId';
 
@@ -55,6 +57,7 @@ interface Props {
     swms: Paginated;
     filters: { q?: string; per_page?: number };
     availableLocations: Location[];
+    kioskEmployees: KioskEmployee[];
 }
 
 function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
@@ -68,7 +71,7 @@ function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
     return pages;
 }
 
-export default function SwmsIndex({ location, swms, filters, availableLocations }: Props) {
+export default function SwmsIndex({ location, swms, filters, availableLocations, kioskEmployees }: Props) {
     const { flash, auth } = usePage<{ flash: { success?: string; error?: string }; auth: { permissions?: string[] } }>().props as {
         flash: { success?: string; error?: string };
         auth: { permissions?: string[] };
@@ -88,6 +91,39 @@ export default function SwmsIndex({ location, swms, filters, availableLocations 
     const [locationOpen, setLocationOpen] = useState(false);
     const [search, setSearch] = useState(filters.q ?? '');
     const [deleteTarget, setDeleteTarget] = useState<SwmsRow | null>(null);
+    const [selectedSwms, setSelectedSwms] = useState<Set<string>>(new Set());
+    const [signRequestOpen, setSignRequestOpen] = useState(false);
+
+    const onlyRowsWithActive = useMemo(
+        () => swms.data.filter((r) => r.active_version !== null),
+        [swms.data],
+    );
+    const allSignableSelected =
+        onlyRowsWithActive.length > 0 && onlyRowsWithActive.every((r) => selectedSwms.has(r.id));
+
+    const toggleRow = (id: string) => {
+        const next = new Set(selectedSwms);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedSwms(next);
+    };
+
+    const toggleAll = () => {
+        if (allSignableSelected) {
+            setSelectedSwms(new Set());
+        } else {
+            setSelectedSwms(new Set(onlyRowsWithActive.map((r) => r.id)));
+        }
+    };
+
+    const selectedNames = swms.data
+        .filter((r) => selectedSwms.has(r.id))
+        .map((r) => r.name);
+
+    // Clear selection when navigating (per shadcn-clean-index-design rule 9)
+    useEffect(() => {
+        setSelectedSwms(new Set());
+    }, [filters.q, swms.current_page]);
 
     // Remember the last project the user visited so /swms auto-redirects next time
     useEffect(() => {
@@ -191,10 +227,35 @@ export default function SwmsIndex({ location, swms, filters, availableLocations 
                     )}
                 </div>
 
+                {selectedSwms.size > 0 && can('swms.sign') && (
+                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                        <div className="flex items-center gap-3 text-sm">
+                            <span className="font-medium">{selectedSwms.size} selected</span>
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedSwms(new Set())}>
+                                Clear
+                            </Button>
+                        </div>
+                        <Button size="sm" onClick={() => setSignRequestOpen(true)}>
+                            <Signature className="mr-2 h-4 w-4" />
+                            Request signatures
+                        </Button>
+                    </div>
+                )}
+
                 <div className="rounded-md border">
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                {can('swms.sign') && (
+                                    <TableHead className="w-10">
+                                        <Checkbox
+                                            checked={allSignableSelected}
+                                            onCheckedChange={toggleAll}
+                                            aria-label="Select all SWMS with an active version"
+                                            disabled={onlyRowsWithActive.length === 0}
+                                        />
+                                    </TableHead>
+                                )}
                                 <TableHead>Name</TableHead>
                                 <TableHead>Active version</TableHead>
                                 <TableHead>Signed</TableHead>
@@ -205,7 +266,7 @@ export default function SwmsIndex({ location, swms, filters, availableLocations 
                         <TableBody>
                             {swms.data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={can('swms.sign') ? 6 : 5} className="text-muted-foreground py-8 text-center">
                                         No SWMS for {location.name} yet.
                                     </TableCell>
                                 </TableRow>
@@ -215,8 +276,19 @@ export default function SwmsIndex({ location, swms, filters, availableLocations 
                                 const primaryHref = row.active_version
                                     ? `${swmsBase}/versions/${row.active_version.id}`
                                     : swmsBase;
+                                const canSelect = row.active_version !== null;
                                 return (
                                 <TableRow key={row.id}>
+                                    {can('swms.sign') && (
+                                        <TableCell className="w-10">
+                                            <Checkbox
+                                                checked={selectedSwms.has(row.id)}
+                                                onCheckedChange={() => toggleRow(row.id)}
+                                                aria-label={`Select ${row.name}`}
+                                                disabled={!canSelect}
+                                            />
+                                        </TableCell>
+                                    )}
                                     <TableCell>
                                         <Link href={primaryHref} className="font-medium hover:underline">
                                             {row.name}
@@ -372,6 +444,15 @@ export default function SwmsIndex({ location, swms, filters, availableLocations 
                 confirmLabel="Delete"
                 onConfirm={confirmDelete}
                 variant="destructive"
+            />
+
+            <RequestSignatureDialog
+                open={signRequestOpen}
+                onOpenChange={setSignRequestOpen}
+                locationId={location.id}
+                swmsIds={Array.from(selectedSwms)}
+                swmsNames={selectedNames}
+                employees={kioskEmployees}
             />
         </AppLayout>
     );
