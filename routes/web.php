@@ -623,6 +623,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/locations/{location}/production-data/preview', [ProductionUploadController::class, 'preview'])->name('locations.production-data.preview');
             Route::post('/locations/{location}/production-data/upload', [ProductionUploadController::class, 'upload'])->name('locations.production-data.upload');
             Route::get('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'show'])->name('locations.production-data.show');
+            Route::patch('/locations/{location}/production-data/{upload}/bid', [ProductionUploadController::class, 'setBid'])->name('locations.production-data.setBid');
             Route::delete('/locations/{location}/production-data/{upload}', [ProductionUploadController::class, 'destroy'])->name('locations.production-data.destroy');
         });
 

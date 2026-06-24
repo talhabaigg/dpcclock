@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { JobSummary, Location, type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Eye, EyeOff, Pencil, Printer, RotateCcw, X } from 'lucide-react';
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, ChevronsUpDown, Eye, EyeOff, Pencil, Printer, RotateCcw, Star, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Line, LineChart, Tooltip as RechartsTooltip, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import ProductionAnalysis from './production-analysis';
@@ -111,6 +111,8 @@ interface DashboardProps {
     productionUploads: ProductionUploadOption[];
     selectedUploadId: number | null;
     productionLines: ProductionRow[];
+    bidUploadId: number | null;
+    bidReportDate: string | null;
     industrialActionHours: number;
     varianceTrend: VarianceTrendPoint[];
     premierCostByCategory: { wages: number; foreman: number; leading_hands: number; labourer: number };
@@ -146,6 +148,8 @@ export default function Dashboard({
     productionUploads,
     selectedUploadId,
     productionLines,
+    bidUploadId,
+    bidReportDate,
     industrialActionHours,
     varianceTrend,
     premierCostByCategory,
@@ -582,6 +586,15 @@ export default function Dashboard({
                 {/* ── Production Data tab ── */}
                 {activeTab === 'production-data' && (
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-hidden sm:gap-2">
+                        {bidUploadId && bidReportDate && (
+                            <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800 sm:text-xs">
+                                <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                                <span>
+                                    Bid baseline: <span className="font-medium">{formatReportDate(bidReportDate)}</span>
+                                </span>
+                                <span className="text-amber-600">— red rows show cost codes from bid not in this report</span>
+                            </div>
+                        )}
                         {/* Variance trend chart */}
                         {varianceTrend.length > 0 && (
                             <div className="bg-background shrink-0 rounded-md border p-2 sm:p-3">

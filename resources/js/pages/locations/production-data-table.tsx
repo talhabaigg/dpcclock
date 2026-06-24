@@ -25,7 +25,7 @@ interface ProductionDataTableProps<TData, TValue> {
     onRowSelect?: (selection: RowSelection | null) => void;
 }
 
-const numericKeys = ['est_hours', 'earned_hours', 'used_hours', 'actual_variance', 'remaining_hours', 'projected_hours', 'projected_variance'];
+const numericKeys = ['bid_hours', 'est_hours', 'earned_hours', 'used_hours', 'actual_variance', 'remaining_hours', 'projected_hours', 'projected_variance'];
 
 function computeSums<TData>(rows: Row<TData>[]): Record<string, number> {
     const sums: Record<string, number> = {};
@@ -294,11 +294,13 @@ export function ProductionDataTable<TData, TValue>({ columns, data, groupBy, onG
                                                 group.rows.map((row) => {
                                                     const orig = row.original as Record<string, unknown>;
                                                     const rowSel = isRowSelected(selectedRow, orig);
+                                                    const isMissing = Boolean(orig.is_missing_from_selected);
                                                     return (
                                                         <TableRow
                                                             key={row.id}
-                                                            className={`cursor-pointer ${rowSel ? 'ring-2 ring-yellow-400 ring-inset' : ''}`}
+                                                            className={`cursor-pointer ${rowSel ? 'ring-2 ring-yellow-400 ring-inset' : ''} ${isMissing ? 'bg-destructive/10 hover:bg-destructive/15' : ''}`}
                                                             onClick={() => handleDetailRowClick(row)}
+                                                            title={isMissing ? 'Cost code present in bid baseline but missing from selected report' : undefined}
                                                         >
                                                             {row.getVisibleCells().map((cell) => (
                                                                 <TableCell key={cell.id}>
@@ -322,11 +324,13 @@ export function ProductionDataTable<TData, TValue>({ columns, data, groupBy, onG
                             table.getRowModel().rows.map((row) => {
                                 const orig = row.original as Record<string, unknown>;
                                 const rowSel = isRowSelected(selectedRow, orig);
+                                const isMissing = Boolean(orig.is_missing_from_selected);
                                 return (
                                     <TableRow
                                         key={row.id}
-                                        className={`cursor-pointer ${rowSel ? 'ring-2 ring-yellow-400 ring-inset' : ''}`}
+                                        className={`cursor-pointer ${rowSel ? 'ring-2 ring-yellow-400 ring-inset' : ''} ${isMissing ? 'bg-destructive/10 hover:bg-destructive/15' : ''}`}
                                         onClick={() => handleDetailRowClick(row)}
+                                        title={isMissing ? 'Cost code present in bid baseline but missing from selected report' : undefined}
                                     >
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>

@@ -22,11 +22,13 @@ class ProductionUpload extends Model
         'status',
         'error_summary',
         'uploaded_by',
+        'is_bid',
     ];
 
     protected $casts = [
         'report_date' => 'date',
         'error_summary' => 'array',
+        'is_bid' => 'boolean',
     ];
 
     public function location(): BelongsTo

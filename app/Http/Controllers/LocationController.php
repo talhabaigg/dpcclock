@@ -654,6 +654,78 @@ class LocationController extends Controller
                 : null;
         }
 
+        // Bid baseline integration — annotate each line with bid_hours
+        // and append placeholder rows for cost codes only present in the bid report.
+        $bidUpload = $location->productionUploads()
+            ->where('is_bid', true)
+            ->where('status', 'completed')
+            ->first();
+
+        $bidReportDate = null;
+        if ($selectedUpload && $bidUpload) {
+            $bidReportDate = $bidUpload->report_date?->format('Y-m-d');
+
+            // Bid est_hours aggregated by exact (area, cost_code) pair
+            $bidRows = ProductionUploadLine::where('production_upload_id', $bidUpload->id)
+                ->where('cost_code', '!=', '')
+                ->select(
+                    'area',
+                    'cost_code',
+                    DB::raw('MAX(code_description) as code_description'),
+                    DB::raw('SUM(est_hours) as bid_est_hours'),
+                )
+                ->groupBy('area', 'cost_code')
+                ->get();
+
+            $bidByPair = [];
+            $bidCostCodes = [];
+            foreach ($bidRows as $row) {
+                $key = $row->area . '|' . $row->cost_code;
+                $bidByPair[$key] = [
+                    'area' => $row->area,
+                    'cost_code' => $row->cost_code,
+                    'code_description' => $row->code_description,
+                    'bid_est_hours' => round((float) $row->bid_est_hours, 2),
+                ];
+                $bidCostCodes[$row->cost_code] = true;
+            }
+
+            $selectedCostCodes = $productionLines->pluck('cost_code')->unique()->filter()->values()->all();
+
+            // Annotate selected lines with bid_hours
+            $productionLines = $productionLines->map(function ($line) use ($bidByPair) {
+                $arr = $line->toArray();
+                $key = $line->area . '|' . $line->cost_code;
+                $arr['bid_hours'] = $bidByPair[$key]['bid_est_hours'] ?? 0.0;
+                $arr['is_missing_from_selected'] = false;
+                return $arr;
+            });
+
+            // Append placeholder rows for cost codes only in bid (not present in any selected line)
+            $missingCostCodes = array_diff(array_keys($bidCostCodes), $selectedCostCodes);
+            if (!empty($missingCostCodes)) {
+                foreach ($bidByPair as $pair) {
+                    if (in_array($pair['cost_code'], $missingCostCodes, true)) {
+                        $productionLines->push([
+                            'area' => $pair['area'],
+                            'code_description' => $pair['code_description'],
+                            'cost_code' => $pair['cost_code'],
+                            'est_hours' => 0.0,
+                            'percent_complete' => 0.0,
+                            'earned_hours' => 0.0,
+                            'used_hours' => 0.0,
+                            'actual_variance' => 0.0,
+                            'remaining_hours' => 0.0,
+                            'projected_hours' => 0.0,
+                            'projected_variance' => 0.0,
+                            'bid_hours' => $pair['bid_est_hours'],
+                            'is_missing_from_selected' => true,
+                        ]);
+                    }
+                }
+            }
+        }
+
         // Variance trend across ALL uploads — grouped by report_date + area + cost_code
         $varianceTrend = [];
         if ($productionUploads->isNotEmpty()) {
@@ -757,6 +829,8 @@ class LocationController extends Controller
             'productionUploads' => $productionUploads,
             'selectedUploadId' => $selectedUpload?->id,
             'productionLines' => $productionLines,
+            'bidUploadId' => $bidUpload?->id,
+            'bidReportDate' => $bidReportDate,
             'industrialActionHours' => round($industrialActionHours, 1),
             'varianceTrend' => $varianceTrend,
             'premierCostByCategory' => $premierCostByCategory,

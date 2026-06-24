@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
@@ -10,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Head, router, useHttp, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { AlertTriangle, ArrowLeft, BarChart3, CalendarIcon, Check, Eye, Loader2, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarIcon, Check, EllipsisVertical, Eye, Loader2, Star, Trash2, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
 import { toast } from 'sonner';
@@ -30,6 +31,7 @@ type ProductionUploadData = {
     skipped_rows: number;
     error_rows: number;
     status: string;
+    is_bid: boolean;
     uploaded_by: number;
     uploader: { id: number; name: string } | null;
     error_summary: RowError[] | null;
@@ -110,6 +112,7 @@ export default function ProductionData() {
     const uploadHttp = useHttp({});
     const detailHttp = useHttp({});
     const deleteHttp = useHttp({});
+    const bidHttp = useHttp({});
 
     // Upload wizard state
     const [wizardOpen, setWizardOpen] = useState(false);
@@ -236,6 +239,20 @@ export default function ProductionData() {
         });
     };
 
+    const handleToggleBid = (upload: ProductionUploadData) => {
+        const next = !upload.is_bid;
+        bidHttp.setData({ is_bid: next });
+        bidHttp.patch(`/locations/${location.id}/production-data/${upload.id}/bid`, {
+            onSuccess: () => {
+                toast.success(next ? 'Marked as bid baseline.' : 'Bid baseline cleared.');
+                router.reload();
+            },
+            onError: () => {
+                toast.error('Failed to update bid status.');
+            },
+        });
+    };
+
     return (
         <LocationLayout location={location} activeTab="production-data">
             <Head title={`Production Data - ${location.name}`} />
@@ -277,7 +294,14 @@ export default function ProductionData() {
                                 ) : (
                                     uploads.map((upload) => (
                                         <TableRow key={upload.id} className="group">
-                                            <TableCell className="pl-3 font-medium sm:pl-6">{formatDate(upload.report_date)}</TableCell>
+                                            <TableCell className="pl-3 font-medium sm:pl-6">
+                                                <div className="flex items-center gap-1.5">
+                                                    {upload.is_bid && (
+                                                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" aria-label="Bid baseline" />
+                                                    )}
+                                                    <span>{formatDate(upload.report_date)}</span>
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="text-muted-foreground max-w-[200px] truncate text-sm">
                                                 {upload.original_filename}
                                             </TableCell>
@@ -302,32 +326,50 @@ export default function ProductionData() {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant={upload.status === 'completed' ? 'default' : 'destructive'} className="text-xs">
-                                                    {upload.status}
-                                                </Badge>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Badge variant={upload.status === 'completed' ? 'default' : 'destructive'} className="text-xs">
+                                                        {upload.status}
+                                                    </Badge>
+                                                    {upload.is_bid && (
+                                                        <Badge variant="outline" className="border-amber-400 text-amber-700 text-xs">
+                                                            Bid
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground text-sm">{upload.uploader?.name ?? 'Unknown'}</TableCell>
                                             <TableCell className="pr-3 text-right sm:pr-6">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-8 w-8"
-                                                        onClick={() => handleViewDetail(upload)}
-                                                        title="View details"
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="text-muted-foreground hover:text-destructive h-8 w-8 opacity-0 transition-all group-hover:opacity-100"
-                                                        onClick={() => handleDelete(upload.id)}
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <EllipsisVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-44 whitespace-nowrap">
+                                                        <DropdownMenuItem onClick={() => handleViewDetail(upload)}>
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            View details
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleToggleBid(upload)}>
+                                                            <Star
+                                                                className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    upload.is_bid && 'fill-amber-400 text-amber-500',
+                                                                )}
+                                                            />
+                                                            {upload.is_bid ? 'Unset as bid' : 'Set as bid'}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive"
+                                                            onClick={() => handleDelete(upload.id)}
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))

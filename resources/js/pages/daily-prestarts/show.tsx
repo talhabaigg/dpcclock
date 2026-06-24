@@ -16,7 +16,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import type { JSONContent } from '@tiptap/react';
 import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, Download, EllipsisVertical, File as FileIcon, FileImage, FileText, GraduationCap, Lock, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -481,7 +481,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
         if (!targetId) return;
         if (!sectionLinks.some((s) => s.id === targetId)) return;
         setActiveSection(targetId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
     const actionsMenu = (

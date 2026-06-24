@@ -16,6 +16,8 @@ export type ProductionRow = {
     remaining_hours: number;
     projected_hours: number;
     projected_variance: number;
+    bid_hours?: number;
+    is_missing_from_selected?: boolean;
 };
 
 function fmt(val: number): string {
@@ -35,6 +37,19 @@ const multiSelectFilter: FilterFn<ProductionRow> = (row, columnId, filterValue: 
 export type GroupByMode = 'none' | 'area' | 'cost_code';
 
 const numericColumns: ColumnDef<ProductionRow>[] = [
+    {
+        accessorKey: 'bid_hours',
+        header: ({ column }) => (
+            <Button variant="ghost" className="-ml-2" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+                Bid Hrs
+                <ArrowUpDown className="ml-1 h-4 w-4" />
+            </Button>
+        ),
+        cell: ({ row }) => {
+            const value = (row.getValue('bid_hours') as number | undefined) ?? 0;
+            return <div className="text-right tabular-nums text-xs text-amber-700">{value ? fmt(value) : '—'}</div>;
+        },
+    },
     {
         accessorKey: 'est_hours',
         header: ({ column }) => (

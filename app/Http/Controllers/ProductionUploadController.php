@@ -40,6 +40,7 @@ class ProductionUploadController extends Controller
 
         $uploads = $location->productionUploads()
             ->with('uploader:id,name')
+            ->orderByDesc('is_bid')
             ->orderByDesc('report_date')
             ->orderByDesc('created_at')
             ->get();
@@ -168,6 +169,33 @@ class ProductionUploadController extends Controller
             'upload' => $upload,
             'lines' => $upload->lines()->get(),
         ]);
+    }
+
+    /**
+     * Mark or unmark a report as the bid baseline (JSON API).
+     * Only one upload per location can be the bid baseline at a time.
+     */
+    public function setBid(Request $request, Location $location, ProductionUpload $upload)
+    {
+        abort_if($upload->location_id !== $location->id, 404);
+
+        $request->validate([
+            'is_bid' => 'required|boolean',
+        ]);
+
+        $isBid = $request->boolean('is_bid');
+
+        DB::transaction(function () use ($location, $upload, $isBid) {
+            if ($isBid) {
+                ProductionUpload::where('location_id', $location->id)
+                    ->where('id', '!=', $upload->id)
+                    ->where('is_bid', true)
+                    ->update(['is_bid' => false]);
+            }
+            $upload->update(['is_bid' => $isBid]);
+        });
+
+        return response()->json(['success' => true, 'is_bid' => $isBid]);
     }
 
     /**
