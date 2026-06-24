@@ -653,6 +653,8 @@ class InjuryController extends Controller
             'claimStatuses' => Injury::CLAIM_STATUS_OPTIONS,
             'capacities' => Injury::CAPACITY_OPTIONS,
             'employmentStatuses' => Injury::EMPLOYMENT_STATUS_OPTIONS,
+            'bodyCategories' => Injury::BODY_CATEGORY_OPTIONS,
+            'bodyLocations' => Injury::BODY_LOCATION_OPTIONS,
         ];
     }
 

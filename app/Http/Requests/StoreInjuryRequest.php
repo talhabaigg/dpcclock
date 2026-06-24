@@ -27,6 +27,8 @@ class StoreInjuryRequest extends FormRequest
             'reported_at' => ['nullable', 'date'],
             'reported_to' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'body_category' => ['nullable', 'string', Rule::in(array_keys(Injury::BODY_CATEGORY_OPTIONS))],
+            'body_location' => ['nullable', 'string', Rule::in(array_keys(Injury::flattenBodyLocations()))],
             'emergency_services' => ['boolean'],
             'emergency_services_details' => ['nullable', 'string', 'max:500'],
             'work_cover_claim' => ['boolean'],

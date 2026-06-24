@@ -30,6 +30,8 @@ class Injury extends Model implements HasMedia
         'reported_to',
         'location_of_incident',
         'description',
+        'body_category',
+        'body_location',
         'emergency_services',
         'emergency_services_details',
         'work_cover_claim',
@@ -101,7 +103,7 @@ class Injury extends Model implements HasMedia
         'corrective_actions' => 'array',
     ];
 
-    protected $appends = ['incident_label', 'report_type_label', 'computed_suitable_duties_days'];
+    protected $appends = ['incident_label', 'report_type_label', 'body_category_label', 'body_location_label', 'computed_suitable_duties_days'];
 
     // --- Enum option constants ---
 
@@ -248,6 +250,64 @@ class Injury extends Model implements HasMedia
         'employment_ended' => 'Employment Ended',
     ];
 
+    public const BODY_CATEGORY_OPTIONS = [
+        'head_and_face' => 'Head & Face',
+        'upper_body' => 'Upper Body',
+        'upper_extremity' => 'Upper Extremity',
+        'lower_extremity' => 'Lower Extremity',
+        'internal_systemic' => 'Internal/Systemic',
+    ];
+
+    public const BODY_LOCATION_OPTIONS = [
+        'head_and_face' => [
+            'head' => 'Head',
+            'scalp' => 'Scalp',
+            'forehead' => 'Forehead',
+            'eye' => 'Eye',
+            'ear' => 'Ear',
+            'nose' => 'Nose',
+            'mouth' => 'Mouth',
+            'jaw' => 'Jaw',
+            'neck' => 'Neck',
+        ],
+        'upper_body' => [
+            'shoulder' => 'Shoulder',
+            'chest' => 'Chest',
+            'upper_back' => 'Upper Back',
+            'lower_back' => 'Lower Back',
+            'abdomen' => 'Abdomen',
+            'pelvis' => 'Pelvis',
+            'hip' => 'Hip',
+        ],
+        'upper_extremity' => [
+            'upper_arm' => 'Upper Arm',
+            'elbow' => 'Elbow',
+            'forearm' => 'Forearm',
+            'wrist' => 'Wrist',
+            'hand' => 'Hand',
+            'thumb' => 'Thumb',
+            'index_finger' => 'Index Finger',
+            'middle_finger' => 'Middle Finger',
+            'ring_finger' => 'Ring Finger',
+            'little_finger' => 'Little Finger',
+        ],
+        'lower_extremity' => [
+            'thigh' => 'Thigh',
+            'knee' => 'Knee',
+            'shin' => 'Shin',
+            'calf' => 'Calf',
+            'ankle' => 'Ankle',
+            'foot' => 'Foot',
+            'heel' => 'Heel',
+            'toes' => 'Toes',
+        ],
+        'internal_systemic' => [
+            'respiratory_system' => 'Respiratory System',
+            'skin' => 'Skin',
+            'multiple_body_parts' => 'Multiple Body Parts',
+        ],
+    ];
+
     public const CORRECTIVE_ACTION_OPTIONS = [
         'swms_review' => 'SWMS Review with individual / workgroup',
         'amend_swms' => 'Amend SWMS (controls relating to the incident / injury to be reviewed and amended)',
@@ -270,6 +330,8 @@ class Injury extends Model implements HasMedia
         'reported_to' => 'Reported To',
         'location_of_incident' => 'Location of Incident',
         'description' => 'Description',
+        'body_category' => 'Body Category',
+        'body_location' => 'Body Location',
         'emergency_services' => 'Emergency Services Called',
         'emergency_services_details' => 'Emergency Services Details',
         'work_cover_claim' => 'WorkCover Claim',
@@ -396,6 +458,8 @@ class Injury extends Model implements HasMedia
         return match ($field) {
             'incident' => self::INCIDENT_OPTIONS[$value] ?? $value,
             'report_type' => self::REPORT_TYPE_OPTIONS[$value] ?? $value,
+            'body_category' => self::BODY_CATEGORY_OPTIONS[$value] ?? $value,
+            'body_location' => self::flattenBodyLocations()[$value] ?? $value,
             'treatment_external' => self::TREATMENT_EXTERNAL_OPTIONS[$value] ?? $value,
             'location_id' => Location::find($value)?->name ?? $value,
             'employee_id' => Employee::find($value)?->preferred_name ?? Employee::find($value)?->name ?? $value,
@@ -422,6 +486,27 @@ class Injury extends Model implements HasMedia
     public function getReportTypeLabelAttribute(): ?string
     {
         return self::REPORT_TYPE_OPTIONS[$this->report_type] ?? $this->report_type;
+    }
+
+    public function getBodyCategoryLabelAttribute(): ?string
+    {
+        return $this->body_category ? (self::BODY_CATEGORY_OPTIONS[$this->body_category] ?? $this->body_category) : null;
+    }
+
+    public function getBodyLocationLabelAttribute(): ?string
+    {
+        return $this->body_location ? (self::flattenBodyLocations()[$this->body_location] ?? $this->body_location) : null;
+    }
+
+    public static function flattenBodyLocations(): array
+    {
+        $flat = [];
+        foreach (self::BODY_LOCATION_OPTIONS as $locations) {
+            foreach ($locations as $key => $label) {
+                $flat[$key] = $label;
+            }
+        }
+        return $flat;
     }
 
     public function getComputedSuitableDutiesDaysAttribute(): int

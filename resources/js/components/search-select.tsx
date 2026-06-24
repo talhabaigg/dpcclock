@@ -68,7 +68,7 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                 </span>
             </ComboboxTrigger>
 
-            <ComboboxContent className="w-(--anchor-width) p-0">
+            <ComboboxContent className="w-(--anchor-width) min-w-(--anchor-width) max-w-(--anchor-width) p-0">
                 <ComboboxInput placeholder={`Search ${optionName}...`} className="h-9" showTrigger={false} />
                 <ComboboxEmpty>No {optionName.toLowerCase()} found.</ComboboxEmpty>
                 <ComboboxList>

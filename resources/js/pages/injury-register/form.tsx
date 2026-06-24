@@ -61,6 +61,8 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
         reported_at: injury?.reported_at ? injury.reported_at.slice(0, 16) : nowLocal,
         reported_to: injury?.reported_to ?? '',
         description: injury?.description ?? '',
+        body_category: injury?.body_category ?? '',
+        body_location: injury?.body_location ?? '',
         emergency_services: injury?.emergency_services ?? false,
         emergency_services_details: injury?.emergency_services_details ?? '',
         treatment: injury?.treatment ?? true,
@@ -372,6 +374,43 @@ export default function InjuryForm({ injury, locations, employees, options }: Pr
                             <div className="space-y-4">
                                 <h2 className="text-lg font-semibold">Detailed account of what occured from the person involved in the incident</h2>
                                 <Textarea className={textareaClass} value={data.description} onChange={(e) => setData('description', e.target.value)} rows={5} placeholder="Describe what happened in detail..." />
+                            </div>
+
+                            <div className="space-y-4">
+                                <h2 className="text-lg font-semibold">Affected body part <span className="text-muted-foreground text-sm font-normal">(optional)</span></h2>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Category</Label>
+                                        <SearchSelect
+                                            options={Object.entries(options.bodyCategories).map(([value, label]) => ({ value, label }))}
+                                            optionName="category"
+                                            selectedOption={data.body_category}
+                                            onValueChange={(v) => {
+                                                setData('body_category', v);
+                                                setData('body_location', '');
+                                            }}
+                                            className="h-12 text-base"
+                                        />
+                                        {fieldError('body_category') && <p className="text-sm text-red-500">{fieldError('body_category')}</p>}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className={labelClass}>Body Location</Label>
+                                        <SearchSelect
+                                            options={
+                                                data.body_category && options.bodyLocations[data.body_category]
+                                                    ? Object.entries(options.bodyLocations[data.body_category]).map(([value, label]) => ({ value, label }))
+                                                    : []
+                                            }
+                                            optionName="body location"
+                                            selectedOption={data.body_location}
+                                            onValueChange={(v) => setData('body_location', v)}
+                                            disabled={!data.body_category}
+                                            placeholder={data.body_category ? 'Select body location' : 'Select a category first'}
+                                            className="h-12 text-base"
+                                        />
+                                        {fieldError('body_location') && <p className="text-sm text-red-500">{fieldError('body_location')}</p>}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="space-y-4">

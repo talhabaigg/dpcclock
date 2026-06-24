@@ -13,6 +13,10 @@ export interface Injury {
     reported_to: string | null;
     location_of_incident: string | null;
     description: string | null;
+    body_category: string | null;
+    body_location: string | null;
+    body_category_label: string | null;
+    body_location_label: string | null;
     emergency_services: boolean;
     emergency_services_details: string | null;
     work_cover_claim: boolean;
@@ -102,6 +106,8 @@ export interface InjuryFormOptions {
     claimStatuses: Record<string, string>;
     capacities: Record<string, string>;
     employmentStatuses: Record<string, string>;
+    bodyCategories: Record<string, string>;
+    bodyLocations: Record<string, Record<string, string>>;
 }
 
 export interface InjuryFilters {

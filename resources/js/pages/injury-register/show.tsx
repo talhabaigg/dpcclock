@@ -897,6 +897,8 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                                 <SidebarField label="Occurred" value={fmtDate(injury.occurred_at)} />
                                 <SidebarField label="Location" value={injury.location?.name} />
                                 <SidebarField label="Specific Location" value={injury.location_of_incident} />
+                                <SidebarField label="Body Category" value={injury.body_category_label} />
+                                <SidebarField label="Body Location" value={injury.body_location_label} />
                             </div>
 
                             <Separator />

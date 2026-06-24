@@ -330,6 +330,23 @@
     <div class="description-box">{{ $injury->description ?? '—' }}</div>
     </div>
 
+    {{-- Affected Body Part --}}
+    @if($injury->body_category || $injury->body_location)
+    <div class="section">
+    <h2>Affected Body Part</h2>
+    <table class="fields">
+        <tr>
+            <td class="label">Category</td>
+            <td class="value">{{ $injury->body_category_label ?? '—' }}</td>
+        </tr>
+        <tr>
+            <td class="label">Body Location</td>
+            <td class="value">{{ $injury->body_location_label ?? '—' }}</td>
+        </tr>
+    </table>
+    </div>
+    @endif
+
     {{-- Emergency Services --}}
     <div class="section">
     <h2>Were Emergency Services Called to the Incident?</h2>
