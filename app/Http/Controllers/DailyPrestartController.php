@@ -344,17 +344,38 @@ class DailyPrestartController extends Controller
             ->forDate($dailyPrestart->work_date)
             ->get();
 
+        $mentionedUserLoad = fn ($q) => $q
+            ->select('users.id', 'users.name', 'users.email', 'users.phone', 'users.position', 'users.disabled_at');
+
+        $mapMentioned = fn ($c) => $c->mentionedUsers->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'phone' => $u->phone,
+            'position' => $u->position,
+            'is_active' => $u->disabled_at === null,
+        ])->values();
+
         $comments = $dailyPrestart->comments()
-            ->with(['user', 'media', 'replies.user', 'replies.media'])
+            ->with([
+                'user',
+                'media',
+                'mentionedUsers' => $mentionedUserLoad,
+                'replies.user',
+                'replies.media',
+                'replies.mentionedUsers' => $mentionedUserLoad,
+            ])
             ->whereNull('parent_id')
             ->orderBy('created_at')
             ->get()
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'body' => $c->body,
+                'body_json' => $c->body_json,
                 'user' => $c->user ? ['id' => $c->user->id, 'name' => $c->user->name] : null,
                 'metadata' => $c->metadata,
                 'created_at' => $c->created_at->toISOString(),
+                'mentioned_users' => $mapMentioned($c),
                 'attachments' => $c->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'file_name' => $m->file_name,
@@ -364,9 +385,11 @@ class DailyPrestartController extends Controller
                 'replies' => $c->replies->map(fn ($r) => [
                     'id' => $r->id,
                     'body' => $r->body,
+                    'body_json' => $r->body_json,
                     'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name] : null,
                     'metadata' => $r->metadata,
                     'created_at' => $r->created_at->toISOString(),
+                    'mentioned_users' => $mapMentioned($r),
                     'attachments' => $r->getMedia('attachments')->map(fn ($m) => [
                         'id' => $m->id,
                         'file_name' => $m->file_name,

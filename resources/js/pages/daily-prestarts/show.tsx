@@ -3,16 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import { CommentBody, type MentionedUser } from '@/components/comments/comment-body';
 import WeatherWidget from '@/components/weather-widget';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, usePage, router } from '@inertiajs/react';
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, Download, File as FileIcon, FileImage, FileText, GraduationCap, Lock, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import type { JSONContent } from '@tiptap/react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, Download, EllipsisVertical, File as FileIcon, FileImage, FileText, GraduationCap, Lock, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface MediaItem {
     id: number;
@@ -79,9 +83,11 @@ interface Attachment {
 interface CommentData {
     id: number;
     body: string;
+    body_json: JSONContent | null;
     metadata: Record<string, unknown> | null;
     user: { id: number; name: string } | null;
     created_at: string;
+    mentioned_users?: MentionedUser[];
     attachments: Attachment[];
     replies?: CommentData[];
 }
@@ -237,7 +243,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
                         </div>
                     )}
                 </div>
-                {comment.body && <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>}
+                <CommentBody doc={comment.body_json} fallback={comment.body} mentionedUsers={comment.mentioned_users} />
                 <AttachmentList attachments={comment.attachments} onPreview={onPreviewAttachment} />
             </div>
         </div>
@@ -259,45 +265,51 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
     const currentUserId = auth?.user?.id;
     const can = (p: string) => permissions.includes(p);
 
-    const [commentBody, setCommentBody] = useState('');
+    const [commentDoc, setCommentDoc] = useState<JSONContent | null>(null);
     const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
     const [postingComment, setPostingComment] = useState(false);
-    const commentFileInputRef = useRef<HTMLInputElement>(null);
 
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
-    const [editCommentBody, setEditCommentBody] = useState('');
+    const [editDoc, setEditDoc] = useState<JSONContent | null>(null);
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
 
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
     const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+    const [activeSection, setActiveSection] = useState<string>('content');
+
+    const docHasContent = (doc: JSONContent | null) => {
+        if (!doc) return false;
+        return /"text"|"mention"/.test(JSON.stringify(doc));
+    };
 
     const sortedComments = useMemo(() => {
         return commentSort === 'newest' ? [...comments].reverse() : comments;
     }, [comments, commentSort]);
 
     function handlePostComment() {
-        if (!commentBody.trim() && commentAttachments.length === 0) return;
+        if (!docHasContent(commentDoc) && commentAttachments.length === 0) return;
         setPostingComment(true);
         const formData = new FormData();
         formData.append('commentable_type', 'daily_prestart');
         formData.append('commentable_id', String(prestart.id));
-        formData.append('body', commentBody);
+        if (commentDoc) formData.append('body_json', JSON.stringify(commentDoc));
         commentAttachments.forEach((f) => formData.append('attachments[]', f));
         router.post(route('comments.store'), formData, {
             preserveScroll: true,
-            onSuccess: () => { setCommentBody(''); setCommentAttachments([]); },
+            forceFormData: true,
+            onSuccess: () => { setCommentDoc(null); setCommentAttachments([]); },
             onFinish: () => setPostingComment(false),
         });
     }
 
     function handleEditComment(comment: CommentData) {
         setEditingComment(comment);
-        setEditCommentBody(comment.body);
+        setEditDoc(comment.body_json ?? null);
     }
 
     function submitEditComment() {
-        if (!editingComment || !editCommentBody.trim()) return;
-        router.patch(route('comments.update', editingComment.id), { body: editCommentBody }, {
+        if (!editingComment || !docHasContent(editDoc)) return;
+        router.patch(route('comments.update', editingComment.id), { body_json: editDoc }, {
             preserveScroll: true,
             onSuccess: () => setEditingComment(null),
         });
@@ -443,60 +455,96 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
     const safetyConcernMedia = prestart.media.filter((m) => m.collection_name === 'safety_concern_files');
     const buildersPrestartMedia = prestart.media.filter((m) => m.collection_name === 'builders_prestart_file');
 
+    const hasActivities = !!prestart.activities && prestart.activities.length > 0;
+    const hasSafetyConcerns = !!prestart.safety_concerns && prestart.safety_concerns.length > 0;
+    const hasTrainings = !!trainings && trainings.length > 0;
+    const hasBuildersPrestart = buildersPrestartMedia.length > 0;
+
+    const sectionLinks: { id: string; label: string; count?: number }[] = [
+        { id: 'content', label: 'Content' },
+        { id: 'comments', label: 'Comments', count: comments.length },
+        { id: 'signed', label: 'Signed', count: prestart.signatures.length },
+        { id: 'not-signed', label: 'Not Signed', count: unsignedEmployees.length },
+    ];
+
+    const showSection = (id: string) => {
+        setActiveSection(id);
+        history.replaceState(null, '', `#${id}`);
+        window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+
+    // Deep-link: respect #section or ?comment=N (notifications open Comments).
+    useEffect(() => {
+        const hash = window.location.hash.replace('#', '');
+        const params = new URLSearchParams(window.location.search);
+        const targetId = hash || (params.has('comment') ? 'comments' : null);
+        if (!targetId) return;
+        if (!sectionLinks.some((s) => s.id === targetId)) return;
+        setActiveSection(targetId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const actionsMenu = (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Actions
+                    <EllipsisVertical className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+                {can('prestarts.edit') && !prestart.is_locked && (
+                    <DropdownMenuItem asChild>
+                        <Link href={`/daily-prestarts/${prestart.id}/edit`}>
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Edit
+                        </Link>
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild>
+                    <a href={`/daily-prestarts/${prestart.id}/pdf`} target="_blank" rel="noreferrer">
+                        <Download className="mr-2 h-3.5 w-3.5" />
+                        Download PDF
+                    </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <a href={`/daily-prestarts/${prestart.id}/sign-sheet`} target="_blank" rel="noreferrer">
+                        <Download className="mr-2 h-3.5 w-3.5" />
+                        Sign Sheet
+                    </a>
+                </DropdownMenuItem>
+                {can('prestarts.edit') && (
+                    <DropdownMenuItem
+                        onClick={() => router.post(`/daily-prestarts/${prestart.id}/${prestart.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
+                    >
+                        {prestart.is_locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
+                        {prestart.is_locked ? 'Unlock' : 'Lock'}
+                    </DropdownMenuItem>
+                )}
+                {can('prestarts.delete') && !prestart.is_locked && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setShowDeleteConfirm(true)}
+                        >
+                            <Trash2 className="mr-2 h-3.5 w-3.5" />
+                            Delete
+                        </DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
+    const activeSectionMeta = sectionLinks.find((s) => s.id === activeSection);
+    const activeSectionLabel = activeSectionMeta?.label ?? '';
+    const activeSectionCount = activeSectionMeta?.count;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Prestart - ${prestart.location?.name ?? ''} ${prestart.work_date_formatted ?? prestart.work_date}`} />
-            <div className="mx-auto w-full max-w-4xl space-y-6 p-4">
-                {/* Header */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-lg font-semibold">Daily Prestart</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {prestart.location?.name ?? '-'} &middot; {prestart.work_date_formatted ?? prestart.work_date}
-                            {prestart.foreman && <> &middot; {prestart.foreman.name}</>}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {prestart.is_locked && <Badge variant="outline">Locked</Badge>}
-                        <Badge variant={prestart.is_active ? 'default' : 'secondary'}>{prestart.is_active ? 'Active' : 'Inactive'}</Badge>
-                        {can('prestarts.edit') && !prestart.is_locked && (
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/daily-prestarts/${prestart.id}/edit`}>
-                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                    Edit
-                                </Link>
-                            </Button>
-                        )}
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={`/daily-prestarts/${prestart.id}/pdf`} target="_blank" rel="noreferrer">
-                                <Download className="mr-1.5 h-3.5 w-3.5" />
-                                PDF
-                            </a>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={`/daily-prestarts/${prestart.id}/sign-sheet`} target="_blank" rel="noreferrer">
-                                <Download className="mr-1.5 h-3.5 w-3.5" />
-                                Sign Sheet
-                            </a>
-                        </Button>
-                        {can('prestarts.edit') && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => router.post(`/daily-prestarts/${prestart.id}/${prestart.is_locked ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
-                            >
-                                {prestart.is_locked ? <Unlock className="mr-1.5 h-3.5 w-3.5" /> : <Lock className="mr-1.5 h-3.5 w-3.5" />}
-                                {prestart.is_locked ? 'Unlock' : 'Lock'}
-                            </Button>
-                        )}
-                        {can('prestarts.delete') && !prestart.is_locked && (
-                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setShowDeleteConfirm(true)}>
-                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                Delete
-                            </Button>
-                        )}
-                    </div>
-                </div>
+            <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
 
                 <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
                     <DialogContent>
@@ -511,258 +559,347 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                     </DialogContent>
                 </Dialog>
 
-                {/* Weather */}
-                <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} />
+                {/* Section nav + content grid */}
+                <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                    <nav
+                        aria-label="Sections"
+                        className="lg:sticky lg:top-4 lg:self-start"
+                    >
+                        <ul className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
+                            {sectionLinks.map((s) => {
+                                const active = activeSection === s.id;
+                                return (
+                                    <li key={s.id} className="shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => showSection(s.id)}
+                                            className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                                                active
+                                                    ? 'bg-muted text-foreground font-medium'
+                                                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                                            }`}
+                                        >
+                                            <span>{s.label}</span>
+                                            {typeof s.count === 'number' && (
+                                                <span className={`text-xs ${active ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>
+                                                    {s.count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </nav>
 
-                {/* Comments / Activity */}
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="flex items-center gap-2">
-                            <MessageSquare className="h-5 w-5" />
-                            Comments
-                        </CardTitle>
-                        {comments.length > 0 && (
-                            <button
-                                type="button"
-                                className="text-primary flex items-center gap-1 text-xs font-medium"
-                                onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
-                            >
-                                {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
-                                <ArrowRight className={`h-3 w-3 transition-transform ${commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90'}`} />
-                            </button>
-                        )}
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {/* Comment Input — above activity, like injuries */}
-                        <div>
-                            {commentAttachments.length > 0 && (
-                                <div className="mb-2 flex flex-wrap gap-2">
-                                    {commentAttachments.map((file, i) => (
-                                        <div key={i} className="bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs">
-                                            <FileText className="h-3 w-3" />
-                                            <span className="max-w-[120px] truncate">{file.name}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setCommentAttachments(commentAttachments.filter((_, j) => j !== i))}
-                                                className="text-muted-foreground hover:text-foreground"
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex items-end gap-2">
-                                <input
-                                    ref={commentFileInputRef}
-                                    type="file"
-                                    multiple
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        setCommentAttachments([...commentAttachments, ...Array.from(e.target.files ?? [])]);
-                                        e.target.value = '';
-                                    }}
-                                />
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-10 w-10 shrink-0"
-                                    type="button"
-                                    onClick={() => commentFileInputRef.current?.click()}
-                                >
-                                    <Paperclip className="h-4 w-4" />
-                                </Button>
-                                <Textarea
-                                    placeholder="Enter message here..."
-                                    className="min-h-[40px] flex-1 resize-none"
-                                    rows={1}
-                                    value={commentBody}
-                                    onChange={(e) => setCommentBody(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                            e.preventDefault();
-                                            handlePostComment();
-                                        }
-                                    }}
-                                />
-                                <Button
-                                    size="icon"
-                                    className="h-10 w-10 shrink-0"
-                                    onClick={handlePostComment}
-                                    disabled={postingComment || (!commentBody.trim() && commentAttachments.length === 0)}
-                                >
-                                    <Send className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-
-                        {comments.length === 0 ? (
-                            <p className="text-muted-foreground py-4 text-center text-sm italic">
-                                No comments yet.
-                            </p>
-                        ) : (
-                            <div className="space-y-4 border-t pt-4">
-                                {sortedComments.map((comment) => (
-                                    <CommentBubble
-                                        key={comment.id}
-                                        comment={comment}
-                                        currentUserId={currentUserId}
-                                        onEdit={handleEditComment}
-                                        onDelete={(id) => setDeletingCommentId(id)}
-                                        onPreviewAttachment={setPreviewAttachment}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Activities */}
-                {prestart.activities && prestart.activities.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>General Site Works / Activities</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="list-disc space-y-1 pl-5">
-                                {prestart.activities.map((a, i) => (
-                                    <li key={i}>{a.description}</li>
-                                ))}
-                            </ul>
-                            {activityMedia.length > 0 && (
-                                <div className="mt-4">
-                                    <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
-                                    <div className="space-y-1">
-                                        {activityMedia.map((m) => (
-                                            <a
-                                                key={m.id}
-                                                href={m.original_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block text-sm text-blue-600 hover:underline"
-                                            >
-                                                {m.file_name}
-                                            </a>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Daily Checklist */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Daily Checklist</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ol className="space-y-2">
-                            {DAILY_CHECKLIST.map((item, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm">
-                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                                    <span>{item}</span>
-                                </li>
-                            ))}
-                        </ol>
-                    </CardContent>
-                </Card>
-
-                {/* Safety Concerns */}
-                {prestart.safety_concerns && prestart.safety_concerns.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Safety Concerns / Incidents</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="list-disc space-y-1 pl-5">
-                                {prestart.safety_concerns.map((s, i) => (
-                                    <li key={i}>{s.description}</li>
-                                ))}
-                            </ul>
-                            {safetyConcernMedia.length > 0 && (
-                                <div className="mt-4">
-                                    <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
-                                    <div className="space-y-1">
-                                        {safetyConcernMedia.map((m) => (
-                                            <a
-                                                key={m.id}
-                                                href={m.original_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block text-sm text-blue-600 hover:underline"
-                                            >
-                                                {m.file_name}
-                                            </a>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Trainings */}
-                {trainings && trainings.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <GraduationCap className="h-5 w-5" />
-                                Training Booked
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {trainings.map((t) => (
-                                <div key={t.id} className="rounded-lg border p-3">
-                                    <p className="font-medium">
-                                        {t.title}
-                                        {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
-                                    </p>
-                                    {t.room && <p className="text-muted-foreground text-sm">{t.room}</p>}
-                                    {t.employees.length > 0 && (
-                                        <p className="mt-1 text-sm">
-                                            {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
-                                        </p>
-                                    )}
-                                    {t.notes && <p className="text-muted-foreground mt-1 text-sm italic">{t.notes}</p>}
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Builders Prestart Files */}
-                {buildersPrestartMedia.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Builders Daily Pre-Start</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-1">
-                                {buildersPrestartMedia.map((m) => (
-                                    <a
-                                        key={m.id}
-                                        href={m.original_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="block text-sm text-blue-600 hover:underline"
-                                    >
-                                        {m.file_name}
-                                    </a>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Unsigned Employees */}
-                {unsignedEmployees.length > 0 && (
-                    <div className="space-y-3">
+                    <div className="min-w-0 space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                            <h2 className="text-base font-semibold">Not Signed ({unsignedEmployees.length})</h2>
+                            <h2 className="text-base font-semibold">
+                                {activeSectionLabel}
+                                {typeof activeSectionCount === 'number' && (
+                                    <span className="text-muted-foreground ml-1.5 font-normal">({activeSectionCount})</span>
+                                )}
+                            </h2>
+                            {actionsMenu}
+                        </div>
+                        <section id="content" className="space-y-4" hidden={activeSection !== 'content'}>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                                {prestart.foreman && (
+                                    <p className="text-sm">
+                                        <span className="text-muted-foreground">Foreman: </span>
+                                        <span className="font-medium">{prestart.foreman.name}</span>
+                                    </p>
+                                )}
+                                <div className="flex items-center gap-1.5">
+                                    {prestart.is_locked && <Badge variant="outline">Locked</Badge>}
+                                    <Badge variant={prestart.is_active ? 'default' : 'secondary'}>{prestart.is_active ? 'Active' : 'Inactive'}</Badge>
+                                </div>
+                            </div>
+
+                            <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} />
+
+                            {hasActivities && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>General Site Works / Activities</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ul className="list-disc space-y-1 pl-5">
+                                            {prestart.activities!.map((a, i) => (
+                                                <li key={i}>{a.description}</li>
+                                            ))}
+                                        </ul>
+                                        {activityMedia.length > 0 && (
+                                            <div className="mt-4">
+                                                <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
+                                                <div className="space-y-1">
+                                                    {activityMedia.map((m) => (
+                                                        <a
+                                                            key={m.id}
+                                                            href={m.original_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="block text-sm text-blue-600 hover:underline"
+                                                        >
+                                                            {m.file_name}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Daily Checklist</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <ol className="space-y-2">
+                                        {DAILY_CHECKLIST.map((item, i) => (
+                                            <li key={i} className="flex items-start gap-2 text-sm">
+                                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                                <span>{item}</span>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </CardContent>
+                            </Card>
+
+                            {hasSafetyConcerns && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Safety Concerns / Incidents</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ul className="list-disc space-y-1 pl-5">
+                                            {prestart.safety_concerns!.map((s, i) => (
+                                                <li key={i}>{s.description}</li>
+                                            ))}
+                                        </ul>
+                                        {safetyConcernMedia.length > 0 && (
+                                            <div className="mt-4">
+                                                <h4 className="text-muted-foreground mb-2 text-sm font-medium">Attached Files</h4>
+                                                <div className="space-y-1">
+                                                    {safetyConcernMedia.map((m) => (
+                                                        <a
+                                                            key={m.id}
+                                                            href={m.original_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="block text-sm text-blue-600 hover:underline"
+                                                        >
+                                                            {m.file_name}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {hasTrainings && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <GraduationCap className="h-5 w-5" />
+                                            Training Booked
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        {trainings.map((t) => (
+                                            <div key={t.id} className="rounded-lg border p-3">
+                                                <p className="font-medium">
+                                                    {t.title}
+                                                    {t.time && <span className="text-muted-foreground"> at {t.time}</span>}
+                                                </p>
+                                                {t.room && <p className="text-muted-foreground text-sm">{t.room}</p>}
+                                                {t.employees.length > 0 && (
+                                                    <p className="mt-1 text-sm">
+                                                        {t.employees.map((e) => e.display_name || e.preferred_name || e.name).join(', ')}
+                                                    </p>
+                                                )}
+                                                {t.notes && <p className="text-muted-foreground mt-1 text-sm italic">{t.notes}</p>}
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {hasBuildersPrestart && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Builders Daily Pre-Start</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-1">
+                                            {buildersPrestartMedia.map((m) => (
+                                                <a
+                                                    key={m.id}
+                                                    href={m.original_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="block text-sm text-blue-600 hover:underline"
+                                                >
+                                                    {m.file_name}
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </section>
+
+                        {/* Comments */}
+                        <section id="comments" className="space-y-4" hidden={activeSection !== 'comments'}>
+                            <AiRichTextEditor
+                                outputFormat="json"
+                                content={commentDoc}
+                                onChange={setCommentDoc}
+                                placeholder="Type a message. Use @ to mention someone."
+                                enableAttachments
+                                enableMentions
+                                collapseToolbar
+                                attachments={commentAttachments}
+                                onAttachmentsChange={setCommentAttachments}
+                                trailingActions={
+                                    <Button
+                                        size="sm"
+                                        className="h-8 gap-1.5"
+                                        onClick={handlePostComment}
+                                        disabled={postingComment || (!docHasContent(commentDoc) && commentAttachments.length === 0)}
+                                    >
+                                        <Send className="h-3.5 w-3.5" />
+                                        Send
+                                    </Button>
+                                }
+                            />
+
+                            {comments.length === 0 ? (
+                                <p className="text-muted-foreground py-4 text-center text-sm italic">
+                                    No comments yet.
+                                </p>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            className="text-primary flex items-center gap-1 text-xs font-medium"
+                                            onClick={() => setCommentSort((s) => (s === 'oldest' ? 'newest' : 'oldest'))}
+                                        >
+                                            {commentSort === 'oldest' ? 'Oldest first' : 'Newest first'}
+                                            <ArrowRight className={`h-3 w-3 transition-transform ${commentSort === 'oldest' ? 'rotate-[-90deg]' : 'rotate-90'}`} />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {sortedComments.map((comment) => (
+                                            <CommentBubble
+                                                key={comment.id}
+                                                comment={comment}
+                                                currentUserId={currentUserId}
+                                                onEdit={handleEditComment}
+                                                onDelete={(id) => setDeletingCommentId(id)}
+                                                onPreviewAttachment={setPreviewAttachment}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* Signed */}
+                        <section id="signed" className="space-y-3" hidden={activeSection !== 'signed'}>
+                            {prestart.signatures.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">No signatures yet.</p>
+                            ) : (
+                                <>
+                                    <div className="hidden rounded-md border sm:block">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Name</TableHead>
+                                                    <TableHead>Signed At</TableHead>
+                                                    <TableHead>Signature</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {prestart.signatures.map((sig) => (
+                                                    <TableRow key={sig.id}>
+                                                        <TableCell>
+                                                            {sig.is_guest ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="min-w-0">
+                                                                        <div className="truncate font-medium">{sig.guest_name || '—'}</div>
+                                                                        {sig.guest_company && (
+                                                                            <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
+                                                                        )}
+                                                                    </div>
+                                                                    <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                                                                        Guest
+                                                                    </Badge>
+                                                                </div>
+                                                            ) : (
+                                                                sig.employee?.preferred_name || sig.employee?.name || '—'
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
+                                                        <TableCell>
+                                                            <img
+                                                                src={sig.signature}
+                                                                alt="Signature"
+                                                                className="h-10 max-w-[200px] object-contain dark:invert"
+                                                            />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+
+                                    <div className="divide-y rounded-md border sm:hidden">
+                                        {prestart.signatures.map((sig) => (
+                                            <div key={sig.id} className="grid grid-cols-2 items-center gap-2 p-2">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="truncate text-sm font-medium">
+                                                            {sig.is_guest
+                                                                ? sig.guest_name || '—'
+                                                                : sig.employee?.preferred_name || sig.employee?.name || '—'}
+                                                        </div>
+                                                        {sig.is_guest && (
+                                                            <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-xs leading-4 text-sky-700 dark:text-sky-300">
+                                                                Guest
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {sig.is_guest && sig.guest_company && (
+                                                        <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
+                                                    )}
+                                                    <div className="text-muted-foreground text-xs">
+                                                        {new Date(sig.signed_at).toLocaleString('en-AU')}
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-end">
+                                                    <img
+                                                        src={sig.signature}
+                                                        alt="Signature"
+                                                        className="h-10 max-w-full object-contain dark:invert"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </section>
+
+                        {/* Not Signed */}
+                        <section id="not-signed" className="space-y-3" hidden={activeSection !== 'not-signed'}>
                             {selectedIds.size > 0 && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
+                                <div className="flex items-center justify-end gap-2">
+                                    <span className="text-muted-foreground text-sm">{selectedIds.size} selected</span>
                                     <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
                                         Clear
                                     </Button>
@@ -771,93 +908,110 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                     </Button>
                                 </div>
                             )}
-                        </div>
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-10">
-                                            <Checkbox
-                                                checked={allVisibleSelected}
-                                                onCheckedChange={toggleSelectAll}
-                                                aria-label="Select all"
-                                            />
-                                        </TableHead>
-                                        <TableHead>
-                                            <button
-                                                type="button"
-                                                className="flex items-center gap-1 font-medium hover:text-slate-900"
-                                                onClick={() => toggleSort('name')}
-                                            >
-                                                Employee
-                                                {sortBy === 'name' ? (
-                                                    sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                ) : (
-                                                    <ArrowUpDown className="h-3 w-3 opacity-50" />
-                                                )}
-                                            </button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <button
-                                                type="button"
-                                                className="flex items-center gap-1 font-medium hover:text-slate-900"
-                                                onClick={() => toggleSort('status')}
-                                            >
-                                                Status
-                                                {sortBy === 'status' ? (
-                                                    sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                ) : (
-                                                    <ArrowUpDown className="h-3 w-3 opacity-50" />
-                                                )}
-                                            </button>
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {sortedUnsigned.map((emp) => (
-                                        <TableRow key={emp.id} data-selected={selectedIds.has(emp.id) ? 'true' : undefined}>
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedIds.has(emp.id)}
-                                                    onCheckedChange={() => toggleSelected(emp.id)}
-                                                    aria-label={`Select ${emp.name}`}
-                                                />
-                                            </TableCell>
-                                                <TableCell>{emp.name}</TableCell>
-                                                <TableCell>
-                                                    <div className="space-y-2">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex flex-wrap items-center gap-1.5">
-                                                                {emp.is_present_at_site ? (
-                                                                    <Badge variant="outline">Present - Not Signed</Badge>
-                                                                ) : emp.absence_reason && !(emp.reason_label && emp.absence_reason === 'Absent (Unexplained)') ? (
-                                                                    <Badge variant="outline">{emp.absence_reason}</Badge>
-                                                                ) : !emp.reason_label ? (
-                                                                    <Badge variant="outline">No Record</Badge>
-                                                                ) : null}
-                                                                {emp.clock_in_time && (
-                                                                    <span className="text-muted-foreground text-xs">at {emp.clock_in_time}</span>
-                                                                )}
-                                                                {emp.reason_label && (
-                                                                    <Badge variant="secondary">{emp.reason_label}</Badge>
-                                                                )}
-                                                            </div>
-                                                            {editingEmployeeId === emp.id && (
+                            {unsignedEmployees.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">Everyone has signed.</p>
+                            ) : (
+                                <div className="overflow-x-auto rounded-md border">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="w-10">
+                                                    <Checkbox
+                                                        checked={allVisibleSelected}
+                                                        onCheckedChange={toggleSelectAll}
+                                                        aria-label="Select all"
+                                                    />
+                                                </TableHead>
+                                                <TableHead>
+                                                    <button
+                                                        type="button"
+                                                        className="hover:text-foreground flex items-center gap-1 font-medium"
+                                                        onClick={() => toggleSort('name')}
+                                                    >
+                                                        Employee
+                                                        {sortBy === 'name' ? (
+                                                            sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                                        )}
+                                                    </button>
+                                                </TableHead>
+                                                <TableHead>
+                                                    <button
+                                                        type="button"
+                                                        className="hover:text-foreground flex items-center gap-1 font-medium"
+                                                        onClick={() => toggleSort('status')}
+                                                    >
+                                                        Status
+                                                        {sortBy === 'status' ? (
+                                                            sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 opacity-50" />
+                                                        )}
+                                                    </button>
+                                                </TableHead>
+                                                <TableHead>Reason</TableHead>
+                                                <TableHead>Note</TableHead>
+                                                <TableHead>Updated</TableHead>
+                                                <TableHead className="w-10" />
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {sortedUnsigned.map((emp) => {
+                                                const statusLabel = emp.is_present_at_site
+                                                    ? 'Present - Not Signed'
+                                                    : emp.absence_reason && !(emp.reason_label && emp.absence_reason === 'Absent (Unexplained)')
+                                                        ? emp.absence_reason
+                                                        : !emp.reason_label
+                                                            ? 'No Record'
+                                                            : null;
+
+                                                return (
+                                                    <TableRow key={emp.id} data-selected={selectedIds.has(emp.id) ? 'true' : undefined}>
+                                                        <TableCell>
+                                                            <Checkbox
+                                                                checked={selectedIds.has(emp.id)}
+                                                                onCheckedChange={() => toggleSelected(emp.id)}
+                                                                aria-label={`Select ${emp.name}`}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="font-medium">{emp.name}</TableCell>
+                                                        <TableCell>
+                                                            {statusLabel ? <Badge variant="outline">{statusLabel}</Badge> : <span className="text-muted-foreground">—</span>}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {emp.reason_label ? <Badge variant="secondary">{emp.reason_label}</Badge> : <span className="text-muted-foreground">—</span>}
+                                                        </TableCell>
+                                                        <TableCell className="max-w-[260px]">
+                                                            {emp.note ? (
+                                                                <span className="text-xs italic">{emp.note}</span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">—</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground text-[11px] whitespace-nowrap">
+                                                            {emp.updated_by_name && (emp.note || emp.reason_label) ? (
+                                                                <>
+                                                                    {emp.updated_by_name}
+                                                                    {emp.updated_at && <span className="text-muted-foreground/70"> · {emp.updated_at}</span>}
+                                                                </>
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {editingEmployeeId === emp.id ? (
                                                                 <Popover open={true} onOpenChange={(open) => !open && setEditingEmployeeId(null)}>
                                                                     <PopoverTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="sm"
-                                                                            className="h-6 w-6 p-0"
-                                                                        >
+                                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                                                                             <MessageSquare className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </PopoverTrigger>
                                                                     <PopoverContent className="w-80" side="left">
                                                                         <div className="space-y-3">
-                                                                            <h4 className="font-medium text-sm">Absence Reason & Note</h4>
+                                                                            <h4 className="text-sm font-medium">Absence Reason & Note</h4>
                                                                             <div className="space-y-1.5">
-                                                                                <label className="text-xs font-medium text-slate-600">Reason</label>
+                                                                                <label className="text-muted-foreground text-xs font-medium">Reason</label>
                                                                                 <Select value={reasonValue} onValueChange={setReasonValue}>
                                                                                     <SelectTrigger className="w-full">
                                                                                         <SelectValue placeholder="Select reason" />
@@ -873,7 +1027,7 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                                 </Select>
                                                                             </div>
                                                                             <div className="space-y-1.5">
-                                                                                <label className="text-xs font-medium text-slate-600">Note</label>
+                                                                                <label className="text-muted-foreground text-xs font-medium">Note</label>
                                                                                 <Textarea
                                                                                     placeholder="e.g., 2 days at MAR01 (discussed with supervisor)"
                                                                                     value={noteText}
@@ -898,38 +1052,22 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
                                                                         </div>
                                                                     </PopoverContent>
                                                                 </Popover>
-                                                            )}
-                                                            {editingEmployeeId !== emp.id && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => openNoteEditor(emp)}
-                                                                    className="h-6 w-6 p-0"
-                                                                >
-                                                                    <MessageSquare className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <Button variant="ghost" size="sm" onClick={() => openNoteEditor(emp)} className="h-6 w-6 p-0">
+                                                                    <Pencil className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             )}
-                                                        </div>
-                                                        {emp.note && (
-                                                            <div className="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
-                                                                {emp.note}
-                                                            </div>
-                                                        )}
-                                                        {emp.updated_by_name && (emp.note || emp.reason_label) && (
-                                                            <p className="text-[11px] text-slate-500">
-                                                                by {emp.updated_by_name}
-                                                                {emp.updated_at && <> · {emp.updated_at}</>}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </section>
                     </div>
-                )}
+                </div>
 
                 {/* Bulk apply reason/note dialog */}
                 <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
@@ -978,18 +1116,20 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
                 {/* Edit comment dialog */}
                 <Dialog open={editingComment !== null} onOpenChange={(o) => { if (!o) setEditingComment(null); }}>
-                    <DialogContent>
+                    <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
                         <DialogHeader>
                             <DialogTitle>Edit comment</DialogTitle>
                         </DialogHeader>
-                        <Textarea
-                            value={editCommentBody}
-                            onChange={(e) => setEditCommentBody(e.target.value)}
-                            className="min-h-24"
+                        <AiRichTextEditor
+                            outputFormat="json"
+                            content={editDoc}
+                            onChange={setEditDoc}
+                            placeholder="Edit your comment. Use @ to mention someone."
+                            enableMentions
                         />
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setEditingComment(null)}>Cancel</Button>
-                            <Button onClick={submitEditComment} disabled={!editCommentBody.trim()}>Save</Button>
+                            <Button onClick={submitEditComment} disabled={!docHasContent(editDoc)}>Save</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
@@ -1010,95 +1150,6 @@ export default function DailyPrestartShow({ prestart, unsignedEmployees, trainin
 
                 {/* Attachment preview */}
                 <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
-
-                {/* Signatures */}
-                <div className="space-y-3">
-                    <h2 className="text-base font-semibold">Signatures ({prestart.signatures.length})</h2>
-                    {prestart.signatures.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No signatures yet.</p>
-                    ) : (
-                        <>
-                            {/* Desktop / tablet: full 3-column table */}
-                            <div className="hidden rounded-md border sm:block">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Signed At</TableHead>
-                                            <TableHead>Signature</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {prestart.signatures.map((sig) => (
-                                            <TableRow key={sig.id}>
-                                                <TableCell>
-                                                    {sig.is_guest ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="min-w-0">
-                                                                <div className="truncate font-medium">{sig.guest_name || '—'}</div>
-                                                                {sig.guest_company && (
-                                                                    <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
-                                                                )}
-                                                            </div>
-                                                            <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-                                                                Guest
-                                                            </Badge>
-                                                        </div>
-                                                    ) : (
-                                                        sig.employee?.preferred_name || sig.employee?.name || '—'
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>{new Date(sig.signed_at).toLocaleString('en-AU')}</TableCell>
-                                                <TableCell>
-                                                    <img
-                                                        src={sig.signature}
-                                                        alt="Signature"
-                                                        className="h-10 max-w-[200px] object-contain dark:invert"
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-
-                            {/* Mobile: 2-column collapsed view (name+time / signature) */}
-                            <div className="divide-y rounded-md border sm:hidden">
-                                {prestart.signatures.map((sig) => (
-                                    <div key={sig.id} className="grid grid-cols-2 items-center gap-2 p-2">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="truncate text-sm font-medium">
-                                                    {sig.is_guest
-                                                        ? sig.guest_name || '—'
-                                                        : sig.employee?.preferred_name || sig.employee?.name || '—'}
-                                                </div>
-                                                {sig.is_guest && (
-                                                    <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 px-1.5 py-0 text-xs leading-4 text-sky-700 dark:text-sky-300">
-                                                        Guest
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            {sig.is_guest && sig.guest_company && (
-                                                <div className="text-muted-foreground truncate text-xs">{sig.guest_company}</div>
-                                            )}
-                                            <div className="text-muted-foreground text-xs">
-                                                {new Date(sig.signed_at).toLocaleString('en-AU')}
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-end">
-                                            <img
-                                                src={sig.signature}
-                                                alt="Signature"
-                                                className="h-10 max-w-full object-contain dark:invert"
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
             </div>
 
         </AppLayout>

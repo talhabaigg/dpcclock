@@ -119,7 +119,7 @@ export default function WeatherWidget({ weather, workDate, compact = false, dens
     }
 
     return (
-        <div className="overflow-hidden rounded-xl border border-sky-200/60 dark:border-sky-800/40 bg-gradient-to-br from-sky-50 via-blue-50/80 to-indigo-50/50 dark:from-sky-950/30 dark:via-blue-950/20 dark:to-indigo-950/10">
+        <div className="overflow-hidden rounded-2xl border border-sky-200/40 bg-gradient-to-br from-white via-sky-50/60 to-sky-100/40 shadow-[0_4px_20px_-14px_rgba(14,165,233,0.25)] dark:border-sky-900/40 dark:from-sky-950/40 dark:via-sky-950/60 dark:to-blue-950/60 dark:shadow-[0_4px_20px_-14px_rgba(2,132,199,0.3)]">
             {dense ? (
                 current && (
                     <div className="flex items-center gap-3 px-3 py-2">
@@ -144,26 +144,26 @@ export default function WeatherWidget({ weather, workDate, compact = false, dens
                     </div>
                 )
             ) : (
-                <div className="p-4">
+                <div className="p-5">
                     {/* Current conditions */}
                     {current && (
                         <div className="flex items-center gap-4">
-                            <GoogleWeatherIcon iconBaseUri={current.icon_code} size={56} />
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline gap-2">
+                            <GoogleWeatherIcon iconBaseUri={current.icon_code} size={60} />
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline gap-2.5">
                                     {current.temp != null && (
-                                        <span className="text-4xl font-bold tracking-tighter">
+                                        <span className="text-5xl font-medium tracking-[-0.04em]">
                                             {Math.round(current.temp)}°
                                         </span>
                                     )}
                                     {current.condition && (
-                                        <span className="text-sm font-medium text-muted-foreground">
+                                        <span className="text-muted-foreground text-sm font-medium">
                                             {current.condition}
                                         </span>
                                     )}
                                 </div>
                                 {current.feels_like != null && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                    <p className="text-muted-foreground mt-1 text-xs">
                                         Feels like {Math.round(current.feels_like)}°
                                     </p>
                                 )}
@@ -173,31 +173,31 @@ export default function WeatherWidget({ weather, workDate, compact = false, dens
 
                     {/* Stats row */}
                     {current && (
-                        <div className="mt-3 grid grid-cols-3 gap-2">
+                        <div className="mt-4 grid grid-cols-3 gap-3">
                             {current.humidity != null && (
-                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                    <Droplets className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                <div className="flex items-center gap-2">
+                                    <Droplets className="text-muted-foreground/70 h-4 w-4 shrink-0" />
                                     <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground leading-none">Humidity</p>
-                                        <p className="text-sm font-semibold leading-tight">{current.humidity}%</p>
+                                        <p className="text-muted-foreground text-[11px] leading-none">Humidity</p>
+                                        <p className="text-sm font-medium leading-tight">{current.humidity}%</p>
                                     </div>
                                 </div>
                             )}
                             {current.wind_speed != null && (
-                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                    <Wind className="h-3.5 w-3.5 text-teal-500 shrink-0" />
+                                <div className="flex items-center gap-2">
+                                    <Wind className="text-muted-foreground/70 h-4 w-4 shrink-0" />
                                     <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground leading-none">Wind</p>
-                                        <p className="text-sm font-semibold leading-tight">{Math.round(current.wind_speed)} km/h</p>
+                                        <p className="text-muted-foreground text-[11px] leading-none">Wind</p>
+                                        <p className="text-sm font-medium leading-tight">{Math.round(current.wind_speed)} km/h</p>
                                     </div>
                                 </div>
                             )}
                             {current.uv_index != null && (
-                                <div className="flex items-center gap-1.5 rounded-lg bg-white/60 dark:bg-white/5 px-2.5 py-1.5">
-                                    <Sun className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                <div className="flex items-center gap-2">
+                                    <Sun className="text-muted-foreground/70 h-4 w-4 shrink-0" />
                                     <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground leading-none">UV Index</p>
-                                        <p className="text-sm font-semibold leading-tight">{current.uv_index}</p>
+                                        <p className="text-muted-foreground text-[11px] leading-none">UV Index</p>
+                                        <p className="text-sm font-medium leading-tight">{current.uv_index}</p>
                                     </div>
                                 </div>
                             )}
@@ -208,42 +208,45 @@ export default function WeatherWidget({ weather, workDate, compact = false, dens
 
             {/* Forecast bar */}
             {forecast && (
-                <div className={cn('flex items-center justify-between gap-3 border-t border-sky-200/60 dark:border-sky-800/40 bg-white/40 dark:bg-white/5', dense ? 'px-3 py-1 text-xs' : 'px-4 py-2.5 text-sm')}>
-                    <div className="flex items-center gap-2">
+                <div className={cn('flex items-center justify-between gap-3 border-t border-sky-200/50 bg-white/50 backdrop-blur-md dark:border-sky-800/50 dark:bg-sky-950/40', dense ? 'px-3 py-1 text-xs' : 'px-4 py-2.5 text-sm')}>
+                    <div className="flex min-w-0 items-center gap-2">
                         {forecast.icon_code && current && !dense && (
                             <GoogleWeatherIcon iconBaseUri={forecast.icon_code} size={28} />
                         )}
-                        <span className="font-medium">Today</span>
-                        {forecast.condition && (
-                            <span className="text-muted-foreground hidden sm:inline">{forecast.condition}</span>
-                        )}
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                                <span className="font-medium">Today</span>
+                                {forecast.condition && (
+                                    <span className="text-muted-foreground hidden sm:inline">{forecast.condition}</span>
+                                )}
+                            </div>
+                            {weather.fetched_at && (
+                                <span className="text-muted-foreground block text-[10px] leading-none">
+                                    as at {formatBrisbane(weather.fetched_at)}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className={cn('flex items-center', dense ? 'gap-2' : 'gap-3')}>
                         {forecast.high != null && (
-                            <span className="flex items-center gap-0.5 font-semibold">
-                                <ArrowUp className="h-3 w-3 text-red-400" />
+                            <span className="flex items-center gap-0.5 font-medium">
+                                <ArrowUp className="text-muted-foreground/70 h-3 w-3" />
                                 {Math.round(forecast.high)}°
                             </span>
                         )}
                         {forecast.low != null && (
-                            <span className="flex items-center gap-0.5 text-muted-foreground">
-                                <ArrowDown className="h-3 w-3 text-blue-400" />
+                            <span className="text-muted-foreground flex items-center gap-0.5">
+                                <ArrowDown className="text-muted-foreground/70 h-3 w-3" />
                                 {Math.round(forecast.low)}°
                             </span>
                         )}
                         {forecast.rain_chance != null && (
-                            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                                <CloudRain className="h-3 w-3" />
+                            <span className="text-muted-foreground flex items-center gap-1">
+                                <CloudRain className="text-muted-foreground/70 h-3 w-3" />
                                 {forecast.rain_chance}%
                             </span>
                         )}
                     </div>
-                </div>
-            )}
-
-            {weather.fetched_at && (
-                <div className={cn('border-t border-sky-200/40 dark:border-sky-800/30 bg-white/30 dark:bg-white/[0.03] text-right text-muted-foreground', dense ? 'px-3 py-0.5 text-[10px]' : 'px-4 py-1 text-[11px]')}>
-                    as at {formatBrisbane(weather.fetched_at)}
                 </div>
             )}
         </div>
