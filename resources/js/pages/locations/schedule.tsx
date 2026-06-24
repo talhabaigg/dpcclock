@@ -1091,6 +1091,7 @@ export default function Schedule() {
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
                     onDownloadTemplate={() => (window.location.href = '/schedule-template')}
+                    onExportCsv={() => (window.location.href = `/locations/${location.id}/tasks/export-csv`)}
                     onExportMsProject={() => (window.location.href = `/locations/${location.id}/tasks/export-ms-project`)}
                     onSetBaseline={handleSetBaseline}
                     onRevertToBaseline={handleRevertToBaseline}

@@ -556,6 +556,90 @@ class ProjectTaskController extends Controller
         ]);
     }
 
+    /**
+     * Export current tasks as a prefilled CSV that mirrors the import template.
+     * Users can edit and re-upload via the same import flow.
+     */
+    public function exportCsv(Location $location)
+    {
+        $tasks = $location->projectTasks()->orderBy('sort_order')->get();
+        $links = ProjectTaskLink::where('location_id', $location->id)->get();
+
+        // Build WBS numbering via DFS over parent_id (matches exportMsProject).
+        $childrenMap = [];
+        $roots = [];
+        foreach ($tasks as $task) {
+            if ($task->parent_id) {
+                $childrenMap[$task->parent_id][] = $task;
+            } else {
+                $roots[] = $task;
+            }
+        }
+
+        $wbsByTaskId = [];
+        $rowsInOrder = [];
+
+        $walk = function ($nodes, $parentWbs) use (&$walk, &$childrenMap, &$wbsByTaskId, &$rowsInOrder) {
+            $seq = 1;
+            foreach ($nodes as $task) {
+                $wbs = $parentWbs ? "{$parentWbs}.{$seq}" : (string) $seq;
+                $wbsByTaskId[$task->id] = $wbs;
+                $rowsInOrder[] = ['wbs' => $wbs, 'task' => $task];
+                if (!empty($childrenMap[$task->id])) {
+                    $walk($childrenMap[$task->id], $wbs);
+                }
+                $seq++;
+            }
+        };
+        $walk($roots, '');
+
+        // Group predecessor links by their successor (target) task id.
+        $predsByTarget = [];
+        foreach ($links as $link) {
+            $predsByTarget[$link->target_id][] = $link;
+        }
+
+        $formatPredecessors = function (int $taskId) use ($predsByTarget, $wbsByTaskId): string {
+            $items = [];
+            foreach ($predsByTarget[$taskId] ?? [] as $link) {
+                $sourceWbs = $wbsByTaskId[$link->source_id] ?? null;
+                if (!$sourceWbs) continue;
+                $part = $sourceWbs . ':' . $link->type;
+                if ((int) $link->lag_days !== 0) {
+                    $part .= ($link->lag_days > 0 ? '+' : '') . $link->lag_days;
+                }
+                $items[] = $part;
+            }
+            return implode(',', $items);
+        };
+
+        $headers = ['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors'];
+
+        $callback = function () use ($headers, $rowsInOrder, $formatPredecessors) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $headers);
+            foreach ($rowsInOrder as $row) {
+                $task = $row['task'];
+                fputcsv($file, [
+                    $row['wbs'],
+                    $task->name,
+                    $task->start_date ? Carbon::parse($task->start_date)->format('Y-m-d') : '',
+                    $task->end_date ? Carbon::parse($task->end_date)->format('Y-m-d') : '',
+                    $formatPredecessors($task->id),
+                ]);
+            }
+            fclose($file);
+        };
+
+        $slug = \Illuminate\Support\Str::slug($location->name ?: ('location-' . $location->id)) ?: ('location-' . $location->id);
+        $filename = "schedule-{$slug}-" . Carbon::now()->format('Y-m-d') . '.csv';
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
     public function downloadTemplate()
     {
         $headers = ['WBS', 'Task Name', 'Start Date', 'End Date', 'Predecessors'];

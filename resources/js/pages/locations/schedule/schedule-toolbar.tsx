@@ -40,6 +40,7 @@ interface ScheduleToolbarProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
     onDownloadTemplate: () => void;
+    onExportCsv: () => void;
     onExportMsProject: () => void;
     onSetBaseline: () => void;
     onRevertToBaseline: () => void;
@@ -90,6 +91,7 @@ export default function ScheduleToolbar({
     searchQuery,
     onSearchChange,
     onDownloadTemplate,
+    onExportCsv,
     onExportMsProject,
     onSetBaseline,
     onRevertToBaseline,
@@ -136,11 +138,17 @@ export default function ScheduleToolbar({
                     {/* File menu */}
                     <MenubarMenu>
                         <MenubarTrigger className="px-2 py-1 text-xs">File</MenubarTrigger>
-                        <MenubarContent>
-                            <MenubarItem onClick={onImport}>Import</MenubarItem>
-                            <MenubarItem onClick={onDownloadTemplate}>Download Import Template</MenubarItem>
+                        <MenubarContent className="min-w-[260px]">
+                            <MenubarItem onClick={onImport} className="whitespace-nowrap">Import</MenubarItem>
+                            <MenubarItem onClick={onDownloadTemplate} className="whitespace-nowrap">Download Import Template</MenubarItem>
                             <MenubarSeparator />
-                            <MenubarItem onClick={onExportMsProject}>Export to Microsoft Project</MenubarItem>
+                            <MenubarItem onClick={onExportCsv} className="flex w-full items-center justify-between whitespace-nowrap">
+                                <span>Export to CSV</span>
+                                <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                    New
+                                </span>
+                            </MenubarItem>
+                            <MenubarItem onClick={onExportMsProject} className="whitespace-nowrap">Export to Microsoft Project</MenubarItem>
                         </MenubarContent>
                     </MenubarMenu>
 
