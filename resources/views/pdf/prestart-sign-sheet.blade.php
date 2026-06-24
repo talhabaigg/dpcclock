@@ -99,9 +99,7 @@
             padding: 6px 8px;
             border-bottom: 1px solid #e5e7eb;
             vertical-align: middle;
-        }
-        table.signatures tr:nth-child(even) {
-            background: #fafafa;
+            height: 42px;
         }
         .sig-img {
             height: 30px;

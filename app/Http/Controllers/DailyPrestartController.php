@@ -587,8 +587,17 @@ class DailyPrestartController extends Controller
             ->get()
             ->keyBy('employee_id');
 
+        // Reasons that should not appear on the printed PDF (and not count toward absentee total).
+        $hiddenAbsenteeReasons = ['other_project', 'workcover'];
+
         $absentees = $kioskEmployees
-            ->filter(fn ($emp) => ! in_array($emp->id, $signedIds))
+            ->filter(function ($emp) use ($signedIds, $absenteeNotes, $hiddenAbsenteeReasons) {
+                if (in_array($emp->id, $signedIds)) {
+                    return false;
+                }
+                $record = $absenteeNotes->get($emp->id);
+                return ! ($record && in_array($record->reason, $hiddenAbsenteeReasons, true));
+            })
             ->map(function ($emp) use ($absenteeNotes) {
                 $emp->note = $absenteeNotes->get($emp->id)?->notes;
                 return $emp;
