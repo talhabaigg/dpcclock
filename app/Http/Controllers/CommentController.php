@@ -19,6 +19,7 @@ class CommentController extends Controller
         'forecast_project' => \App\Models\ForecastProject::class,
         'App\\Models\\ForecastProject' => \App\Models\ForecastProject::class,
         'daily_prestart' => \App\Models\DailyPrestart::class,
+        'toolbox_talk' => \App\Models\ToolboxTalk::class,
     ];
 
     /**
@@ -252,6 +253,10 @@ class CommentController extends Controller
             $commentable instanceof \App\Models\DailyPrestart => [
                 url(route('daily-prestarts.show', $commentable)),
                 'a daily prestart',
+            ],
+            $commentable instanceof \App\Models\ToolboxTalk => [
+                url(route('toolbox-talks.show', $commentable)),
+                'a toolbox talk',
             ],
             default => [null, null],
         };
