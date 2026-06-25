@@ -1,12 +1,18 @@
+import LocationPageHeader from '@/components/location-page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { Head, usePage } from '@inertiajs/react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, CheckCircle, Download, FolderTree, ShieldCheck } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+
+const SUBLOC_COLUMN_COUNT = 4;
+const ROW_HEIGHT = 32;
 
 type Location = LocationBase & {
     subLocations: Array<{
@@ -38,6 +44,21 @@ const extractSuffix = (externalId: string): string | null => {
 export default function LocationShow() {
     const { location, dpcKeys } = usePage<{ location: Location; dpcKeys: string[] }>().props;
 
+    const subLocations = location.subLocations ?? [];
+
+    const subLocScrollRef = useRef<HTMLDivElement>(null);
+    const subLocVirtualizer = useVirtualizer({
+        count: subLocations.length,
+        getScrollElement: () => subLocScrollRef.current,
+        estimateSize: () => ROW_HEIGHT,
+        overscan: 10,
+    });
+
+    const subLocVirtualItems = subLocVirtualizer.getVirtualItems();
+    const subLocTotalSize = subLocVirtualizer.getTotalSize();
+    const subLocPaddingTop = subLocVirtualItems[0]?.start ?? 0;
+    const subLocPaddingBottom = subLocTotalSize - (subLocVirtualItems[subLocVirtualItems.length - 1]?.end ?? 0);
+
     const dpcValidation = useMemo(() => {
         if (!dpcKeys || dpcKeys.length === 0) return null;
 
@@ -64,13 +85,13 @@ export default function LocationShow() {
     return (
         <LocationLayout location={location} activeTab="sublocations">
             <Head title={location.name} />
-            <Tabs defaultValue="sublocations" className="flex flex-col">
+            <Tabs defaultValue="sublocations" className="flex flex-col gap-3">
                 <TabsList>
-                    <TabsTrigger value="sublocations">
+                    <TabsTrigger value="sublocations" className="text-xs">
                         <FolderTree className="h-3.5 w-3.5" />
                         Sub-locations
                     </TabsTrigger>
-                    <TabsTrigger value="code">
+                    <TabsTrigger value="code" className="text-xs">
                         <ShieldCheck className="h-3.5 w-3.5" />
                         DPC Validation{' '}
                         {dpcValidation && dpcValidation.issues.length > 0 && (
@@ -80,103 +101,125 @@ export default function LocationShow() {
                         )}
                     </TabsTrigger>
                 </TabsList>
-                <TabsContent value="sublocations">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
-                            <CardTitle className="text-base">Sub-locations</CardTitle>
-                            {location.external_id && (
-                                <Button variant="outline" size="sm" asChild>
-                                    <a href={`/locations/external-id-report?job=${encodeURIComponent(location.external_id.replace(/:+$/, ''))}`}>
-                                        <Download className="mr-1.5 h-3.5 w-3.5" />
-                                        Validation Report
-                                    </a>
-                                </Button>
-                            )}
-                        </CardHeader>
+
+                <TabsContent value="sublocations" className="flex flex-col gap-3">
+                    <LocationPageHeader location={location} title="Sub-locations">
+                        {location.external_id && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={`/locations/external-id-report?job=${encodeURIComponent(location.external_id.replace(/:+$/, ''))}`}>
+                                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                                    Validation Report
+                                </a>
+                            </Button>
+                        )}
+                    </LocationPageHeader>
+                    <div className="text-muted-foreground flex items-center justify-between px-1 text-xs">
+                        <span>{subLocations.length.toLocaleString()} sub-locations</span>
+                    </div>
+                    <Card className="py-0">
                         <CardContent className="p-0">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="pl-3 sm:pl-6">ID</TableHead>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead className="hidden md:table-cell">External ID</TableHead>
-                                            <TableHead className="hidden sm:table-cell">Level</TableHead>
-                                            <TableHead className="hidden pr-3 sm:table-cell sm:pr-6">Activity</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {location.subLocations.length === 0 ? (
+                            <TooltipProvider delay={200}>
+                                <div ref={subLocScrollRef} className="h-[calc(100vh-300px)] min-h-[320px] overflow-auto">
+                                    <Table className="text-xs [&_td]:h-8 [&_td]:py-0 [&_th]:h-8 [&_th]:py-0">
+                                        <TableHeader className="bg-card sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--border)]">
                                             <TableRow>
-                                                <TableCell colSpan={5} className="h-32 text-center">
-                                                    <div className="text-muted-foreground flex flex-col items-center gap-2">
-                                                        <FolderTree className="h-8 w-8 opacity-40" />
-                                                        <p>No sub-locations found</p>
-                                                    </div>
-                                                </TableCell>
+                                                <TableHead className="pl-3 sm:pl-6">ID</TableHead>
+                                                <TableHead className="hidden md:table-cell">External ID</TableHead>
+                                                <TableHead className="hidden sm:table-cell">Level</TableHead>
+                                                <TableHead className="hidden pr-3 sm:table-cell sm:pr-6">Activity</TableHead>
                                             </TableRow>
-                                        ) : (
-                                            location.subLocations.map((subLocation) => (
-                                                <TableRow key={subLocation.id}>
-                                                    <TableCell className="text-muted-foreground pl-3 font-mono text-xs sm:pl-6">
-                                                        {subLocation.eh_location_id}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">{subLocation.name}</TableCell>
-                                                    <TableCell className="hidden md:table-cell">
-                                                        {subLocation.external_id ? (
-                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                                                {subLocation.external_id}
-                                                            </code>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm italic">Not set</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="hidden sm:table-cell">
-                                                        <Badge variant="outline" className="font-mono text-xs">
-                                                            {splitExternalId(subLocation.external_id).level}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="hidden pr-3 sm:table-cell sm:pr-6">
-                                                        <Badge variant="secondary" className="font-mono text-xs">
-                                                            {splitExternalId(subLocation.external_id).activity}
-                                                        </Badge>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {subLocations.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={SUBLOC_COLUMN_COUNT} className="h-32 text-center">
+                                                        <div className="text-muted-foreground flex flex-col items-center gap-2">
+                                                            <FolderTree className="h-8 w-8 opacity-40" />
+                                                            <p>No sub-locations found</p>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                            ) : (
+                                                <>
+                                                    {subLocPaddingTop > 0 && (
+                                                        <tr aria-hidden style={{ height: subLocPaddingTop }}>
+                                                            <td colSpan={SUBLOC_COLUMN_COUNT} />
+                                                        </tr>
+                                                    )}
+                                                    {subLocVirtualItems.map((vi) => {
+                                                        const subLocation = subLocations[vi.index];
+                                                        const { level, activity } = splitExternalId(subLocation.external_id);
+                                                        return (
+                                                            <TableRow key={subLocation.id}>
+                                                                <TableCell className="text-muted-foreground pl-3 font-mono text-xs sm:pl-6">
+                                                                    {subLocation.eh_location_id}
+                                                                </TableCell>
+                                                                <TableCell className="hidden whitespace-nowrap md:table-cell">
+                                                                    {subLocation.external_id ? (
+                                                                        <span className="font-mono">{subLocation.external_id}</span>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground italic">Not set</span>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell className="hidden max-w-[140px] sm:table-cell">
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="block truncate font-mono">{level}</span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>{level}</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TableCell>
+                                                                <TableCell className="hidden max-w-[160px] pr-3 sm:table-cell sm:pr-6">
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <span className="block truncate font-mono">{activity}</span>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>{activity}</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                    {subLocPaddingBottom > 0 && (
+                                                        <tr aria-hidden style={{ height: subLocPaddingBottom }}>
+                                                            <td colSpan={SUBLOC_COLUMN_COUNT} />
+                                                        </tr>
+                                                    )}
+                                                </>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </TooltipProvider>
                         </CardContent>
                     </Card>
                 </TabsContent>
-                <TabsContent value="code">
-                    <Card>
-                        <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <CardTitle className="text-base">DPC Cost Code Validation</CardTitle>
-                                    {dpcValidation ? (
-                                        dpcValidation.issues.length === 0 ? (
-                                            <Badge variant="default" className="gap-1 text-xs">
-                                                <CheckCircle className="h-3 w-3" />
-                                                All matched
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="destructive" className="gap-1 text-xs">
-                                                <AlertTriangle className="h-3 w-3" />
-                                                {dpcValidation.issues.length} unmatched
-                                            </Badge>
-                                        )
-                                    ) : null}
-                                </div>
-                                {dpcValidation && (
-                                    <span className="text-muted-foreground text-xs">
-                                        {dpcValidation.totalChecked} sub-locations checked against {dpcKeys.length} DPC codes
-                                    </span>
-                                )}
-                            </div>
-                        </CardHeader>
+
+                <TabsContent value="code" className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-sm font-semibold">DPC Cost Code Validation</h2>
+                            {dpcValidation ? (
+                                dpcValidation.issues.length === 0 ? (
+                                    <Badge variant="default" className="gap-1 text-xs">
+                                        <CheckCircle className="h-3 w-3" />
+                                        All matched
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="destructive" className="gap-1 text-xs">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        {dpcValidation.issues.length} unmatched
+                                    </Badge>
+                                )
+                            ) : null}
+                        </div>
+                        {dpcValidation && (
+                            <span className="text-muted-foreground text-xs">
+                                {dpcValidation.totalChecked} sub-locations checked against {dpcKeys.length} DPC codes
+                            </span>
+                        )}
+                    </div>
+                    <Card className="py-0">
                         <CardContent className="p-0">
                             {!dpcValidation ? (
                                 <div className="flex flex-col items-center gap-2 py-12 text-center">
@@ -192,7 +235,7 @@ export default function LocationShow() {
                                 </div>
                             ) : (
                                 <div className="overflow-x-auto">
-                                    <Table>
+                                    <Table className="text-xs">
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead className="pl-3 sm:pl-6">Sub-location</TableHead>
@@ -213,7 +256,7 @@ export default function LocationShow() {
                                                             {issue.suffix}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-muted-foreground pr-3 text-sm sm:pr-6">{issue.issue}</TableCell>
+                                                    <TableCell className="text-muted-foreground pr-3 sm:pr-6">{issue.issue}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>

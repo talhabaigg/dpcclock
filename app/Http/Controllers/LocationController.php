@@ -136,6 +136,23 @@ class LocationController extends Controller
     }
 
     /**
+     * Display the location details tab (IDs, variation start, sell multiplier, shift conditions).
+     */
+    public function details(Location $location)
+    {
+        $user = auth()->user();
+        if (! $user->can('locations.view-all') && ! $user->managedLocationIds()->contains($location->id)) {
+            abort(403, 'You do not have access to this project.');
+        }
+
+        $this->getLocationWithCounts($location);
+
+        return Inertia::render('locations/details', [
+            'location' => $location,
+        ]);
+    }
+
+    /**
      * Display the cost codes tab.
      */
     public function costCodes(Location $location)

@@ -612,6 +612,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/project-dashboard', [LocationController::class, 'projectDashboard'])->name('project-dashboard')->middleware('permission:project-dashboard.view');
         Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
         Route::get('/locations/{location}', [LocationController::class, 'show'])->name('locations.show');
+        Route::get('/locations/{location}/details', [LocationController::class, 'details'])->name('locations.details');
         Route::get('/locations/{location}/dashboard', [LocationController::class, 'dashboard'])->name('locations.dashboard')->middleware('permission:locations.dashboard.view');
         Route::put('/locations/{location}/dashboard-settings', [LocationController::class, 'saveDashboardSettings'])->name('locations.dashboard-settings.update')->middleware('permission:locations.dashboard.view');
 

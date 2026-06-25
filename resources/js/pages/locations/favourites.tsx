@@ -1,5 +1,6 @@
+import LocationPageHeader from '@/components/location-page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { Head, usePage } from '@inertiajs/react';
@@ -20,24 +21,21 @@ export default function LocationFavourites() {
     return (
         <LocationLayout location={location} activeTab="favourites">
             <Head title={`Favourites - ${location.name}`} />
-            <Card>
-                <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <CardTitle className="text-base">Favorite Materials</CardTitle>
-                        <div className="flex flex-wrap gap-2">
-                            <FavouriteMaterialUploader locationId={location.id} />
-                            <a href={`/location/${location.id}/favourite-materials/download-csv`}>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <Download className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Download CSV</span>
-                                </Button>
-                            </a>
-                        </div>
-                    </div>
-                </CardHeader>
+
+            <LocationPageHeader location={location} title="Favourite Materials">
+                <FavouriteMaterialUploader locationId={location.id} />
+                <a href={`/location/${location.id}/favourite-materials/download-csv`}>
+                    <Button variant="outline" size="sm" className="gap-2">
+                        <Download className="h-4 w-4" />
+                        <span className="hidden sm:inline">Download CSV</span>
+                    </Button>
+                </a>
+            </LocationPageHeader>
+
+            <Card className="py-0">
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                        <Table>
+                        <Table className="text-xs [&_td]:h-8 [&_td]:py-0 [&_th]:h-8 [&_th]:py-0">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="pl-3 sm:pl-6">Code</TableHead>

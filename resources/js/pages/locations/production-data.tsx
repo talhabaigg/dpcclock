@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import LocationPageHeader from '@/components/location-page-header';
 import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -256,31 +257,28 @@ export default function ProductionData() {
     return (
         <LocationLayout location={location} activeTab="production-data">
             <Head title={`Production Data - ${location.name}`} />
-            {/* Upload Section */}
-            <Card>
-                <CardHeader className="px-3 py-3 sm:px-6 sm:py-4">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-base">DPC Data</CardTitle>
-                        <Button onClick={handleOpenWizard} className="gap-2" size="sm">
-                            <Upload className="h-4 w-4" />
-                            Upload CSV
-                        </Button>
-                    </div>
-                </CardHeader>
+
+            <LocationPageHeader location={location} title="DPC Data">
+                <Button onClick={handleOpenWizard} className="gap-2" size="sm">
+                    <Upload className="h-4 w-4" />
+                    Upload CSV
+                </Button>
+            </LocationPageHeader>
+
+            <Card className="py-0">
                 <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="pl-3 sm:pl-6">Report Date</TableHead>
-                                    <TableHead>Filename</TableHead>
-                                    <TableHead className="text-right">Rows</TableHead>
-                                    <TableHead className="text-right">Errors</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Uploaded By</TableHead>
-                                    <TableHead className="w-28 pr-3 text-right sm:pr-6">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                    <Table className="text-xs [&_td]:h-8 [&_td]:py-0 [&_th]:h-8 [&_th]:py-0">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="pl-3 sm:pl-6">Report Date</TableHead>
+                                <TableHead>Filename</TableHead>
+                                <TableHead className="text-right">Rows</TableHead>
+                                <TableHead className="text-right">Errors</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Uploaded By</TableHead>
+                                <TableHead className="w-28 pr-3 text-right sm:pr-6">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
                             <TableBody>
                                 {uploads.length === 0 ? (
                                     <TableRow>
@@ -374,9 +372,8 @@ export default function ProductionData() {
                                         </TableRow>
                                     ))
                                 )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
 
