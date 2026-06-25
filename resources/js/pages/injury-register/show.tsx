@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import type { JSONContent } from '@tiptap/react';
@@ -21,7 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FormFillPane, FormResponsePane, type FormRequestData } from '@/components/form-renderer/form-fill-pane';
-import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, Download, File as FileIcon, FileImage, FileText, Loader2, Lock, Mail, MessageSquare, Paperclip, Pencil, Send, Trash2, Unlock, X } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Download, EllipsisVertical, ExternalLink, File as FileIcon, FileImage, FileText, HeartPulse, Loader2, Lock, Mail, MapPin, MessageSquare, Paperclip, Pencil, Send, Stethoscope, Trash2, Unlock, User, Users, X } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
 import { useEffect, useRef, useState } from 'react';
@@ -69,10 +71,13 @@ interface Props {
     formRequests: FormRequestData[];
 }
 
-function UserAvatar({ name }: { name: string }) {
+function UserAvatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
     const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+    const sizeClasses = size === 'sm'
+        ? 'h-6 w-6 text-[10px]'
+        : 'h-8 w-8 text-xs';
     return (
-        <div className="bg-muted text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+        <div className={cn('bg-muted text-muted-foreground flex shrink-0 items-center justify-center rounded-full font-medium', sizeClasses)}>
             {initials}
         </div>
     );
@@ -446,9 +451,9 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
 
 function SidebarField({ label, value }: { label: string; value?: string | number | null }) {
     return (
-        <div>
-            <dt className="text-muted-foreground text-xs">{label}</dt>
-            <dd className="text-sm">{value || '—'}</dd>
+        <div className="leading-tight">
+            <dt className="text-muted-foreground text-[11px]">{label}</dt>
+            <dd className="text-xs">{value || '—'}</dd>
         </div>
     );
 }
@@ -535,6 +540,8 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
     const [preview, setPreview] = useState<AttachmentPreview | null>(null);
     const [removingMediaId, setRemovingMediaId] = useState<number | null>(null);
+    const [mobileView, setMobileView] = useState<'details' | 'activity'>('details');
+    const messageCount = comments.filter((c) => c.metadata === null).length;
 
     function confirmRemoveAttachment() {
         if (removingMediaId === null) return;
@@ -651,19 +658,56 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={injury.id_formal} />
 
-            {flash?.success && <SuccessAlertFlash message={flash.success} />}
-
             <div
                 className={cn(
                     'transition-[padding] duration-200',
                     (fillingFormRequest || viewingFormRequest) && 'xl:pr-[520px]',
                 )}
             >
-            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
-                <Card className="gap-0 overflow-hidden rounded-xl py-0 lg:min-h-[calc(100vh-7rem)]">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 p-3 sm:p-4 sm:gap-4">
+                {flash?.success && <SuccessAlertFlash message={flash.success} />}
+
+                {/* Mobile-only view switcher — desktop keeps both columns visible */}
+                <div className="sticky top-0 z-10 -mx-3 flex border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 sm:rounded-lg sm:border lg:hidden">
+                    <button
+                        type="button"
+                        onClick={() => setMobileView('details')}
+                        aria-pressed={mobileView === 'details'}
+                        className={cn(
+                            'flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors',
+                            mobileView === 'details'
+                                ? 'border-b-2 border-primary text-foreground sm:border-b-0 sm:bg-muted'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <FileText className="h-4 w-4" />
+                        Details
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMobileView('activity')}
+                        aria-pressed={mobileView === 'activity'}
+                        className={cn(
+                            'flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors',
+                            mobileView === 'activity'
+                                ? 'border-b-2 border-primary text-foreground sm:border-b-0 sm:bg-muted'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <MessageSquare className="h-4 w-4" />
+                        Comments
+                        {messageCount > 0 && (
+                            <span className="bg-muted text-muted-foreground ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                                {messageCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                <Card className="gap-0 overflow-hidden rounded-xl py-0 max-lg:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-7rem)]">
                     <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
                         {/* Left Column — Activity / Comments */}
-                        <div className="flex flex-col">
+                        <div className={cn('flex flex-col', mobileView !== 'activity' && 'max-lg:hidden')}>
                             <div className="flex-1 space-y-4 p-5">
                                 <div>
                                     <h3 className="text-sm font-semibold">Activity</h3>
@@ -756,130 +800,157 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                         </div>
 
                         {/* Right Column — Sidebar */}
-                        <div className="bg-muted/40 space-y-4 p-5 max-lg:border-t lg:border-l">
-                            {/* Header */}
-                            <div className="flex items-start justify-between gap-2">
+                        <div className={cn(
+                            'bg-muted/40 space-y-4 p-5 lg:border-l',
+                            mobileView !== 'details' && 'max-lg:hidden',
+                        )}>
+                            {/* Header — id + utilities + kebab action menu inline */}
+                            <div className="flex items-center justify-between gap-2">
                                 <h2 className="text-lg font-semibold">{injury.id_formal}</h2>
-                                <div className="flex items-center gap-2">
-                                    <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
-                                    {injury.locked_at && <Badge variant="outline"><Lock className="mr-1 h-3 w-3" /> Locked</Badge>}
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex gap-2">
-                                {can('injury-register.edit') && !injury.locked_at && (
-                                    <Button variant="outline" size="sm" className="flex-1" asChild>
-                                        <Link href={`/injury-register/${injury.id}/edit`}>
-                                            <Pencil className="mr-1 h-3 w-3" /> Edit
-                                        </Link>
-                                    </Button>
-                                )}
-                                {can('injury-register.lock') && (
-                                    !injury.locked_at ? (
-                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.post(`/injury-register/${injury.id}/lock`, {}, { preserveScroll: true })}>
-                                            <Lock className="mr-1 h-3 w-3" /> Lock
-                                        </Button>
-                                    ) : (
-                                        <Button variant="outline" size="sm" className="flex-1" onClick={() => router.post(`/injury-register/${injury.id}/unlock`, {}, { preserveScroll: true })}>
-                                            <Unlock className="mr-1 h-3 w-3" /> Unlock
-                                        </Button>
-                                    )
-                                )}
-                                <Button variant="outline" size="sm" className="flex-1" onClick={() => setSendOpen(true)}>
-                                    <Send className="mr-1 h-3 w-3" /> Notify
-                                </Button>
-                                {appEnv !== 'production' && (
-                                    <Popover open={testPopoverOpen} onOpenChange={setTestPopoverOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="ghost" size="sm" disabled={sendingTestNotification} title="Send a test (dev only)">
-                                                <MessageSquare className="h-3 w-3" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent align="end" className="w-72 space-y-3">
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-medium">Test SMS to phone</Label>
-                                                <div className="flex gap-2">
-                                                    <Input
-                                                        type="tel"
-                                                        placeholder="0412 345 678"
-                                                        value={testPhone}
-                                                        onChange={(e) => setTestPhone(e.target.value)}
-                                                        className="h-8 flex-1 text-sm"
-                                                        disabled={sendingTestNotification}
-                                                    />
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-8"
-                                                        disabled={sendingTestNotification || !testPhone.trim()}
-                                                        onClick={() => {
-                                                            setSendingTestNotification(true);
-                                                            router.post(`/injury-register/${injury.id}/test-notification`, { phone: testPhone }, {
-                                                                preserveScroll: true,
-                                                                onSuccess: () => { setTestPhone(''); setTestPopoverOpen(false); },
-                                                                onFinish: () => setSendingTestNotification(false),
-                                                            });
-                                                        }}
-                                                    >
-                                                        Send
-                                                    </Button>
+                                <div className="flex items-center gap-1">
+                                    {injury.locked_at && (
+                                        <Badge variant="outline"><Lock className="mr-1 h-3 w-3" /> Locked</Badge>
+                                    )}
+                                    {appEnv !== 'production' && (
+                                        <Popover open={testPopoverOpen} onOpenChange={setTestPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="ghost" size="icon-sm" disabled={sendingTestNotification} title="Send a test (dev only)" aria-label="Send a test notification">
+                                                    <MessageSquare className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent align="end" className="w-72 space-y-3">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-medium">Test SMS to phone</Label>
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            type="tel"
+                                                            placeholder="0412 345 678"
+                                                            value={testPhone}
+                                                            onChange={(e) => setTestPhone(e.target.value)}
+                                                            className="h-8 flex-1 text-sm"
+                                                            disabled={sendingTestNotification}
+                                                        />
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-8"
+                                                            disabled={sendingTestNotification || !testPhone.trim()}
+                                                            onClick={() => {
+                                                                setSendingTestNotification(true);
+                                                                router.post(`/injury-register/${injury.id}/test-notification`, { phone: testPhone }, {
+                                                                    preserveScroll: true,
+                                                                    onSuccess: () => { setTestPhone(''); setTestPopoverOpen(false); },
+                                                                    onFinish: () => setSendingTestNotification(false),
+                                                                });
+                                                            }}
+                                                        >
+                                                            Send
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <Separator />
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="w-full"
-                                                disabled={sendingTestNotification}
-                                                onClick={() => {
-                                                    setSendingTestNotification(true);
-                                                    router.post(`/injury-register/${injury.id}/test-notification`, {}, {
-                                                        preserveScroll: true,
-                                                        onSuccess: () => setTestPopoverOpen(false),
-                                                        onFinish: () => setSendingTestNotification(false),
-                                                    });
-                                                }}
-                                            >
-                                                <Mail className="mr-1 h-3 w-3" /> Send to my email
+                                                <Separator />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full"
+                                                    disabled={sendingTestNotification}
+                                                    onClick={() => {
+                                                        setSendingTestNotification(true);
+                                                        router.post(`/injury-register/${injury.id}/test-notification`, {}, {
+                                                            preserveScroll: true,
+                                                            onSuccess: () => setTestPopoverOpen(false),
+                                                            onFinish: () => setSendingTestNotification(false),
+                                                        });
+                                                    }}
+                                                >
+                                                    <Mail className="mr-1 h-3 w-3" /> Send to my email
+                                                </Button>
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon-sm" aria-label="Actions">
+                                                <EllipsisVertical className="h-4 w-4" />
                                             </Button>
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-44">
+                                            {can('injury-register.edit') && (
+                                                injury.locked_at ? (
+                                                    <DropdownMenuItem disabled>
+                                                        <Pencil className="mr-2 h-3.5 w-3.5" />
+                                                        Edit
+                                                        <span className="text-muted-foreground ml-auto text-[10px]">Locked</span>
+                                                    </DropdownMenuItem>
+                                                ) : (
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/injury-register/${injury.id}/edit`}>
+                                                            <Pencil className="mr-2 h-3.5 w-3.5" /> Edit
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                )
+                                            )}
+                                            <DropdownMenuItem onClick={() => setTimeout(() => setSendOpen(true), 100)}>
+                                                <Send className="mr-2 h-3.5 w-3.5" /> Notify
+                                            </DropdownMenuItem>
+                                            {can('injury-register.lock') && (
+                                                <>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        onClick={() => router.post(`/injury-register/${injury.id}/${injury.locked_at ? 'unlock' : 'lock'}`, {}, { preserveScroll: true })}
+                                                    >
+                                                        {injury.locked_at ? (
+                                                            <><Unlock className="mr-2 h-3.5 w-3.5" /> Unlock record</>
+                                                        ) : (
+                                                            <><Lock className="mr-2 h-3.5 w-3.5" /> Lock record</>
+                                                        )}
+                                                    </DropdownMenuItem>
+                                                </>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </div>
 
                             {pendingFormRequests.length > 0 && (
                                 <>
                                     <Separator />
                                     <div className="space-y-2">
-                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sign-off</h4>
-
                                         {pendingFormRequests.map((fr) => {
                                             const fillable = canFillFormRequest(fr);
+                                            const isUserAssignment = fr.assignee_strategy === 'user' && fr.assignee_user_name;
+                                            const isPermissionAssignment = fr.assignee_strategy === 'permission';
+                                            const assignee = isUserAssignment
+                                                ? fr.assignee_user_name
+                                                : isPermissionAssignment && fr.assignee_permission
+                                                    ? `Anyone with ${fr.assignee_permission}`
+                                                    : fr.recipient_name;
+                                            const avatarName = isUserAssignment ? fr.assignee_user_name : fr.recipient_name;
                                             return (
-                                                <div key={fr.id} className="rounded-md border bg-background p-2.5">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
-                                                            <p className="mt-0.5 text-xs text-muted-foreground">
-                                                                {fr.assignee_strategy === 'user' && fr.assignee_user_name
-                                                                    ? `Assigned to ${fr.assignee_user_name}`
-                                                                    : fr.assignee_strategy === 'permission' && fr.assignee_permission
-                                                                        ? `Anyone with ${fr.assignee_permission}`
-                                                                        : `Awaiting ${fr.recipient_name}`}
-                                                            </p>
+                                                <div key={fr.id} className="flex items-center gap-2 rounded-md border bg-background p-2">
+                                                    {isPermissionAssignment ? (
+                                                        <div className="bg-muted text-muted-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
+                                                            <Users className="h-3 w-3" />
                                                         </div>
-                                                        <Badge variant="secondary" className="shrink-0 text-xs">Pending</Badge>
+                                                    ) : (
+                                                        <UserAvatar name={avatarName ?? '?'} size="sm" />
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate text-xs font-medium leading-tight">{fr.form_template?.name ?? 'Form'}</p>
+                                                        {assignee && (
+                                                            <p className="text-muted-foreground truncate text-[11px] leading-tight">{assignee}</p>
+                                                        )}
                                                     </div>
-                                                    {fillable && (
+                                                    {fillable ? (
                                                         <Button
                                                             size="sm"
-                                                            className="mt-2 h-7 w-full text-xs"
+                                                            className="h-7 shrink-0 text-xs"
                                                             disabled={!fr.form_template?.fields?.length}
                                                             onClick={() => setFillingFormRequest(fr)}
                                                         >
-                                                            <ClipboardCheck className="mr-1 h-3 w-3" />
                                                             Sign off
                                                         </Button>
+                                                    ) : (
+                                                        <Badge variant="secondary" className="shrink-0 text-xs">Pending</Badge>
                                                     )}
                                                 </div>
                                             );
@@ -890,162 +961,278 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
 
                             <Separator />
 
-                            {/* Incident */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incident</h4>
-                                <SidebarField label="Type" value={injury.incident_label} />
-                                <SidebarField label="Occurred" value={fmtDate(injury.occurred_at)} />
-                                <SidebarField label="Location" value={injury.location?.name} />
-                                <SidebarField label="Specific Location" value={injury.location_of_incident} />
-                                <SidebarField label="Body Category" value={injury.body_category_label} />
-                                <SidebarField label="Body Location" value={injury.body_location_label} />
-                            </div>
-
-                            <Separator />
-
-                            {/* Worker */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Worker</h4>
-                                <SidebarField label="Name" value={injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name} />
-                                <SidebarField label="Address" value={injury.employee_address} />
-                            </div>
-
-                            <Separator />
-
-                            {/* Reporting */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reporting</h4>
-                                    {can('injury-register.edit') && (
-                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '', claim_active: injury.claim_active ?? false, claim_type: injury.claim_type ?? '', claim_status: injury.claim_status ?? '', capacity: injury.capacity ?? '', employment_status: injury.employment_status ?? '', claim_cost: injury.claim_cost ?? 0, days_suitable_duties: injury.days_suitable_duties ?? 0, suitable_duties_from: injury.suitable_duties_from ?? '', suitable_duties_to: injury.suitable_duties_to ?? '', medical_expenses: injury.medical_expenses ?? 0 }); setClassifyOpen(true); }}>
-                                            <Pencil className="mr-1 h-3 w-3" /> Edit
-                                        </Button>
-                                    )}
-                                </div>
-                                <SidebarField label="Reported By" value={injury.reported_by} />
-                                <SidebarField label="Reported At" value={fmtDate(injury.reported_at)} />
-                                <SidebarField label="Reported To" value={injury.reported_to} />
-                                <SidebarField label="WorkCover Claim" value={injury.work_cover_claim ? 'Yes' : 'No'} />
-                                <SidebarField label="Days Lost" value={injury.work_days_missed} />
-                                <SidebarField label="Days Suitable Duties" value={injury.computed_suitable_duties_days} />
-                                {injury.suitable_duties_from && (
-                                    <div className="text-xs text-muted-foreground">
-                                        {fmtDateOnly(injury.suitable_duties_from)} → {injury.suitable_duties_to ? fmtDateOnly(injury.suitable_duties_to) : 'ongoing'}
-                                    </div>
-                                )}
-                                {injury.work_cover_claim && (
-                                    <>
-                                        <SidebarField label="Claim Active" value={injury.claim_active ? 'Yes' : 'No'} />
-                                        <SidebarField label="Claim Type" value={injury.claim_type ? (options.claimTypes[injury.claim_type] ?? injury.claim_type) : null} />
-                                        <SidebarField label="Claim Status" value={injury.claim_status ? (options.claimStatuses[injury.claim_status] ?? injury.claim_status) : null} />
-                                        <SidebarField label="Capacity" value={injury.capacity ? (options.capacities[injury.capacity] ?? injury.capacity) : null} />
-                                        <SidebarField label="Employment Status" value={injury.employment_status ? (options.employmentStatuses[injury.employment_status] ?? injury.employment_status) : null} />
-                                        <SidebarField label="Claim Cost" value={injury.claim_cost ? `$${Number(injury.claim_cost).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
-                                    </>
-                                )}
-                                <SidebarField label="Medical Expenses (Non-WC)" value={injury.medical_expenses ? `$${Number(injury.medical_expenses).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
-                            </div>
-
-                            <Separator />
-
-                            {/* Treatment */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Emergency & Treatment</h4>
-                                <SidebarField label="Emergency Services Called" value={injury.emergency_services ? 'Yes' : 'No'} />
-                                {injury.emergency_services && injury.emergency_services_details && (
-                                    <SidebarField label="Emergency Details" value={injury.emergency_services_details} />
-                                )}
-                                <SidebarField label="Treatment Provided" value={injury.treatment === null ? 'N/A' : injury.treatment ? 'Yes' : 'No'} />
-                                {injury.treatment && (
-                                    <>
-                                        <SidebarField label="Type of Treatment" value={injury.treatment_type ? options.treatmentTypes[injury.treatment_type] : 'N/A'} />
-                                        {injury.treatment_details && (
-                                            <SidebarField label="Treatment Details" value={injury.treatment_details} />
-                                        )}
-                                    </>
-                                )}
-                                {injury.treatment === false && injury.no_treatment_reason && (
-                                    <SidebarField label="Reason No Treatment" value={injury.no_treatment_reason} />
-                                )}
-                            </div>
-
-                            {/* Natures / mechanisms etc — compact badges */}
-                            {injury.natures && injury.natures.length > 0 && (
-                                <>
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nature of Injury</h4>
-                                        <div className="flex flex-wrap gap-1">
-                                            {injury.natures.map((key) => (
-                                                <Badge key={key} variant="secondary" className="text-xs">{options.natures[key] ?? key}</Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {injury.mechanisms && injury.mechanisms.length > 0 && (
-                                <>
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mechanism</h4>
-                                        <div className="flex flex-wrap gap-1">
-                                            {injury.mechanisms.map((key) => (
-                                                <Badge key={key} variant="secondary" className="text-xs">{options.mechanisms[key] ?? key}</Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Attached Files */}
-                            {injury.media && injury.media.filter((m) => m.collection_name === 'files').length > 0 && (
-                                <>
-                                    <Separator />
-                                    <div className="space-y-2">
-                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attached Files</h4>
-                                        <div className="space-y-1">
-                                            {injury.media
-                                                .filter((m) => m.collection_name === 'files')
-                                                .map((m) => (
-                                                    <div key={m.id} className="flex items-center gap-1 rounded border px-2 py-1.5 text-xs">
-                                                        <a href={`/injury-register/${injury.id}/files/${m.id}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex min-w-0 flex-1 items-center gap-2">
-                                                            <FileText className="h-3.5 w-3.5 shrink-0" />
-                                                            <span className="truncate">{m.file_name}</span>
-                                                        </a>
-                                                        {can('injury-register.delete') && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setRemovingMediaId(m.id)}
-                                                                className="text-muted-foreground hover:bg-muted hover:text-red-500 shrink-0 rounded p-0.5 transition-colors"
-                                                                aria-label={`Remove ${m.file_name}`}
-                                                                title="Remove attachment"
-                                                            >
-                                                                <X className="h-3.5 w-3.5" />
-                                                            </button>
-                                                        )}
+                            {/* Detail sections — wrapped in accordion so the sidebar stays compact.
+                                Default-open sections (Worker / Incident / Injury) cover the "what is this record?"
+                                essentials; heavier sections start collapsed and are one tap away. */}
+                            <Accordion
+                                multiple
+                                defaultValue={['worker', 'incident', 'injury']}
+                                className="rounded-lg border bg-background"
+                            >
+                                <AccordionItem value="worker" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Worker
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="space-y-2">
+                                            {(() => {
+                                                const workerName = injury.employee?.preferred_name ?? injury.employee?.name ?? injury.employee_name ?? '—';
+                                                const avatar = <UserAvatar name={workerName} size="sm" />;
+                                                return injury.employee?.id ? (
+                                                    <Link
+                                                        href={`/employees/${injury.employee.id}`}
+                                                        className="group -mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 no-underline! transition-colors hover:bg-muted hover:no-underline!"
+                                                    >
+                                                        {avatar}
+                                                        <span className="text-primary! truncate text-xs font-medium group-hover:text-primary/80!">
+                                                            {workerName}
+                                                        </span>
+                                                    </Link>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        {avatar}
+                                                        <span className="truncate text-xs font-medium">{workerName}</span>
                                                     </div>
-                                                ))}
+                                                );
+                                            })()}
+                                            {injury.employee_address ? (
+                                                <div className="leading-tight">
+                                                    <dt className="text-muted-foreground text-[11px]">Address</dt>
+                                                    <dd className="text-xs">
+                                                        <a
+                                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(injury.employee_address)}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-primary! no-underline! inline-flex items-start gap-1 hover:text-primary/80! hover:no-underline!"
+                                                        >
+                                                            <span>{injury.employee_address}</span>
+                                                            <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" />
+                                                        </a>
+                                                    </dd>
+                                                </div>
+                                            ) : (
+                                                <SidebarField label="Address" value={injury.employee_address} />
+                                            )}
                                         </div>
-                                    </div>
-                                </>
-                            )}
+                                    </AccordionContent>
+                                </AccordionItem>
 
-                            <Separator />
+                                <AccordionItem value="incident" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Incident
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="space-y-1">
+                                            <SidebarField label="Type" value={injury.incident_label} />
+                                            <SidebarField label="Occurred" value={fmtDate(injury.occurred_at)} />
+                                            {injury.location?.id && can('locations.view') ? (
+                                                <div className="leading-tight">
+                                                    <dt className="text-muted-foreground text-[11px]">Location</dt>
+                                                    <dd className="text-xs">
+                                                        <Link
+                                                            href={`/locations/${injury.location.id}`}
+                                                            className="text-primary! no-underline! hover:text-primary/80! hover:no-underline!"
+                                                        >
+                                                            {injury.location.name}
+                                                        </Link>
+                                                    </dd>
+                                                </div>
+                                            ) : (
+                                                <SidebarField label="Location" value={injury.location?.name} />
+                                            )}
+                                            <SidebarField label="Specific Location" value={injury.location_of_incident} />
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
 
-                            {/* Download PDF */}
-                            <Button variant="outline" size="sm" className="w-full" asChild>
-                                <a href={`/injury-register/${injury.id}/pdf`}>
-                                    <Download className="mr-1 h-4 w-4" /> Download Injury Report PDF
-                                </a>
-                            </Button>
+                                <AccordionItem value="injury" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <HeartPulse className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Injury
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                            <SidebarField label="Body Category" value={injury.body_category_label} />
+                                            <SidebarField label="Body Location" value={injury.body_location_label} />
+                                            {injury.natures && injury.natures.length > 0 && (
+                                                <div className="leading-tight">
+                                                    <p className="text-muted-foreground text-[11px]">Nature of Injury</p>
+                                                    <div className="mt-0.5 flex flex-wrap gap-1">
+                                                        {injury.natures.map((key) => (
+                                                            <Badge key={key} variant="secondary" className="h-auto min-h-5 whitespace-normal px-1.5 py-0.5 text-left text-[10px] leading-tight">{options.natures[key] ?? key}</Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {injury.mechanisms && injury.mechanisms.length > 0 && (
+                                                <div className="leading-tight">
+                                                    <p className="text-muted-foreground text-[11px]">Mechanism</p>
+                                                    <div className="mt-0.5 flex flex-wrap gap-1">
+                                                        {injury.mechanisms.map((key) => (
+                                                            <Badge key={key} variant="secondary" className="h-auto min-h-5 whitespace-normal px-1.5 py-0.5 text-left text-[10px] leading-tight">{options.mechanisms[key] ?? key}</Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
 
-                            {/* Meta */}
-                            <div className="space-y-2 pt-2 text-xs">
-                                <SidebarField label="Created By" value={injury.creator?.name} />
-                                <SidebarField label="Created" value={fmtDate(injury.created_at)} />
-                                <SidebarField label="Updated" value={fmtDate(injury.updated_at)} />
-                            </div>
+                                <AccordionItem value="treatment" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <Stethoscope className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Emergency & Treatment
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="space-y-1">
+                                            <SidebarField label="Emergency Services Called" value={injury.emergency_services ? 'Yes' : 'No'} />
+                                            {injury.emergency_services && injury.emergency_services_details && (
+                                                <SidebarField label="Emergency Details" value={injury.emergency_services_details} />
+                                            )}
+                                            <SidebarField label="Treatment Provided" value={injury.treatment === null ? 'N/A' : injury.treatment ? 'Yes' : 'No'} />
+                                            {injury.treatment && (
+                                                <>
+                                                    <SidebarField label="Type of Treatment" value={injury.treatment_type ? options.treatmentTypes[injury.treatment_type] : 'N/A'} />
+                                                    {injury.treatment_details && (
+                                                        <SidebarField label="Treatment Details" value={injury.treatment_details} />
+                                                    )}
+                                                </>
+                                            )}
+                                            {injury.treatment === false && injury.no_treatment_reason && (
+                                                <SidebarField label="Reason No Treatment" value={injury.no_treatment_reason} />
+                                            )}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="reporting" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Reporting
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="space-y-1">
+                                            <SidebarField label="Reported By" value={injury.reported_by} />
+                                            <SidebarField label="Reported At" value={fmtDate(injury.reported_at)} />
+                                            <SidebarField label="Reported To" value={injury.reported_to} />
+                                            <Separator className="my-1" />
+                                            <SidebarField label="Created By" value={injury.creator?.name} />
+                                            <SidebarField label="Created" value={fmtDate(injury.created_at)} />
+                                            <SidebarField label="Updated" value={fmtDate(injury.updated_at)} />
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                <AccordionItem value="claim" className="px-3">
+                                    <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                        <span className="flex items-center gap-2 text-xs font-medium">
+                                            <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                                            Classifications & Claim
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-1">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                {injury.report_type ? (
+                                                    <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
+                                                ) : (
+                                                    <span className="text-muted-foreground text-[11px] italic">No classification set</span>
+                                                )}
+                                                {can('injury-register.edit') && (
+                                                    <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={() => { setClassForm({ work_cover_claim: injury.work_cover_claim, work_days_missed: injury.work_days_missed, report_type: injury.report_type ?? '', claim_active: injury.claim_active ?? false, claim_type: injury.claim_type ?? '', claim_status: injury.claim_status ?? '', capacity: injury.capacity ?? '', employment_status: injury.employment_status ?? '', claim_cost: injury.claim_cost ?? 0, days_suitable_duties: injury.days_suitable_duties ?? 0, suitable_duties_from: injury.suitable_duties_from ?? '', suitable_duties_to: injury.suitable_duties_to ?? '', medical_expenses: injury.medical_expenses ?? 0 }); setClassifyOpen(true); }}>
+                                                        <Pencil className="mr-1 h-3 w-3" /> Edit
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <SidebarField label="WorkCover Claim" value={injury.work_cover_claim ? 'Yes' : 'No'} />
+                                            <SidebarField label="Days Lost" value={injury.work_days_missed} />
+                                            <SidebarField label="Days Suitable Duties" value={injury.computed_suitable_duties_days} />
+                                            {injury.suitable_duties_from && (
+                                                <div className="text-xs text-muted-foreground">
+                                                    {fmtDateOnly(injury.suitable_duties_from)} → {injury.suitable_duties_to ? fmtDateOnly(injury.suitable_duties_to) : 'ongoing'}
+                                                </div>
+                                            )}
+                                            {injury.work_cover_claim && (
+                                                <>
+                                                    <SidebarField label="Claim Active" value={injury.claim_active ? 'Yes' : 'No'} />
+                                                    <SidebarField label="Claim Type" value={injury.claim_type ? (options.claimTypes[injury.claim_type] ?? injury.claim_type) : null} />
+                                                    <SidebarField label="Claim Status" value={injury.claim_status ? (options.claimStatuses[injury.claim_status] ?? injury.claim_status) : null} />
+                                                    <SidebarField label="Capacity" value={injury.capacity ? (options.capacities[injury.capacity] ?? injury.capacity) : null} />
+                                                    <SidebarField label="Employment Status" value={injury.employment_status ? (options.employmentStatuses[injury.employment_status] ?? injury.employment_status) : null} />
+                                                    <SidebarField label="Claim Cost" value={injury.claim_cost ? `$${Number(injury.claim_cost).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
+                                                </>
+                                            )}
+                                            <SidebarField label="Medical Expenses (Non-WC)" value={injury.medical_expenses ? `$${Number(injury.medical_expenses).toLocaleString('en-AU', { minimumFractionDigits: 2 })}` : '$0.00'} />
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+
+                                {injury.media && injury.media.filter((m) => m.collection_name === 'files').length > 0 && (
+                                    <AccordionItem value="files" className="px-3">
+                                        <AccordionTrigger className="py-1 text-xs hover:no-underline">
+                                            <span className="flex items-center gap-2 text-xs font-medium">
+                                                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                                                Attached Files
+                                                <span className="bg-muted text-muted-foreground ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                                                    {injury.media.filter((m) => m.collection_name === 'files').length}
+                                                </span>
+                                            </span>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-1">
+                                            <div className="space-y-1">
+                                                {injury.media
+                                                    .filter((m) => m.collection_name === 'files')
+                                                    .map((m) => (
+                                                        <div key={m.id} className="flex items-center gap-1 rounded border px-2 py-1.5 text-xs">
+                                                            <a href={`/injury-register/${injury.id}/files/${m.id}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground flex min-w-0 flex-1 items-center gap-2">
+                                                                <FileText className="h-3.5 w-3.5 shrink-0" />
+                                                                <span className="truncate">{m.file_name}</span>
+                                                            </a>
+                                                            {can('injury-register.delete') && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setRemovingMediaId(m.id)}
+                                                                    className="text-muted-foreground hover:bg-muted hover:text-red-500 shrink-0 rounded p-0.5 transition-colors"
+                                                                    aria-label={`Remove ${m.file_name}`}
+                                                                    title="Remove attachment"
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                )}
+                            </Accordion>
+
+                            {/* Download PDF — styled as a downloadable file card */}
+                            <a
+                                href={`/injury-register/${injury.id}/pdf`}
+                                className="group flex items-center gap-2.5 rounded-md border bg-background px-3 py-2 transition-colors hover:bg-muted"
+                            >
+                                <div className="bg-muted text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
+                                    <FileText className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0 flex-1 leading-tight">
+                                    <p className="truncate text-xs font-medium">Injury Report</p>
+                                    <p className="text-muted-foreground text-[11px]">PDF · {injury.id_formal}</p>
+                                </div>
+                                <Download className="text-muted-foreground h-4 w-4 shrink-0 transition-transform group-hover:translate-y-0.5" />
+                            </a>
                         </div>
                     </div>
                 </Card>

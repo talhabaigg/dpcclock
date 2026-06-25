@@ -1,23 +1,21 @@
-import { AlertCircleIcon, CircleCheck } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { AlertCircleIcon } from 'lucide-react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { Alert, AlertDescription } from './ui/alert';
 
 const SuccessAlertFlash = ({ message }: { message: string }) => {
-    return (
-        <Alert
-            variant="default"
-            className="m-2 mx-auto mt-1 max-w-96 items-center justify-start gap-2 border-green-700 p-2 text-sm sm:mx-2 sm:max-w-2xl sm:flex-row md:justify-between"
-        >
-            <CircleCheck color="#388E3C " />
-            <AlertTitle className="mt-1 text-green-700">{message}</AlertTitle>
-        </Alert>
-    );
+    useEffect(() => {
+        if (!message) return;
+        toast.success(message);
+    }, [message]);
+    return null;
 };
 
 const ErrorAlertFlash = ({ error }: { error: { message: string; response?: string } }) => {
     return (
         <Alert
             variant="destructive"
-            className="m-2 mx-auto mt-1 max-w-96 justify-start gap-2 border-red-700 p-2 text-sm sm:mx-2 sm:max-w-2xl sm:flex-row md:justify-between"
+            className="m-2 mx-auto mt-1 max-w-96 border-red-700 p-2 text-sm sm:mx-2 sm:max-w-2xl"
         >
             <AlertCircleIcon />
             {error.message && <AlertDescription className="whitespace-pre-wrap">{error.message}</AlertDescription>}
