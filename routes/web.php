@@ -361,8 +361,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
     });
 
-    Route::middleware('permission:employment-applications.screen')->group(function () {
+    // Status updates are open to any role that owns a stage in the pipeline —
+    // screen (early stages), whs-review, whs (final review), approve. The
+    // controller gates each target status to the matching permission.
+    Route::middleware('permission:employment-applications.screen|employment-applications.whs-review|employment-applications.whs|employment-applications.approve')->group(function () {
         Route::patch('/employment-applications/{employmentApplication}/status', [EmploymentApplicationController::class, 'updateStatus'])->name('employment-applications.update-status');
+    });
+
+    Route::middleware('permission:employment-applications.screen')->group(function () {
         Route::post('/employment-applications/{employmentApplication}/onboard', [EmploymentApplicationController::class, 'onboard'])->name('employment-applications.onboard');
         Route::post('/employment-applications/{employmentApplication}/link-employee', [EmploymentApplicationController::class, 'linkToEmployee'])->name('employment-applications.link-employee');
         Route::delete('/employment-applications/{employmentApplication}/unlink-employee', [EmploymentApplicationController::class, 'unlinkEmployee'])->name('employment-applications.unlink-employee');

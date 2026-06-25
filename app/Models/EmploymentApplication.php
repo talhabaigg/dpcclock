@@ -164,6 +164,26 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
     }
 
     /**
+     * Human-readable label used by form notifications and system comments so
+     * recipients can see *which* applicant the form is about.
+     */
+    public function displayLabel(): string
+    {
+        $name = trim("{$this->first_name} {$this->surname}");
+
+        return $name !== '' ? $name : "Application #{$this->id}";
+    }
+
+    /**
+     * Deep link to this application's show page — included in form-request
+     * emails so the recipient can review the applicant before signing off.
+     */
+    public function formContextUrl(): string
+    {
+        return route('employment-applications.show', $this->id);
+    }
+
+    /**
      * Find duplicate applications by email or phone.
      */
     public function scopeDuplicatesOf($query, string $email, ?string $phone = null)

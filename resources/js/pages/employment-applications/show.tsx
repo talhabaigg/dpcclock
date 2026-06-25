@@ -287,6 +287,9 @@ const SYSTEM_STATUSES = ['contract_sent', 'contract_signed', 'onboarded'];
 /** Statuses that are selectable in the dropdown */
 const SELECTABLE_STATUSES = PIPELINE_STATUSES.filter((s) => !SYSTEM_STATUSES.includes(s));
 
+/** Early-pipeline statuses owned by the screen permission (up to face-to-face). */
+const SCREEN_STATUSES = ['new', 'reviewing', 'phone_interview', 'reference_check', 'face_to_face'];
+
 function StatusBadge({ status, labels, className }: { status: string; labels: Record<string, string>; className?: string }) {
     return (
         <Badge variant="secondary" className={cn('text-xs', className)}>
@@ -1739,7 +1742,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 </div>
 
                                 {/* Status Controls */}
-                                {canScreen && (
+                                {(canScreen || canWhsReview || canWhs || canApprove) && (
                                     <div className="mb-4 space-y-2">
                                         {SYSTEM_STATUSES.includes(app.status) ? (
                                             <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
@@ -1753,10 +1756,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {SELECTABLE_STATUSES.filter((s) => {
-                                                        if (s === 'whs_review') return canWhsReview;
+                                                        // Always include the current status so the trigger has a matching option.
+                                                        if (s === app.status) return true;
+                                                        if (s === 'whs_review') return canScreen || canWhsReview;
                                                         if (s === 'final_review') return canWhs;
                                                         if (s === 'approved') return canApprove;
-                                                        return true;
+                                                        if (SCREEN_STATUSES.includes(s)) return canScreen;
+                                                        return false;
                                                     }).map((s) => (
                                                         <SelectItem key={s} value={s}>
                                                             {statuses[s]}
@@ -1770,20 +1776,22 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                         )}
 
                                         {/* Action Buttons — contextual based on current status */}
-                                        <div className="flex gap-2">
-                                            {['approved', 'contract_sent', 'contract_signed'].includes(app.status) && (
-                                                <Button size="sm" variant="outline" className="flex-1" onClick={() => setShowSigningModal(true)}>
-                                                    <Send className="mr-1.5 h-3.5 w-3.5" />
-                                                    Send Docs
-                                                </Button>
-                                            )}
-                                            {['contract_signed', 'onboarded'].includes(app.status) && (
-                                                <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
-                                                    <User className="mr-1.5 h-3.5 w-3.5" />
-                                                    Payroll
-                                                </Button>
-                                            )}
-                                        </div>
+                                        {canScreen && (
+                                            <div className="flex gap-2">
+                                                {['approved', 'contract_sent', 'contract_signed'].includes(app.status) && (
+                                                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setShowSigningModal(true)}>
+                                                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                                                        Send Docs
+                                                    </Button>
+                                                )}
+                                                {['contract_signed', 'onboarded'].includes(app.status) && (
+                                                    <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
+                                                        <User className="mr-1.5 h-3.5 w-3.5" />
+                                                        Payroll
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

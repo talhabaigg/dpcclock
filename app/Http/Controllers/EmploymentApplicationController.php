@@ -564,9 +564,12 @@ class EmploymentApplicationController extends Controller
             return back()->withErrors(['status' => 'Use the Send to Payroll action instead.']);
         }
 
-        // Gate: only users with 'whs-review' permission can move to "WHS Review"
+        // Gate: screen and whs-review users can move to "WHS Review" — screen
+        // users trigger the WHS sign-off workflow; whs-review explicitly grants
+        // the same on its own for roles that don't have full screen access.
         if ($newStatus === EmploymentApplication::STATUS_WHS_REVIEW) {
-            if (! $request->user()->can('employment-applications.whs-review')) {
+            if (! $request->user()->can('employment-applications.screen')
+                && ! $request->user()->can('employment-applications.whs-review')) {
                 return back()->withErrors(['status' => 'You do not have permission to send enquiries to WHS Review.']);
             }
         }
