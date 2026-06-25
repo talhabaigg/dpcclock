@@ -1586,9 +1586,22 @@ class SigningRequestController extends Controller
         return response()->download($tmpZip, 'signing-documents-' . now()->format('Ymd-His') . '.zip')->deleteFileAfterSend(true);
     }
 
-    public function download(SigningRequest $signingRequest)
+    public function download(SigningRequest $signingRequest, Request $request)
     {
         $this->authorizeSignableAction($signingRequest);
+
+        // Preview mode: render the unsigned document with resolved variables, regardless of status.
+        // Used so senders can see exactly what was sent to the recipient before they sign.
+        if ($request->boolean('preview') && $signingRequest->document_html) {
+            $pdfService = app(\App\Services\SignedDocumentPdfService::class);
+            $pdf = $pdfService->generatePreview($signingRequest);
+            $filename = str()->slug($signingRequest->document_title ?: 'document') . '-unsigned.pdf';
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        }
 
         // Try signed document first, then uploaded document (info-only deliveries)
         $media = $signingRequest->getFirstMedia('signed_document')

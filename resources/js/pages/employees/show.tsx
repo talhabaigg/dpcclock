@@ -983,6 +983,9 @@ export default function EmployeeShow() {
                                                                                                     <a href={sr.signing_url} target="_blank" rel="noreferrer">Sign in person</a>
                                                                                                 </DropdownMenuItem>
                                                                                             )}
+                                                                                            <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                                <a href={`/signing-requests/${sr.id}/download?preview=1`} target="_blank" rel="noreferrer">Download as sent</a>
+                                                                                            </DropdownMenuItem>
                                                                                             <DropdownMenuItem
                                                                                                 className="whitespace-nowrap"
                                                                                                 onClick={() => openResendDialog(sr)}
@@ -1000,6 +1003,9 @@ export default function EmployeeShow() {
                                                                                     )}
                                                                                     {isAwaitingInternal && (
                                                                                         <>
+                                                                                            <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                                <a href={`/signing-requests/${sr.id}/download?preview=1`} target="_blank" rel="noreferrer">Download as sent</a>
+                                                                                            </DropdownMenuItem>
                                                                                             <DropdownMenuItem
                                                                                                 className="whitespace-nowrap"
                                                                                                 onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}
@@ -1098,6 +1104,9 @@ export default function EmployeeShow() {
                                                                                                 <a href={sr.signing_url} target="_blank" rel="noreferrer">Sign in person</a>
                                                                                             </DropdownMenuItem>
                                                                                         )}
+                                                                                        <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                            <a href={`/signing-requests/${sr.id}/download?preview=1`} target="_blank" rel="noreferrer">Download as sent</a>
+                                                                                        </DropdownMenuItem>
                                                                                         <DropdownMenuItem
                                                                                             className="whitespace-nowrap"
                                                                                             onClick={() => openResendDialog(sr)}
@@ -1115,6 +1124,9 @@ export default function EmployeeShow() {
                                                                                 )}
                                                                                 {isAwaitingInternal && (
                                                                                     <>
+                                                                                        <DropdownMenuItem asChild className="whitespace-nowrap">
+                                                                                            <a href={`/signing-requests/${sr.id}/download?preview=1`} target="_blank" rel="noreferrer">Download as sent</a>
+                                                                                        </DropdownMenuItem>
                                                                                         <DropdownMenuItem
                                                                                             className="whitespace-nowrap"
                                                                                             onClick={() => router.post(`/signing-requests/${sr.id}/resend`, {}, { preserveScroll: true })}

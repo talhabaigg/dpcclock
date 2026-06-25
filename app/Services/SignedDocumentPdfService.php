@@ -23,8 +23,9 @@ class SignedDocumentPdfService
     {
         $html = $this->assembler->assemble($signingRequest->document_html, RenderStage::Preview);
         $html = $this->assembler->wrapForPdf($html);
+        $logoFile = DocumentHtmlAssembler::resolveLogoFile($signingRequest);
 
-        return $this->renderPdf($html);
+        return $this->renderPdf($html, $logoFile);
     }
 
     /**
