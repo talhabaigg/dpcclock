@@ -13,6 +13,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import type { JSONContent } from '@tiptap/react';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -28,14 +30,16 @@ import {
     ChevronRight,
     Clipboard,
     Download,
+    EllipsisVertical,
     ExternalLink,
     FileIcon,
+    FileText,
     History,
     ListChecks,
     Loader2,
     Mail,
     MapPin,
-    Paperclip,
+    MessageSquare,
     Pencil,
     Phone,
     Plus,
@@ -51,7 +55,7 @@ import {
     XCircle,
     XIcon,
 } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
     FormFillPane,
     FormResponsePane,
@@ -316,11 +320,11 @@ function formatFileSize(bytes: number) {
 
 function SidebarAttribute({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
     return (
-        <div className="flex items-start gap-3 py-2">
-            <Icon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex items-start gap-2 py-1.5 leading-tight">
+            <Icon className="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
             <div className="min-w-0 flex-1">
-                <p className="text-muted-foreground text-xs">{label}</p>
-                <div className="text-sm">{children}</div>
+                <p className="text-muted-foreground text-[11px]">{label}</p>
+                <div className="text-xs">{children}</div>
             </div>
         </div>
     );
@@ -346,7 +350,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
-    onReply?: (commentId: number, userName: string) => void;
+    onReply?: (commentId: number, userName: string, userId: number | null) => void;
     isReply?: boolean;
     statusLabels: Record<string, string>;
 }) {
@@ -524,7 +528,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                         <div className="mt-1 flex items-center gap-4">
                             <button
                                 type="button"
-                                onClick={() => onReply(comment.id, comment.user?.name ?? 'someone')}
+                                onClick={() => onReply(comment.id, comment.user?.name ?? 'someone', comment.user?.id ?? null)}
                                 className="text-muted-foreground hover:bg-muted inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium transition-colors"
                             >
                                 <Reply className="h-3.5 w-3.5" />
@@ -1280,16 +1284,41 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         }
     }, []);
 
-    const [commentBody, setCommentBody] = useState('');
+    const [commentDoc, setCommentDoc] = useState<JSONContent | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
-    const [inputFocused, setInputFocused] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [alertMessage, setAlertMessage] = useState<{ type: 'error'; text: string } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(undefined);
 
-    // Reply state
-    const [replyingTo, setReplyingTo] = useState<{ id: number; userName: string } | null>(null);
+    // Reply state — userId lets us auto-@mention the replied-to user on the new comment.
+    const [replyingTo, setReplyingTo] = useState<{ id: number; userId: number | null; userName: string } | null>(null);
+
+    const docHasContent = (doc: JSONContent | null) => {
+        if (!doc) return false;
+        return /"text"|"mention"/.test(JSON.stringify(doc));
+    };
+
+    /**
+     * Click Reply → pre-fill the editor with an @mention of that user so they
+     * get notified when the reply is posted (mention extension drives the
+     * mentioned_users payload server-side).
+     */
+    function handleReplyClick(commentId: number, userName: string, userId: number | null) {
+        setReplyingTo({ id: commentId, userId, userName });
+        if (userId == null) return;
+        setCommentDoc({
+            type: 'doc',
+            content: [
+                {
+                    type: 'paragraph',
+                    content: [
+                        { type: 'mention', attrs: { id: userId, label: userName } },
+                        { type: 'text', text: ' ' },
+                    ],
+                },
+            ],
+        });
+    }
 
     // Comment edit/delete state
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
@@ -1300,6 +1329,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     // Comment filter & sort
     const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('messages');
+    const [mobileView, setMobileView] = useState<'details' | 'activity'>('details');
+    const messageCount = comments.filter((c) => c.metadata === null).length;
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
 
     const currentUser = (usePage().props.auth as { user?: { id: number; name: string } })?.user;
@@ -1329,20 +1360,21 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     }
 
     function handlePostComment() {
-        if (!commentBody.trim() && attachments.length === 0) return;
+        if (!docHasContent(commentDoc) && attachments.length === 0) return;
 
         const formData = new FormData();
         formData.append('commentable_type', 'employment_application');
         formData.append('commentable_id', String(app.id));
-        formData.append('body', commentBody);
+        if (commentDoc) formData.append('body_json', JSON.stringify(commentDoc));
         if (replyingTo) formData.append('parent_id', String(replyingTo.id));
         attachments.forEach((file) => formData.append('attachments[]', file));
 
         setSubmitting(true);
         router.post(route('comments.store'), formData, {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: () => {
-                setCommentBody('');
+                setCommentDoc(null);
                 setAttachments([]);
                 setReplyingTo(null);
             },
@@ -1352,17 +1384,6 @@ export default function EmploymentApplicationShow({ application: app, comments, 
             },
             onFinish: () => setSubmitting(false),
         });
-    }
-
-    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-        if (e.target.files) {
-            setAttachments((prev) => [...prev, ...Array.from(e.target.files!)]);
-        }
-        e.target.value = '';
-    }
-
-    function removeAttachment(index: number) {
-        setAttachments((prev) => prev.filter((_, i) => i !== index));
     }
 
     function handleEditComment(comment: CommentData) {
@@ -1556,11 +1577,48 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                     </Card>
                 )}
 
+                {/* Mobile-only view switcher — desktop keeps both columns visible */}
+                <div className="sticky top-0 z-10 -mx-3 flex border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:mx-0 sm:rounded-lg sm:border lg:hidden">
+                    <button
+                        type="button"
+                        onClick={() => setMobileView('details')}
+                        aria-pressed={mobileView === 'details'}
+                        className={cn(
+                            'flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors',
+                            mobileView === 'details'
+                                ? 'border-b-2 border-primary text-foreground sm:border-b-0 sm:bg-muted'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <FileText className="h-4 w-4" />
+                        Details
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMobileView('activity')}
+                        aria-pressed={mobileView === 'activity'}
+                        className={cn(
+                            'flex flex-1 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors',
+                            mobileView === 'activity'
+                                ? 'border-b-2 border-primary text-foreground sm:border-b-0 sm:bg-muted'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <MessageSquare className="h-4 w-4" />
+                        Activity
+                        {messageCount > 0 && (
+                            <span className="bg-muted text-muted-foreground ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                                {messageCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
                 {/* Single Card Layout */}
-                <Card className="gap-0 overflow-hidden rounded-xl py-0 lg:min-h-[calc(100vh-7rem)]">
+                <Card className="gap-0 overflow-hidden rounded-xl py-0 max-lg:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-7rem)]">
                     <div className="grid flex-1 grid-cols-1 lg:grid-cols-[1fr_320px]">
                         {/* Left Column — Main Content */}
-                        <div className="flex flex-col">
+                        <div className={cn('flex flex-col', mobileView !== 'activity' && 'max-lg:hidden')}>
                             <div className="flex-1 space-y-6 p-5">
                                 {/* Checklist Section */}
                                 <ChecklistSection
@@ -1625,7 +1683,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                     const fr = formRequests?.find((f) => f.id === id);
                                                     if (fr) setViewingFormRequest(fr);
                                                 }}
-                                                onReply={(id, userName) => setReplyingTo({ id, userName })}
+                                                onReply={handleReplyClick}
                                                 statusLabels={statuses}
                                             />
                                         ))}
@@ -1633,106 +1691,83 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 )}
                             </div>
 
-                            {/* Comment Input */}
+                            {/* Comment Input — AiRichTextEditor (mentions + attachments built in) */}
                             {canView && (
                                 <div className="mt-auto border-t p-3">
                                     {replyingTo && (
                                         <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 text-xs">
                                             <Reply className="h-3 w-3 text-muted-foreground" />
                                             <span className="text-muted-foreground">Replying to <span className="font-medium text-foreground">{replyingTo.userName}</span></span>
-                                            <button type="button" onClick={() => setReplyingTo(null)} className="text-muted-foreground hover:text-foreground ml-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setReplyingTo(null); setCommentDoc(null); }}
+                                                className="text-muted-foreground hover:text-foreground ml-auto"
+                                            >
                                                 <XIcon className="h-3.5 w-3.5" />
                                             </button>
                                         </div>
                                     )}
-                                    {attachments.length > 0 && (
-                                        <div className="mb-2 flex flex-wrap gap-2">
-                                            {attachments.map((file, i) => (
-                                                <div key={i} className="bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs">
-                                                    <FileIcon className="h-3 w-3" />
-                                                    <span className="max-w-[120px] truncate">{file.name}</span>
-                                                    <button type="button" onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-foreground">
-                                                        <XCircle className="h-3 w-3" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="flex items-end gap-2">
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            multiple
-                                            className="hidden"
-                                            onChange={handleFileSelect}
-                                        />
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-10 w-10 shrink-0"
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            aria-label="Attach file"
-                                        >
-                                            <Paperclip className="h-4 w-4" />
-                                        </Button>
-                                        <Textarea
-                                            placeholder="Enter message here..."
-                                            className="min-h-[40px] flex-1 resize-none"
-                                            rows={1}
-                                            value={commentBody}
-                                            onChange={(e) => setCommentBody(e.target.value)}
-                                            onFocus={() => setInputFocused(true)}
-                                            onBlur={() => setInputFocused(false)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                                    e.preventDefault();
-                                                    handlePostComment();
-                                                }
-                                            }}
-                                        />
-                                        {inputFocused || commentBody.trim() || attachments.length > 0 ? (
-                                            <Button
-                                                size="icon"
-                                                className="h-10 w-10 shrink-0"
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={handlePostComment}
-                                                disabled={submitting || (!commentBody.trim() && attachments.length === 0)}
-                                            >
-                                                <Send className="h-4 w-4" />
-                                            </Button>
-                                        ) : (
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="outline" size="sm" className="h-10 shrink-0 gap-1.5">
-                                                        <Share2 className="h-3.5 w-3.5" />
-                                                        Share
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-1.5" side="top" align="end">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-8 gap-1.5"
-                                                        onClick={() => {
-                                                            navigator.clipboard.writeText(window.location.href);
-                                                            setLinkCopied(true);
-                                                            setTimeout(() => setLinkCopied(false), 2000);
-                                                        }}
-                                                    >
-                                                        {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-                                                        {linkCopied ? 'Copied!' : 'Copy link'}
-                                                    </Button>
-                                                </PopoverContent>
-                                            </Popover>
-                                        )}
-                                    </div>
+                                    <AiRichTextEditor
+                                        outputFormat="json"
+                                        content={commentDoc}
+                                        onChange={setCommentDoc}
+                                        placeholder="Add a comment…"
+                                        enableAttachments
+                                        enableMentions
+                                        collapseToolbar
+                                        inlineActions
+                                        editorClassName="min-h-0 py-1.5"
+                                        attachments={attachments}
+                                        onAttachmentsChange={setAttachments}
+                                        trailingActions={
+                                            <>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            type="button"
+                                                            aria-label="Share"
+                                                        >
+                                                            <Share2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-1.5" side="top" align="end">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-8 gap-1.5"
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(window.location.href);
+                                                                setLinkCopied(true);
+                                                                setTimeout(() => setLinkCopied(false), 2000);
+                                                            }}
+                                                        >
+                                                            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                                            {linkCopied ? 'Copied!' : 'Copy link'}
+                                                        </Button>
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8"
+                                                    onClick={handlePostComment}
+                                                    disabled={submitting || (!docHasContent(commentDoc) && attachments.length === 0)}
+                                                >
+                                                    {replyingTo ? 'Reply' : 'Post'}
+                                                </Button>
+                                            </>
+                                        }
+                                    />
                                 </div>
                             )}
                         </div>
 
                         {/* Right Column — Attributes Sidebar */}
-                        <div className="bg-muted/40 p-5 max-lg:border-t lg:border-l">
+                        <div className={cn(
+                            'bg-muted/40 p-4 lg:border-l',
+                            mobileView !== 'details' && 'max-lg:hidden',
+                        )}>
                                 {/* Name & Status */}
                                 <div className="mb-4 flex items-start justify-between gap-2">
                                     <h2 className="text-lg font-semibold">
@@ -1797,32 +1832,36 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 {/* Pending Signing Requests — only show unsigned docs */}
                                 {signingRequests.filter((sr) => sr.status !== 'signed').length > 0 && (
-                                    <div className="mb-4 rounded-lg border bg-background p-3">
-                                        <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Documents</span>
-                                        <div className="space-y-2">
-                                            {signingRequests.filter((sr) => sr.status !== 'signed').map((sr) => (
-                                                <div key={sr.id} className="rounded-md border p-2.5">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <p className="truncate text-sm font-medium">{sr.document_template?.name ?? 'Document'}</p>
-                                                        <Badge variant="secondary" className="shrink-0 text-xs">{sr.status}</Badge>
-                                                    </div>
-                                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                                        {sr.delivery_method === 'email' ? 'Via email' : 'In-person'}
-                                                        {sr.sent_by && ` by ${sr.sent_by.name}`}
+                                    <div className="mb-3 space-y-1.5">
+                                        {signingRequests.filter((sr) => sr.status !== 'signed').map((sr) => (
+                                            <div key={sr.id} className="flex items-center gap-2 rounded-md border bg-background p-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="line-clamp-2 text-xs font-medium leading-tight">{sr.document_template?.name ?? 'Document'}</p>
+                                                    <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
+                                                        {sr.status}
+                                                        {' · '}
+                                                        {sr.delivery_method === 'email' ? 'via email' : 'in-person'}
                                                     </p>
-                                                    {canScreen && (
-                                                        <div className="mt-1.5 flex gap-1.5">
-                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('signing-requests.resend', sr.id), {}, { preserveScroll: true })}>
-                                                                Resend
-                                                            </Button>
-                                                            <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('signing-requests.cancel', sr.id), {}, { preserveScroll: true })}>
-                                                                Cancel
-                                                            </Button>
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            ))}
-                                        </div>
+                                                {canScreen && (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon-sm" aria-label="Document actions">
+                                                                <EllipsisVertical className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-36">
+                                                            <DropdownMenuItem onClick={() => router.post(route('signing-requests.resend', sr.id), {}, { preserveScroll: true })}>
+                                                                <Send className="mr-2 h-3.5 w-3.5" /> Resend
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem className="text-destructive" onClick={() => router.post(route('signing-requests.cancel', sr.id), {}, { preserveScroll: true })}>
+                                                                <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
 
@@ -1851,8 +1890,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     const goalMet = submittedCount >= minRequired;
 
                                     return (
-                                        <div className="mb-4 rounded-lg border bg-background p-3">
-                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                        <div className="mb-3 rounded-lg border bg-background p-2">
+                                            <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
                                                 <span className="text-xs font-medium text-muted-foreground">
                                                     {refMapping.form_template_name ?? 'Reference Checks'}
                                                 </span>
@@ -1866,7 +1905,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                     {submittedCount} of {minRequired} completed
                                                 </Badge>
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 {app.references.map((ref) => {
                                                     const fr = referenceFormFor(ref.id);
                                                     const status = fr?.status;
@@ -1875,23 +1914,16 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         ? ref.company_name
                                                         : ref.phone_number ?? null;
                                                     const isPending = status === 'pending' || status === 'sent' || status === 'opened';
+                                                    const avatarName = ref.contact_person?.trim() || ref.company_name || '?';
+                                                    const initials = avatarName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
                                                     return (
-                                                        <div key={ref.id} className="rounded-md border p-2.5">
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="min-w-0">
-                                                                    <p className="truncate text-sm font-medium">{label}</p>
-                                                                    {subLabel && (
-                                                                        <p className="truncate text-xs text-muted-foreground">{subLabel}</p>
-                                                                    )}
-                                                                </div>
-                                                                <Badge
-                                                                    variant="secondary"
-                                                                    className={cn(
-                                                                        'shrink-0 text-[10px]',
-                                                                        status === 'submitted' && 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700',
-                                                                        isPending && 'border-amber-500/20 bg-amber-500/10 text-amber-700',
-                                                                    )}
-                                                                >
+                                                        <div key={ref.id} className="flex items-center gap-2 rounded-md border p-2">
+                                                            <div className="bg-muted text-muted-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium">
+                                                                {initials}
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="truncate text-xs font-medium leading-tight">{label}</p>
+                                                                <p className="text-muted-foreground truncate text-[11px] leading-tight">
                                                                     {status === 'submitted'
                                                                         ? 'Completed'
                                                                         : isPending
@@ -1899,67 +1931,58 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                                           : status === 'cancelled'
                                                                             ? 'Skipped'
                                                                             : 'Not started'}
-                                                                </Badge>
+                                                                    {subLabel && ` · ${subLabel}`}
+                                                                </p>
                                                             </div>
-                                                            <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                                {!fr && canScreen && (
-                                                                    <Button
-                                                                        variant="default"
-                                                                        size="sm"
-                                                                        className="h-7 text-xs"
-                                                                        onClick={() =>
-                                                                            router.post(
-                                                                                route(
-                                                                                    'employment-applications.references.start-form',
-                                                                                    [app.id, ref.id, refMapping.id],
-                                                                                ),
-                                                                                {},
-                                                                                { preserveScroll: true },
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <Pencil className="mr-1 h-3 w-3" />
-                                                                        Start reference check
-                                                                    </Button>
-                                                                )}
-                                                                {fr && isPending && canFillFormRequest(fr) && (
-                                                                    <Button
-                                                                        variant="default"
-                                                                        size="sm"
-                                                                        className="h-7 flex-1 text-xs"
-                                                                        onClick={() => setFillingFormRequest(fr)}
-                                                                        disabled={!fr.form_template?.fields?.length}
-                                                                    >
-                                                                        <Pencil className="mr-1 h-3 w-3" /> Continue
-                                                                    </Button>
-                                                                )}
-                                                                {fr && isPending && canScreen && (
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="h-7 text-xs text-destructive"
-                                                                        onClick={() =>
-                                                                            router.post(
-                                                                                route('form-requests.cancel', fr.id),
-                                                                                {},
-                                                                                { preserveScroll: true },
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        Skip
-                                                                    </Button>
-                                                                )}
-                                                                {fr && status === 'submitted' && (
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        className="h-7 text-xs"
-                                                                        onClick={() => setViewingFormRequest(fr)}
-                                                                    >
-                                                                        View
-                                                                    </Button>
-                                                                )}
-                                                            </div>
+                                                            {!fr && canScreen && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="h-7 shrink-0 text-xs"
+                                                                    onClick={() =>
+                                                                        router.post(
+                                                                            route('employment-applications.references.start-form', [app.id, ref.id, refMapping.id]),
+                                                                            {},
+                                                                            { preserveScroll: true },
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Start
+                                                                </Button>
+                                                            )}
+                                                            {fr && isPending && canFillFormRequest(fr) && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="h-7 shrink-0 text-xs"
+                                                                    onClick={() => setFillingFormRequest(fr)}
+                                                                    disabled={!fr.form_template?.fields?.length}
+                                                                >
+                                                                    Continue
+                                                                </Button>
+                                                            )}
+                                                            {fr && status === 'submitted' && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="h-7 shrink-0 text-xs"
+                                                                    onClick={() => setViewingFormRequest(fr)}
+                                                                >
+                                                                    View
+                                                                </Button>
+                                                            )}
+                                                            {fr && isPending && canScreen && (
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="icon-sm" aria-label="Reference actions">
+                                                                            <EllipsisVertical className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end" className="w-32">
+                                                                        <DropdownMenuItem className="text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
+                                                                            <XCircle className="mr-2 h-3.5 w-3.5" /> Skip
+                                                                        </DropdownMenuItem>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -1978,84 +2001,90 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     );
                                     if (pendingGeneric.length === 0) return null;
                                     return (
-                                    <div className="mb-4 rounded-lg border bg-background p-3">
-                                        <span className="mb-2 block text-xs font-medium text-muted-foreground">Pending Forms</span>
-                                        <div className="space-y-2">
-                                            {pendingGeneric.map((fr) => {
-                                                const isPermissionAssigned = fr.assignee_strategy === 'permission' && !!fr.assignee_permission;
-                                                const isInApp = fr.delivery_method === 'in_app';
-                                                const fillable = canFillFormRequest(fr);
-                                                // In-app forms have no send/open lifecycle — show a neutral
-                                                // "open" badge rather than the email-flow "sent" / "opened".
-                                                const statusLabel = isInApp && fr.status !== 'submitted' && fr.status !== 'cancelled' ? 'open' : fr.status;
-                                                return (
-                                                <div key={fr.id} className="rounded-md border p-2.5">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <p className="truncate text-sm font-medium">{fr.form_template?.name ?? 'Form'}</p>
-                                                        <Badge variant="secondary" className="shrink-0 text-xs">{statusLabel}</Badge>
+                                    <div className="mb-3 space-y-1.5">
+                                        {pendingGeneric.map((fr) => {
+                                            const isPermissionAssigned = fr.assignee_strategy === 'permission' && !!fr.assignee_permission;
+                                            const isInApp = fr.delivery_method === 'in_app';
+                                            const fillable = canFillFormRequest(fr);
+                                            const statusLabel = isInApp && fr.status !== 'submitted' && fr.status !== 'cancelled' ? 'open' : fr.status;
+                                            const deliveryLabel = fr.delivery_method === 'email' ? 'via email' : isInApp ? 'in-app' : 'in-person';
+                                            const canManage = canScreen && (!isPermissionAssigned || canScreen);
+                                            return (
+                                                <div key={fr.id} className="flex items-center gap-2 rounded-md border bg-background p-2">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="line-clamp-2 text-xs font-medium leading-tight">{fr.form_template?.name ?? 'Form'}</p>
+                                                        <p className="text-muted-foreground mt-0.5 truncate text-[11px] leading-tight">
+                                                            {statusLabel} · {deliveryLabel}
+                                                        </p>
                                                     </div>
-                                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                                        {fr.delivery_method === 'email' ? 'Via email'
-                                                            : isInApp ? 'In-app'
-                                                            : 'In-person'}
-                                                        {fr.sent_by && ` by ${fr.sent_by.name}`}
-                                                    </p>
                                                     {fillable && (
-                                                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                            <Button
-                                                                variant="default"
-                                                                size="sm"
-                                                                className="h-7 flex-1 text-xs"
-                                                                onClick={() => setFillingFormRequest(fr)}
-                                                                disabled={!fr.form_template?.fields?.length}
-                                                            >
-                                                                <Pencil className="mr-1 h-3 w-3" />
-                                                                Fill out
-                                                            </Button>
-                                                            {!isPermissionAssigned && canScreen && (
-                                                                <>
-                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 text-xs" onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
-                                                                        Resend
-                                                                    </Button>
-                                                                    <Button variant="outline" size="sm" className="h-7 flex-1 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
-                                                                        Cancel
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                            {isPermissionAssigned && canScreen && (
-                                                                <Button variant="outline" size="sm" className="h-7 text-xs text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
-                                                                    Cancel
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-7 shrink-0 text-xs"
+                                                            onClick={() => setFillingFormRequest(fr)}
+                                                            disabled={!fr.form_template?.fields?.length}
+                                                        >
+                                                            Fill out
+                                                        </Button>
+                                                    )}
+                                                    {canManage && (
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon-sm" aria-label="Form actions">
+                                                                    <EllipsisVertical className="h-3.5 w-3.5" />
                                                                 </Button>
-                                                            )}
-                                                        </div>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-36">
+                                                                {!isPermissionAssigned && (
+                                                                    <DropdownMenuItem onClick={() => router.post(route('form-requests.resend', fr.id), {}, { preserveScroll: true })}>
+                                                                        <Send className="mr-2 h-3.5 w-3.5" /> Resend
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                <DropdownMenuItem className="text-destructive" onClick={() => router.post(route('form-requests.cancel', fr.id), {}, { preserveScroll: true })}>
+                                                                    <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                     )}
                                                 </div>
-                                                );
-                                            })}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
                                     );
                                 })()}
 
                                 {app.employees.length > 0 && (
                                     <>
-                                        <Separator className="mb-2" />
+                                        <Separator className="mb-1" />
                                         {app.employees.map((emp) => (
                                             <SidebarAttribute key={emp.id} icon={UserCheck} label="Linked Employee">
-                                                <span className="text-primary font-medium">{emp.name}</span>
+                                                <Link
+                                                    href={`/employees/${emp.id}`}
+                                                    className="text-primary! no-underline! inline-flex items-center font-medium hover:text-primary/80! hover:no-underline!"
+                                                >
+                                                    {emp.name}
+                                                </Link>
                                                 {emp.eh_employee_id && <span className="text-muted-foreground text-xs ml-1">(EH: {emp.eh_employee_id})</span>}
                                             </SidebarAttribute>
                                         ))}
                                     </>
                                 )}
 
-                                <Separator className="mb-2" />
+                                <Separator className="mb-1" />
 
                                 {/* Personal Details */}
                                 <div className="divide-y">
-                                    {!(app.latitude && app.longitude) && (
+                                    {!(app.latitude && app.longitude) && app.suburb && (
                                         <SidebarAttribute icon={MapPin} label="Suburb">
-                                            {app.suburb}
+                                            <a
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(app.suburb)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary! no-underline! inline-flex items-start gap-1 hover:text-primary/80! hover:no-underline!"
+                                            >
+                                                <span>{app.suburb}</span>
+                                                <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" />
+                                            </a>
                                         </SidebarAttribute>
                                     )}
 
@@ -2083,7 +2112,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                                 </div>
 
-                                <Separator className="my-2" />
+                                <Separator className="my-1" />
 
                                 {/* Occupation */}
                                 <div className="divide-y">
@@ -2102,7 +2131,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 {/* Skills */}
                                 {app.skills.length > 0 && (
                                     <>
-                                        <Separator className="my-2" />
+                                        <Separator className="my-1" />
                                         <div className="py-2">
                                             <p className="text-muted-foreground mb-2 text-xs">Skills</p>
                                             <div className="flex flex-wrap gap-1.5">
@@ -2116,17 +2145,22 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </>
                                 )}
 
-                                <Separator className="my-2" />
+                                <Separator className="my-1" />
 
-                                {/* View Full Submission — opens side pane */}
+                                {/* View Full Submission — opens side pane; styled as a "file card" */}
                                 <button
                                     type="button"
                                     onClick={() => setShowSubmissionPane(true)}
-                                    className="text-primary mt-2 flex w-full items-center gap-1.5 py-2 text-left text-sm font-medium hover:underline"
+                                    className="group mt-2 flex w-full items-center gap-2.5 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted"
                                 >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                    View Full Submission
-                                    <ChevronRight className="ml-auto h-3.5 w-3.5" />
+                                    <div className="bg-muted text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
+                                        <FileText className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1 leading-tight">
+                                        <p className="truncate text-xs font-medium">Full Submission</p>
+                                        <p className="text-muted-foreground text-[11px]">Application form responses</p>
+                                    </div>
+                                    <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                                 </button>
 
                                 {canApprove && app.status !== 'declined' && app.status !== 'onboarded' && (
