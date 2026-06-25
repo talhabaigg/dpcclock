@@ -7,12 +7,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Employee extends Model implements ProvidesSigningPlaceholders
+class Employee extends Model implements HasMedia, ProvidesSigningPlaceholders
 {
     use \Illuminate\Database\Eloquent\SoftDeletes;
     use Concerns\HasComments;
     use Concerns\HasSigningRequests;
+    use InteractsWithMedia;
 
     protected $fillable = [
         'eh_employee_id',

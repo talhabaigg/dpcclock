@@ -14,6 +14,7 @@ import type { JSONContent } from '@tiptap/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
+import EmployeeDocumentsCard, { type EmployeeDocument } from '@/components/employee-documents/employee-documents-card';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import { AlertTriangle, BookOpen, Check, Clock, EllipsisVertical, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2, User, X } from 'lucide-react';
@@ -165,12 +166,13 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, auth } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documents, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
         journal: JournalEntry[];
         canSendDocuments: boolean;
+        documents: EmployeeDocument[];
         documentTemplates: DocumentTemplate[];
         signingRequests: SigningRequestSummary[];
         availablePlaceholders: { key: string; label: string; preview?: string }[];
@@ -491,7 +493,7 @@ export default function EmployeeShow() {
         const all = [
             { id: 'overview', label: 'Overview', icon: User, visible: true, count: undefined as number | undefined },
             { id: 'journal', label: 'Journal', icon: BookOpen, visible: true, count: journal?.length || undefined },
-            { id: 'documents', label: 'Documents', icon: FileText, visible: canSendDocuments, count: signedDocuments.length || undefined },
+            { id: 'documents', label: 'Documents', icon: FileText, visible: true, count: (documents?.length || 0) + (canSendDocuments ? signedDocuments.length : 0) || undefined },
             { id: 'signing-requests', label: 'Signature Requests', icon: FileSignature, visible: canSendDocuments, count: activeSigningRequests.length || undefined },
             { id: 'files', label: 'Licences & Training', icon: GraduationCap, visible: !emp.is_office_staff, count: undefined as number | undefined },
             { id: 'projects', label: 'Projects', icon: FolderOpen, visible: !emp.is_office_staff, count: projects?.length || undefined },
@@ -499,7 +501,7 @@ export default function EmployeeShow() {
             { id: 'injuries', label: 'Injury Register', icon: AlertTriangle, visible: !emp.is_office_staff, count: emp.incident_reports?.length || undefined },
         ];
         return all.filter((s) => s.visible);
-    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, signingRequests, signedDocuments, activeSigningRequests, projects]);
+    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, activeSigningRequests, projects]);
 
     const [activeSection, setActiveSection] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview';
@@ -804,50 +806,21 @@ export default function EmployeeShow() {
                         </Card>
                         )}
 
-                        {/* DOCUMENTS — signed & stored PDFs against the employee record */}
-                        {activeSection === 'documents' && canSendDocuments && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-base">
-                                        <FileText className="h-4 w-4" />
-                                        Documents
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                    <Separator className="mb-4" />
-                                    {signedDocuments.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm italic">No signed documents on file yet.</p>
-                                    ) : (
-                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                            {signedDocuments.map((sr) => {
-                                                const title = sr.document_template?.name ?? sr.document_title ?? 'Document';
-                                                const signedDate = sr.signed_at ?? sr.updated_at ?? sr.created_at;
-                                                const signerName = sr.signer_full_name ?? sr.recipient_name;
-                                                return (
-                                                    <a
-                                                        key={sr.id}
-                                                        href={`/signing-requests/${sr.id}/download`}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="group flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/40"
-                                                    >
-                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-red-50 dark:bg-red-950/40">
-                                                            <FileText className="h-5 w-5 text-red-600 dark:text-red-400" />
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="truncate text-sm font-medium leading-tight">{title}</p>
-                                                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                                                                Signed {signedDate ? formatDate(signedDate) : '—'}
-                                                                {signerName ? ` · ${signerName}` : ''}
-                                                            </p>
-                                                        </div>
-                                                    </a>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                        {/* DOCUMENTS — direct uploads + system-generated (signed PDFs) grouped */}
+                        {activeSection === 'documents' && (
+                            <EmployeeDocumentsCard
+                                employeeId={emp.id}
+                                documents={documents}
+                                signedDocuments={canSendDocuments
+                                    ? signedDocuments.map((sr) => ({
+                                          id: sr.id,
+                                          title: sr.document_template?.name ?? sr.document_title ?? 'Document',
+                                          signed_at: sr.signed_at ?? sr.updated_at ?? sr.created_at,
+                                          signer_name: sr.signer_full_name ?? sr.recipient_name,
+                                          download_url: `/signing-requests/${sr.id}/download`,
+                                      }))
+                                    : []}
+                            />
                         )}
 
                         {/* SIGNATURE REQUESTS — workflow tracker for outbound signing requests */}
@@ -870,7 +843,7 @@ export default function EmployeeShow() {
                                     {activeSigningRequests.length === 0 ? (
                                         <p className="text-muted-foreground text-sm italic">
                                             No pending signature requests.
-                                            {signedDocuments.length > 0 && ' Signed documents are in the Documents tab.'}
+                                            {signedDocuments.length > 0 && ' Signed documents are in the Signed Documents tab.'}
                                         </p>
                                     ) : (
                                         <>

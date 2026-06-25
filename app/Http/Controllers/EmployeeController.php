@@ -238,6 +238,20 @@ class EmployeeController extends Controller
 
         $canSendDocuments = Gate::check('sendDocuments', $employee);
 
+        $documents = $employee->getMedia('documents')
+            ->sortByDesc('created_at')
+            ->values()
+            ->map(fn ($m) => [
+                'id'          => $m->id,
+                'name'        => $m->file_name,
+                'mime_type'   => $m->mime_type,
+                'size'        => $m->size,
+                'created_at'  => $m->created_at?->toISOString(),
+                'uploaded_by' => optional(\App\Models\User::find($m->getCustomProperty('uploaded_by')))->name,
+                'download_url' => route('employees.documents.download', [$employee->id, $m->id]),
+                'preview_url'  => route('employees.documents.download', [$employee->id, $m->id]).'?inline=1',
+            ]);
+
         $documentTemplates = collect();
         $signingRequests = collect();
         $availablePlaceholders = [];
@@ -308,6 +322,7 @@ class EmployeeController extends Controller
             'weekEnding' => $weekEnding,
             'journal' => $journal,
             'canSendDocuments' => $canSendDocuments,
+            'documents' => $documents,
             'documentTemplates' => $documentTemplates,
             'signingRequests' => $signingRequests,
             'availablePlaceholders' => $availablePlaceholders,

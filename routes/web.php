@@ -87,6 +87,7 @@ use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
 use App\Http\Controllers\WorktypeController;
 use App\Http\Controllers\EmployeeFileTypeController;
+use App\Http\Controllers\EmployeeDocumentController;
 use App\Http\Controllers\EmployeeFileController;
 use App\Http\Controllers\FeatureFlagController;
 use App\Http\Controllers\ComplianceDashboardController;
@@ -577,6 +578,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('{employeeFile}', [EmployeeFileController::class, 'update'])->name('employees.files.update');
         Route::delete('{employeeFile}', [EmployeeFileController::class, 'destroy'])->name('employees.files.destroy');
         Route::get('{employeeFile}/download/{collection}', [EmployeeFileController::class, 'download'])->name('employees.files.download');
+    });
+
+    Route::prefix('employees/{employee}/documents')->group(function () {
+        Route::post('/', [EmployeeDocumentController::class, 'store'])->name('employees.documents.store');
+        Route::get('{media}/download', [EmployeeDocumentController::class, 'download'])->name('employees.documents.download');
+        Route::delete('{media}', [EmployeeDocumentController::class, 'destroy'])->name('employees.documents.destroy');
     });
 
     Route::get('compliance/files', [FileComplianceDashboardController::class, 'index'])->name('compliance.files');
