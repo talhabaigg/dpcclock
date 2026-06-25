@@ -228,7 +228,7 @@ export default function ProductionData() {
     const handleDelete = (uploadId: number) => {
         if (!confirm('Are you sure you want to delete this upload?')) return;
 
-        deleteHttp.destroy(`/locations/${location.id}/production-data/${uploadId}`, {
+        deleteHttp.delete(`/locations/${location.id}/production-data/${uploadId}`, {
             onSuccess: () => {
                 toast.success('Upload deleted.');
                 router.reload();
