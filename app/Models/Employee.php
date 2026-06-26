@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -86,6 +87,11 @@ class Employee extends Model implements HasMedia, ProvidesSigningPlaceholders
     public function silicaEntries(): HasMany
     {
         return $this->hasMany(SilicaEntry::class);
+    }
+
+    public function formRequests(): MorphMany
+    {
+        return $this->morphMany(FormRequest::class, 'formable')->latest();
     }
 
     public function employmentApplications()

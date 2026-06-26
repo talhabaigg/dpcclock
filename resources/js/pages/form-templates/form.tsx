@@ -94,6 +94,8 @@ interface Template {
     description: string | null;
     category: string | null;
     model_type: string | null;
+    filled_by: 'user' | 'subject';
+    assignee_permission: string | null;
     is_active: boolean;
     is_sendable: boolean;
     fields: FieldItem[];
@@ -101,6 +103,7 @@ interface Template {
 
 interface PageProps {
     template: Template | null;
+    permissions: string[];
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -139,6 +142,7 @@ function getDefaultValues(field: FieldItem): string[] {
 const MODEL_OPTIONS = [
     { value: 'employment_application', label: 'Employment Enquiry' },
     { value: 'injury', label: 'Injury Report' },
+    { value: 'employee', label: 'Employee' },
 ];
 
 /** Map field type to its icon. All icons render in a single neutral tone — colour
@@ -1282,7 +1286,7 @@ function LogicBody({ field, index, allFields, onUpdate }: LogicBodyProps) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function FormTemplateForm({ template }: PageProps) {
+export default function FormTemplateForm({ template, permissions }: PageProps) {
     const isEditing = !!template;
 
     const [name, setName] = useState(template?.name ?? '');
@@ -1291,8 +1295,11 @@ export default function FormTemplateForm({ template }: PageProps) {
     const [modelType, setModelType] = useState<string>(() => {
         if (template?.model_type === 'App\\Models\\EmploymentApplication') return 'employment_application';
         if (template?.model_type === 'App\\Models\\Injury') return 'injury';
+        if (template?.model_type === 'App\\Models\\Employee') return 'employee';
         return '';
     });
+    const [filledBy, setFilledBy] = useState<'user' | 'subject'>(template?.filled_by ?? 'subject');
+    const [assigneePermission, setAssigneePermission] = useState<string>(template?.assignee_permission ?? '');
     const [isActive, setIsActive] = useState(template?.is_active ?? true);
     const [isSendable, setIsSendable] = useState(template?.is_sendable ?? true);
     const [fields, setFields] = useState<FieldItem[]>(template?.fields?.length ? template.fields.map((f) => ({ ...f, options: f.options ?? [], options_source: f.options_source ?? null, placeholder: f.placeholder ?? '', help_text: f.help_text ?? '', default_value: f.default_value ?? '', visible_if: f.visible_if ?? null })) : [emptyField()]);
@@ -1636,6 +1643,8 @@ export default function FormTemplateForm({ template }: PageProps) {
             description: description.trim() || null,
             category: category.trim() || null,
             model_type: modelType || null,
+            filled_by: filledBy,
+            assignee_permission: filledBy === 'user' ? (assigneePermission || null) : null,
             is_active: isActive,
             is_sendable: isSendable,
             fields: remappedFields.map((f) => ({
@@ -1881,6 +1890,67 @@ export default function FormTemplateForm({ template }: PageProps) {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* Who fills this form */}
+                                <div className="border-t border-dashed border-border/60 pt-3">
+                                    <Label className="text-xs font-medium">Who fills this form?</Label>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        Determines whether the form is sent to the subject or completed internally by a user.
+                                    </p>
+                                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilledBy('subject')}
+                                            className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                                                filledBy === 'subject'
+                                                    ? 'border-primary bg-accent/40'
+                                                    : 'hover:bg-accent/30'
+                                            }`}
+                                        >
+                                            <p className="font-medium">The subject</p>
+                                            <p className="mt-0.5 text-muted-foreground">e.g., the employee or applicant. Sent via email/SMS/in person.</p>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFilledBy('user')}
+                                            className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                                                filledBy === 'user'
+                                                    ? 'border-primary bg-accent/40'
+                                                    : 'hover:bg-accent/30'
+                                            }`}
+                                        >
+                                            <p className="font-medium">A user</p>
+                                            <p className="mt-0.5 text-muted-foreground">e.g., a supervisor or HR. Completed in-app by anyone with the permission below.</p>
+                                        </button>
+                                    </div>
+                                    {errors.filled_by && <p className="mt-1 text-xs text-red-500">{errors.filled_by}</p>}
+                                </div>
+
+                                {/* Assignee permission (only when filled_by=user) */}
+                                {filledBy === 'user' && (
+                                    <div>
+                                        <Label className="text-xs font-medium">
+                                            Required permission
+                                            <span className="ml-1 text-red-500">*</span>
+                                        </Label>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                            Any user holding this permission can complete the form.
+                                        </p>
+                                        <Select value={assigneePermission} onValueChange={setAssigneePermission}>
+                                            <SelectTrigger className="mt-1.5 h-7 text-xs md:text-xs">
+                                                <SelectValue placeholder="Pick a permission..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(permissions ?? []).map((p) => (
+                                                    <SelectItem key={p} value={p}>
+                                                        {p}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.assignee_permission && <p className="mt-1 text-xs text-red-500">{errors.assignee_permission}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Sendable toggle */}

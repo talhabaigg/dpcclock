@@ -9,11 +9,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FormTemplate extends Model
 {
+    public const FILLED_BY_USER = 'user';
+    public const FILLED_BY_SUBJECT = 'subject';
+
     protected $fillable = [
         'name',
         'description',
         'category',
         'model_type',
+        'filled_by',
+        'assignee_permission',
         'is_active',
         'is_sendable',
         'created_by',

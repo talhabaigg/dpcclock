@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Jobs\SyncKioskEmployees;
 use App\Models\Employee;
 use App\Models\EmployeeFileType;
+use App\Models\FormTemplate;
 use App\Models\Location;
 use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
+use App\Services\FormService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -314,6 +316,16 @@ class EmployeeController extends Controller
                 ->values();
         }
 
+        $formTemplates = FormTemplate::active()
+            ->forModel(Employee::class)
+            ->orderBy('name')
+            ->get(['id', 'name', 'description', 'category', 'is_sendable', 'filled_by', 'assignee_permission']);
+
+        $formRequests = $employee->formRequests()
+            ->whereNotIn('status', ['cancelled'])
+            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'assigneeUser:id,name', 'media'])
+            ->get();
+
         return Inertia::render('employees/show', [
             'employee' => array_merge($employee->toArray(), [
                 'is_office_staff' => $employee->isOfficeStaff(),
@@ -326,11 +338,191 @@ class EmployeeController extends Controller
             'documentTemplates' => $documentTemplates,
             'signingRequests' => $signingRequests,
             'availablePlaceholders' => $availablePlaceholders,
+            'formTemplates' => $formTemplates,
+            'formRequests' => $formRequests->map(fn ($fr) => [
+                'id' => $fr->id,
+                'status' => $fr->status,
+                'delivery_method' => $fr->delivery_method,
+                'recipient_name' => $fr->recipient_name,
+                'recipient_email' => $fr->recipient_email,
+                'assignee_strategy' => $fr->assignee_strategy,
+                'assignee_permission' => $fr->assignee_permission,
+                'assignee_user_id' => $fr->assignee_user_id,
+                'assignee_user_name' => $fr->assigneeUser?->name,
+                'subject_type' => $fr->subject_type,
+                'subject_id' => $fr->subject_id,
+                'submitted_at' => $fr->submitted_at?->toISOString(),
+                'opened_at' => $fr->opened_at?->toISOString(),
+                'expires_at' => $fr->expires_at?->toISOString(),
+                'created_at' => $fr->created_at?->toISOString(),
+                'responses' => $fr->responses,
+                'response_snapshot' => $this->resolveFormSnapshotSignatureUrls($fr),
+                'form_template' => $fr->formTemplate ? [
+                    'id' => $fr->formTemplate->id,
+                    'name' => $fr->formTemplate->name,
+                    'fields' => $fr->formTemplate->fields->map(fn ($field) => [
+                        'id' => $field->id,
+                        'label' => $field->label,
+                        'type' => $field->type,
+                        'is_required' => (bool) $field->is_required,
+                        'options' => $field->options,
+                        'options_source' => $field->options_source,
+                        'placeholder' => $field->placeholder,
+                        'help_text' => $field->help_text,
+                        'default_value' => $field->default_value,
+                        'visible_if' => $field->visible_if,
+                    ])->values(),
+                ] : null,
+                'sent_by' => $fr->sentBy ? [
+                    'id' => $fr->sentBy->id,
+                    'name' => $fr->sentBy->name,
+                ] : null,
+            ])->values(),
             'savedSenderSignatureUrl' => $canSendDocuments ? Auth::user()?->savedSignatureUrl() : null,
             'appUsers' => $canSendDocuments
                 ? \App\Models\User::query()->whereNull('disabled_at')->orderBy('name')->get(['id', 'name', 'position'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'position' => $u->position])->values()
                 : [],
         ]);
+    }
+
+    /**
+     * Start a new in-app form for the given employee. Supervisors / anyone with
+     * employees.view permission can initiate a form (e.g. exit interview) which
+     * they then fill out themselves — the employee never logs in.
+     */
+    public function startForm(Request $request, Employee $employee, FormService $formService)
+    {
+        Gate::authorize('view', $employee);
+
+        $validated = $request->validate([
+            'form_template_id' => ['required', 'integer', 'exists:form_templates,id'],
+            // in_app   = user fills now (permission-gated). Only valid when template.filled_by='user'.
+            // email    = subject fills via public token URL, link emailed to them.
+            // sms      = subject fills via public token URL, link SMSed to them.
+            // in_person= subject fills via public token URL, no notification sent (handed a tablet).
+            // The last three only valid when template.filled_by='subject'.
+            'delivery_method' => ['required', 'string', 'in:in_app,email,sms,in_person'],
+        ]);
+
+        $template = FormTemplate::query()
+            ->where('id', $validated['form_template_id'])
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('model_type', Employee::class)->orWhereNull('model_type');
+            })
+            ->firstOrFail();
+
+        $deliveryMethod = $validated['delivery_method'];
+        $isUserFilled = $template->filled_by === FormTemplate::FILLED_BY_USER;
+
+        // Server-side guard: delivery method must match the template's intended filler.
+        // filled_by=user templates are filled internally → only in_app.
+        // filled_by=subject templates are filled by the subject → email/sms/in_person.
+        if ($isUserFilled && $deliveryMethod !== 'in_app') {
+            return back()->withErrors([
+                'delivery_method' => 'This form is intended to be filled in-app by a user.',
+            ]);
+        }
+        if (! $isUserFilled && $deliveryMethod === 'in_app') {
+            return back()->withErrors([
+                'delivery_method' => 'This form is intended to be filled by the employee — choose email, SMS, or in-person.',
+            ]);
+        }
+
+        // Existing FormService gate: even when filled_by=subject, an admin can
+        // restrict to in-person handoff by leaving is_sendable=false.
+        if (! $template->is_sendable && in_array($deliveryMethod, ['email', 'sms'], true)) {
+            return back()->withErrors([
+                'delivery_method' => 'This template can\'t be sent — it must be completed in person.',
+            ]);
+        }
+
+        if ($deliveryMethod === 'email' && empty($employee->email)) {
+            return back()->withErrors(['delivery_method' => 'This employee has no email address on file.']);
+        }
+
+        $employeePhone = \App\Models\User::normaliseAuMobile($employee->mobile_number);
+        if ($deliveryMethod === 'sms' && empty($employeePhone)) {
+            return back()->withErrors(['delivery_method' => 'This employee has no valid mobile number on file.']);
+        }
+
+        // filled_by=user templates without a permission can't enforce filling —
+        // require the template author to declare one.
+        if ($isUserFilled && empty($template->assignee_permission)) {
+            return back()->withErrors([
+                'delivery_method' => 'This template is missing its assignee_permission. Edit the template to set who can fill it.',
+            ]);
+        }
+
+        $user = $request->user();
+
+        // For in_app (filled_by=user): the user filling it is the "recipient" in
+        // the FormRequest sense — that's who the audit trail credits.
+        // For email/sms/in_person (filled_by=subject): the employee is the recipient.
+        $recipientName = $isUserFilled
+            ? $user->name
+            : ($employee->display_name ?: $employee->name);
+        $recipientEmail = $deliveryMethod === 'email' ? $employee->email : null;
+
+        $formRequest = $formService->createAndSend(
+            template: $template,
+            deliveryMethod: $deliveryMethod,
+            admin: $user,
+            recipientName: $recipientName,
+            recipientEmail: $recipientEmail,
+            formable: $employee,
+            assigneeStrategy: $isUserFilled ? 'permission' : null,
+            assigneePermission: $isUserFilled ? $template->assignee_permission : null,
+        );
+
+        if ($deliveryMethod === 'sms') {
+            // FormService only sets expires_at for email — match its 7-day window for SMS.
+            $formRequest->update(['expires_at' => now()->addDays(7)]);
+            \Illuminate\Support\Facades\Notification::route('clicksend', $employeePhone)
+                ->notify(new \App\Notifications\FormRequestSmsNotification($formRequest));
+        }
+
+        // filled_by=user → drop straight into the fill pane.
+        // filled_by=subject → land on the Forms tab so the user sees the new pending row.
+        $query = $isUserFilled
+            ? '?form_request_id=' . $formRequest->id . '&mode=fill'
+            : '';
+
+        return redirect(route('employees.show', $employee) . $query . '#forms')
+            ->with('success', $isUserFilled
+                ? 'Form ready to fill.'
+                : 'Form sent to ' . $recipientName . '.');
+    }
+
+    /**
+     * Replace signature media IDs in a FormRequest's response_snapshot with
+     * presigned URLs so the read-only response pane can render them. Mirrors
+     * the same helper in EmploymentApplicationController, minus the
+     * placeholder interpolation (employee labels are literal).
+     *
+     * @return array<int, array<string,mixed>>|null
+     */
+    private function resolveFormSnapshotSignatureUrls(\App\Models\FormRequest $fr): ?array
+    {
+        $snapshot = $fr->response_snapshot;
+        if (! is_array($snapshot)) {
+            return $snapshot;
+        }
+        $mediaById = $fr->getMedia('signatures')->keyBy('id');
+        foreach ($snapshot as $i => $row) {
+            if (! is_array($row) || ($row['type'] ?? null) !== 'signature') {
+                continue;
+            }
+            $value = $row['value'] ?? null;
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $media = $mediaById->get((int) $value);
+            if ($media) {
+                $snapshot[$i]['value'] = $this->mediaUrl($media);
+            }
+        }
+        return $snapshot;
     }
 
     /**

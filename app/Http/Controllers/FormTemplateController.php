@@ -9,6 +9,7 @@ use App\Services\FormVisibilityEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 
 class FormTemplateController extends Controller
 {
@@ -27,6 +28,7 @@ class FormTemplateController extends Controller
     {
         return Inertia::render('form-templates/form', [
             'template' => null,
+            'permissions' => Permission::orderBy('name')->pluck('name'),
         ]);
     }
 
@@ -100,11 +102,16 @@ class FormTemplateController extends Controller
         $this->validateVisibilityRules($validated);
         $this->validateOptionsSources($validated, app(FormResolverRegistry::class));
 
+        $filledBy = $validated['filled_by'] ?? FormTemplate::FILLED_BY_SUBJECT;
         $template = FormTemplate::create([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'category' => $validated['category'] ?? null,
             'model_type' => $this->resolveModelType($validated['model_type'] ?? null),
+            'filled_by' => $filledBy,
+            'assignee_permission' => $filledBy === FormTemplate::FILLED_BY_USER
+                ? ($validated['assignee_permission'] ?? null)
+                : null,
             'is_active' => $validated['is_active'] ?? true,
             'is_sendable' => $validated['is_sendable'] ?? true,
             'created_by' => $request->user()->id,
@@ -139,6 +146,7 @@ class FormTemplateController extends Controller
 
         return Inertia::render('form-templates/form', [
             'template' => $this->serializeTemplateForBuilder($formTemplate),
+            'permissions' => Permission::orderBy('name')->pluck('name'),
         ]);
     }
 
@@ -150,11 +158,16 @@ class FormTemplateController extends Controller
         $this->validateVisibilityRules($validated);
         $this->validateOptionsSources($validated, app(FormResolverRegistry::class));
 
+        $filledBy = $validated['filled_by'] ?? FormTemplate::FILLED_BY_SUBJECT;
         $formTemplate->update([
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'category' => $validated['category'] ?? null,
             'model_type' => $this->resolveModelType($validated['model_type'] ?? null),
+            'filled_by' => $filledBy,
+            'assignee_permission' => $filledBy === FormTemplate::FILLED_BY_USER
+                ? ($validated['assignee_permission'] ?? null)
+                : null,
             'is_active' => $validated['is_active'] ?? true,
             'is_sendable' => $validated['is_sendable'] ?? true,
             'updated_by' => $request->user()->id,
@@ -213,6 +226,8 @@ class FormTemplateController extends Controller
             'description' => $formTemplate->description,
             'category' => $formTemplate->category,
             'model_type' => $formTemplate->model_type,
+            'filled_by' => $formTemplate->filled_by,
+            'assignee_permission' => $formTemplate->assignee_permission,
             'is_active' => $formTemplate->is_active,
             'is_sendable' => $formTemplate->is_sendable,
             'fields' => $orderedFields->map(fn ($f) => [
@@ -248,11 +263,18 @@ class FormTemplateController extends Controller
             return back()->with('error', 'Invalid form template file.');
         }
 
+        $importedFilledBy = in_array($data['filled_by'] ?? null, [FormTemplate::FILLED_BY_USER, FormTemplate::FILLED_BY_SUBJECT], true)
+            ? $data['filled_by']
+            : FormTemplate::FILLED_BY_SUBJECT;
         $template = FormTemplate::create([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'category' => $data['category'] ?? null,
             'model_type' => $this->resolveModelType($data['model_type'] ?? null),
+            'filled_by' => $importedFilledBy,
+            'assignee_permission' => $importedFilledBy === FormTemplate::FILLED_BY_USER
+                ? ($data['assignee_permission'] ?? null)
+                : null,
             'is_active' => $data['is_active'] ?? true,
             'is_sendable' => $data['is_sendable'] ?? true,
             'created_by' => $request->user()->id,
@@ -290,6 +312,8 @@ class FormTemplateController extends Controller
             \App\Models\EmploymentApplication::class => \App\Models\EmploymentApplication::class,
             'injury' => \App\Models\Injury::class,
             \App\Models\Injury::class => \App\Models\Injury::class,
+            'employee' => \App\Models\Employee::class,
+            \App\Models\Employee::class => \App\Models\Employee::class,
             default => null,
         };
     }
@@ -330,6 +354,8 @@ class FormTemplateController extends Controller
             'description' => 'nullable|string|max:500',
             'category' => 'nullable|string|max:255',
             'model_type' => 'nullable|string',
+            'filled_by' => 'required|in:user,subject',
+            'assignee_permission' => 'nullable|string|max:255|required_if:filled_by,user|exists:permissions,name',
             'is_active' => 'boolean',
             'is_sendable' => 'boolean',
             'fields' => 'required|array|min:1',
@@ -480,6 +506,8 @@ class FormTemplateController extends Controller
             'description' => $formTemplate->description,
             'category' => $formTemplate->category,
             'model_type' => $formTemplate->model_type,
+            'filled_by' => $formTemplate->filled_by,
+            'assignee_permission' => $formTemplate->assignee_permission,
             'is_active' => $formTemplate->is_active,
             'is_sendable' => $formTemplate->is_sendable,
             'fields' => $orderedFields->map(fn ($f) => [

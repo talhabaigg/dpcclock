@@ -17,7 +17,12 @@ import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import EmployeeDocumentsCard, { type EmployeeDocument } from '@/components/employee-documents/employee-documents-card';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
-import { AlertTriangle, BookOpen, Check, Clock, EllipsisVertical, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, LinkIcon, Loader2, Pencil, ThumbsDown, ThumbsUp, Trash2, User, X } from 'lucide-react';
+import {
+    FormFillPane,
+    FormResponsePane,
+    type FormRequestData,
+} from '@/components/form-renderer/form-fill-pane';
+import { AlertTriangle, BookOpen, Check, ClipboardList, Clock, EllipsisVertical, Eye, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, HandMetal, LinkIcon, Loader2, Mail, MessageSquare, Pencil, Plus, ThumbsDown, ThumbsUp, Trash2, User, UserCheck, X, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -165,8 +170,18 @@ function DetailItem({ label, children }: { label: string; children: React.ReactN
     );
 }
 
+interface FormTemplateSummary {
+    id: number;
+    name: string;
+    description: string | null;
+    category: string | null;
+    is_sendable: boolean;
+    filled_by: 'user' | 'subject';
+    assignee_permission: string | null;
+}
+
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documents, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, auth } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documents, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, formTemplates, formRequests, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
@@ -178,8 +193,19 @@ export default function EmployeeShow() {
         availablePlaceholders: { key: string; label: string; preview?: string }[];
         savedSenderSignatureUrl: string | null;
         appUsers: { id: number; name: string; position: string | null }[];
-        auth: { user?: { id: number; name: string } };
+        formTemplates: FormTemplateSummary[];
+        formRequests: FormRequestData[];
+        auth: { user?: { id: number; name: string }; permissions?: string[]; isAdmin?: boolean };
     }>().props;
+
+    const permissions = auth?.permissions ?? [];
+    const canFillFormRequest = useCallback((fr: FormRequestData): boolean => {
+        if (auth?.isAdmin) return true;
+        if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
+            return permissions.includes(fr.assignee_permission);
+        }
+        return permissions.includes('employees.view');
+    }, [auth?.isAdmin, permissions]);
 
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [editingDraft, setEditingDraft] = useState<SigningRequestSummary | null>(null);
@@ -330,6 +356,68 @@ export default function EmployeeShow() {
     }, []);
 
     const currentUserId = auth?.user?.id;
+
+    // Forms tab state
+    const [fillingFormRequest, setFillingFormRequest] = useState<FormRequestData | null>(null);
+    const [viewingFormRequest, setViewingFormRequest] = useState<FormRequestData | null>(null);
+    const [startFormDialogOpen, setStartFormDialogOpen] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [selectedDelivery, setSelectedDelivery] = useState<'in_app' | 'email' | 'sms' | 'in_person'>('in_app');
+    const [startingForm, setStartingForm] = useState(false);
+    const [confirmCancelFormId, setConfirmCancelFormId] = useState<number | null>(null);
+
+    const selectedTemplate = useMemo(
+        () => formTemplates.find((t) => t.id === selectedTemplateId) ?? null,
+        [formTemplates, selectedTemplateId],
+    );
+    const hasMobileForForm = Boolean(emp.mobile_number && emp.mobile_number.replace(/\D/g, '').length >= 9);
+    const hasEmail = Boolean(emp.email && emp.email.trim());
+
+    // Auto-open the fill (or response) pane when redirected with
+    // ?form_request_id=...&mode=fill|view. Inertia keeps the component
+    // mounted on same-route redirects, so the effect must depend on
+    // formRequests (the props that change after the POST) rather than
+    // running once on mount. After opening, strip the query so a refresh
+    // or back-navigation doesn't re-open the pane.
+    useEffect(() => {
+        if (!formRequests || formRequests.length === 0) return;
+        const params = new URLSearchParams(window.location.search);
+        const requestedId = Number(params.get('form_request_id'));
+        const mode = params.get('mode');
+        if (!requestedId) return;
+        const target = formRequests.find((fr) => fr.id === requestedId);
+        if (!target) return;
+        let opened = false;
+        if (mode === 'fill' && target.status !== 'submitted' && target.status !== 'cancelled' && canFillFormRequest(target)) {
+            setFillingFormRequest(target);
+            opened = true;
+        } else if (mode === 'view' && target.status === 'submitted') {
+            setViewingFormRequest(target);
+            opened = true;
+        }
+        if (opened) {
+            const cleaned = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, '', cleaned);
+        }
+    }, [formRequests, canFillFormRequest]);
+
+    const startForm = useCallback(() => {
+        if (!selectedTemplateId) return;
+        setStartingForm(true);
+        router.post(
+            `/employees/${emp.id}/forms`,
+            { form_template_id: selectedTemplateId, delivery_method: selectedDelivery },
+            {
+                preserveScroll: false,
+                onSuccess: () => {
+                    setStartFormDialogOpen(false);
+                    setSelectedTemplateId(null);
+                    setSelectedDelivery('in_app');
+                },
+                onFinish: () => setStartingForm(false),
+            },
+        );
+    }, [emp.id, selectedTemplateId, selectedDelivery]);
 
     // Journal form state
     const [journalDoc, setJournalDoc] = useState<JSONContent | null>(null);
@@ -495,13 +583,14 @@ export default function EmployeeShow() {
             { id: 'journal', label: 'Journal', icon: BookOpen, visible: true, count: journal?.length || undefined },
             { id: 'documents', label: 'Documents', icon: FileText, visible: true, count: (documents?.length || 0) + (canSendDocuments ? signedDocuments.length : 0) || undefined },
             { id: 'signing-requests', label: 'Signature Requests', icon: FileSignature, visible: canSendDocuments, count: activeSigningRequests.length || undefined },
+            { id: 'forms', label: 'Forms', icon: ClipboardList, visible: true, count: formRequests?.length || undefined },
             { id: 'files', label: 'Licences & Training', icon: GraduationCap, visible: !emp.is_office_staff, count: undefined as number | undefined },
             { id: 'projects', label: 'Projects', icon: FolderOpen, visible: !emp.is_office_staff, count: projects?.length || undefined },
             { id: 'timesheets', label: 'Timesheets', icon: Clock, visible: !emp.is_office_staff, count: undefined as number | undefined },
             { id: 'injuries', label: 'Injury Register', icon: AlertTriangle, visible: !emp.is_office_staff, count: emp.incident_reports?.length || undefined },
         ];
         return all.filter((s) => s.visible);
-    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, activeSigningRequests, projects]);
+    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, activeSigningRequests, projects, formRequests]);
 
     const [activeSection, setActiveSection] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview';
@@ -1196,6 +1285,145 @@ export default function EmployeeShow() {
                         )}
 
                         {/* INJURY REGISTER */}
+                        {activeSection === 'forms' && (
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <ClipboardList className="h-4 w-4" />
+                                        Forms
+                                    </CardTitle>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1.5"
+                                        onClick={() => {
+                                            const first = formTemplates[0] ?? null;
+                                            setSelectedTemplateId(first?.id ?? null);
+                                            if (first) {
+                                                if (first.filled_by === 'user') {
+                                                    setSelectedDelivery('in_app');
+                                                } else if (!first.is_sendable) {
+                                                    setSelectedDelivery('in_person');
+                                                } else if (hasEmail) {
+                                                    setSelectedDelivery('email');
+                                                } else if (hasMobileForForm) {
+                                                    setSelectedDelivery('sms');
+                                                } else {
+                                                    setSelectedDelivery('in_person');
+                                                }
+                                            }
+                                            setStartFormDialogOpen(true);
+                                        }}
+                                        disabled={formTemplates.length === 0}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Start a form
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <Separator className="mb-4" />
+                                {formTemplates.length === 0 && (
+                                    <p className="text-muted-foreground mb-3 text-xs italic">
+                                        No form templates configured for employees. Create one in Form Templates with model type set to Employee.
+                                    </p>
+                                )}
+                                {formRequests.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm italic">No forms yet. Click <span className="text-foreground font-medium">Start a form</span> to fill one out for this employee.</p>
+                                ) : (
+                                    <div className="overflow-hidden rounded-lg border">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-muted/50">
+                                                    <TableHead className="px-3 text-xs">Form</TableHead>
+                                                    <TableHead className="px-3 text-xs">Status</TableHead>
+                                                    <TableHead className="px-3 text-xs">Delivery</TableHead>
+                                                    <TableHead className="px-3 text-xs">Started by</TableHead>
+                                                    <TableHead className="px-3 text-xs">Submitted</TableHead>
+                                                    <TableHead className="w-10 px-3"></TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {formRequests.map((fr) => {
+                                                    const isSubmitted = fr.status === 'submitted';
+                                                    const isPending = !isSubmitted && fr.status !== 'cancelled';
+                                                    const fillable = isPending && canFillFormRequest(fr);
+                                                    const deliveryLabel = fr.delivery_method === 'in_app'
+                                                        ? 'Self-fill'
+                                                        : fr.delivery_method === 'email'
+                                                        ? 'Email'
+                                                        : fr.delivery_method === 'sms'
+                                                        ? 'SMS'
+                                                        : 'In person';
+                                                    return (
+                                                        <TableRow key={fr.id}>
+                                                            <TableCell className="px-3 text-xs font-medium">
+                                                                {fr.form_template?.name ?? 'Form'}
+                                                            </TableCell>
+                                                            <TableCell className="px-3">
+                                                                <Badge
+                                                                    variant={isSubmitted ? 'default' : isPending ? 'secondary' : 'outline'}
+                                                                    className="text-[10px] capitalize"
+                                                                >
+                                                                    {isPending ? 'Open' : fr.status}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell className="px-3 text-xs text-muted-foreground">
+                                                                {deliveryLabel}
+                                                            </TableCell>
+                                                            <TableCell className="px-3 text-xs text-muted-foreground">
+                                                                {fr.sent_by?.name ?? '—'}
+                                                            </TableCell>
+                                                            <TableCell className="px-3 text-xs text-muted-foreground">
+                                                                {fr.submitted_at ? formatDate(fr.submitted_at) : '—'}
+                                                            </TableCell>
+                                                            <TableCell className="px-3">
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="icon-sm" aria-label="Form actions">
+                                                                            <EllipsisVertical className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end" className="w-36">
+                                                                        {fillable && (
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => setFillingFormRequest(fr)}
+                                                                                disabled={!fr.form_template?.fields?.length}
+                                                                            >
+                                                                                <Pencil className="mr-2 h-3.5 w-3.5" /> Fill
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {isSubmitted && (
+                                                                            <DropdownMenuItem onClick={() => setViewingFormRequest(fr)}>
+                                                                                <Eye className="mr-2 h-3.5 w-3.5" /> View
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {isPending && (
+                                                                            <>
+                                                                                {fillable && <DropdownMenuSeparator />}
+                                                                                <DropdownMenuItem
+                                                                                    className="text-destructive"
+                                                                                    onClick={() => setConfirmCancelFormId(fr.id)}
+                                                                                >
+                                                                                    <XCircle className="mr-2 h-3.5 w-3.5" /> Cancel
+                                                                                </DropdownMenuItem>
+                                                                            </>
+                                                                        )}
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                        )}
+
                         {activeSection === 'injuries' && !emp.is_office_staff && (
                         <Card>
                             <CardHeader>
@@ -1507,6 +1735,215 @@ export default function EmployeeShow() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Start a form dialog */}
+            <Dialog open={startFormDialogOpen} onOpenChange={(open) => {
+                setStartFormDialogOpen(open);
+                if (!open) {
+                    setSelectedTemplateId(null);
+                    setSelectedDelivery('in_app');
+                }
+            }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Start a form</DialogTitle>
+                        <DialogDescription>
+                            Pick a form and how it'll be completed for {emp.display_name || emp.name}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Step 1: pick template */}
+                    <div className="flex flex-col gap-1.5">
+                        <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">Form</p>
+                        {formTemplates.length === 0 ? (
+                            <p className="text-muted-foreground text-xs italic">No form templates available.</p>
+                        ) : (
+                            formTemplates.map((tpl) => {
+                                const isSelected = selectedTemplateId === tpl.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={tpl.id}
+                                        onClick={() => {
+                                            setSelectedTemplateId(tpl.id);
+                                            // Reset delivery to the only option compatible with this template.
+                                            // user-filled → in_app. subject-filled → first sendable option, else in_person.
+                                            if (tpl.filled_by === 'user') {
+                                                setSelectedDelivery('in_app');
+                                            } else if (!tpl.is_sendable) {
+                                                setSelectedDelivery('in_person');
+                                            } else if (hasEmail) {
+                                                setSelectedDelivery('email');
+                                            } else if (hasMobileForForm) {
+                                                setSelectedDelivery('sms');
+                                            } else {
+                                                setSelectedDelivery('in_person');
+                                            }
+                                        }}
+                                        className={`flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors ${
+                                            isSelected
+                                                ? 'border-primary bg-accent/40'
+                                                : 'hover:bg-accent/30'
+                                        }`}
+                                    >
+                                        <span className="text-sm font-medium">{tpl.name}</span>
+                                        {tpl.description && (
+                                            <span className="text-muted-foreground text-xs">{tpl.description}</span>
+                                        )}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Step 2: pick delivery — gated on template.filled_by */}
+                    {selectedTemplate && (() => {
+                        const isUserFilled = selectedTemplate.filled_by === 'user';
+                        const allowSendToSubject = selectedTemplate.is_sendable;
+
+                        const options: { id: typeof selectedDelivery; label: string; sub: string; icon: typeof Mail; disabled?: string }[] = isUserFilled
+                            ? [
+                                  {
+                                      id: 'in_app',
+                                      label: 'Fill it now',
+                                      sub: selectedTemplate.assignee_permission
+                                          ? `Anyone with "${selectedTemplate.assignee_permission}" can complete it`
+                                          : 'Complete the form in the side pane',
+                                      icon: UserCheck,
+                                  },
+                              ]
+                            : [
+                                  {
+                                      id: 'email',
+                                      label: 'Email to employee',
+                                      sub: hasEmail ? `Send link to ${emp.email}` : 'No email on file',
+                                      icon: Mail,
+                                      disabled: !allowSendToSubject
+                                          ? 'Template is not sendable — must be in person'
+                                          : !hasEmail
+                                          ? 'No email on file'
+                                          : undefined,
+                                  },
+                                  {
+                                      id: 'sms',
+                                      label: 'SMS to employee',
+                                      sub: hasMobileForForm ? `Send link to ${emp.mobile_number}` : 'No mobile number on file',
+                                      icon: MessageSquare,
+                                      disabled: !allowSendToSubject
+                                          ? 'Template is not sendable — must be in person'
+                                          : !hasMobileForForm
+                                          ? 'No mobile number on file'
+                                          : undefined,
+                                  },
+                                  {
+                                      id: 'in_person',
+                                      label: 'Hand to employee in person',
+                                      sub: 'No notification sent — hand them a tablet',
+                                      icon: HandMetal,
+                                  },
+                              ];
+
+                        return (
+                            <div className="mt-3 flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">Delivery</p>
+                                    <span className="text-muted-foreground text-[10px]">
+                                        {isUserFilled ? 'Filled by a user' : 'Filled by the employee'}
+                                    </span>
+                                </div>
+                                {options.map((opt) => {
+                                    const Icon = opt.icon;
+                                    const isSelected = selectedDelivery === opt.id;
+                                    const isDisabled = Boolean(opt.disabled);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={opt.id}
+                                            disabled={isDisabled}
+                                            onClick={() => setSelectedDelivery(opt.id)}
+                                            className={`flex items-start gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
+                                                isDisabled
+                                                    ? 'cursor-not-allowed opacity-50'
+                                                    : isSelected
+                                                    ? 'border-primary bg-accent/40'
+                                                    : 'hover:bg-accent/30'
+                                            }`}
+                                        >
+                                            <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium leading-tight">{opt.label}</p>
+                                                <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                                                    {opt.disabled ?? opt.sub}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setStartFormDialogOpen(false)} disabled={startingForm}>
+                            Cancel
+                        </Button>
+                        <Button onClick={startForm} disabled={!selectedTemplateId || startingForm}>
+                            {startingForm ? (
+                                <>
+                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    Starting…
+                                </>
+                            ) : selectedDelivery === 'in_app' ? (
+                                'Start & fill'
+                            ) : selectedDelivery === 'email' ? (
+                                'Send via email'
+                            ) : selectedDelivery === 'sms' ? (
+                                'Send via SMS'
+                            ) : (
+                                'Create for in-person'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cancel form confirmation */}
+            <AlertDialog open={confirmCancelFormId !== null} onOpenChange={(open) => !open && setConfirmCancelFormId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel this form?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The form will be marked cancelled and can no longer be filled out. This can't be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Keep form</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (!confirmCancelFormId) return;
+                                router.post(`/form-requests/${confirmCancelFormId}/cancel`, {}, {
+                                    preserveScroll: true,
+                                    onSuccess: () => setConfirmCancelFormId(null),
+                                });
+                            }}
+                        >
+                            Cancel form
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Fill pane */}
+            <FormFillPane
+                formRequest={fillingFormRequest}
+                onClose={() => setFillingFormRequest(null)}
+            />
+
+            {/* Read-only response pane */}
+            <FormResponsePane
+                formRequest={viewingFormRequest}
+                onClose={() => setViewingFormRequest(null)}
+            />
 
         </AppLayout>
     );

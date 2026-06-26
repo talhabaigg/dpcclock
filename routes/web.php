@@ -532,6 +532,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+        Route::post('/employees/{employee}/forms', [EmployeeController::class, 'startForm'])->name('employees.forms.store');
     });
     Route::middleware('permission:employees.office.view')->group(function () {
         Route::get('/office-employees', [EmployeeController::class, 'officeIndex'])->name('employees.office.index');
