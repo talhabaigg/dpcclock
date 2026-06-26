@@ -35,6 +35,15 @@ class KioskAuthController extends Controller
 
         $employee = Employee::where('eh_employee_id', $employeeId)->firstOrFail();
         $kiosk = Kiosk::with('relatedKiosks', 'managers')->where('eh_kiosk_id', $kioskId)->firstOrFail();
+
+        // A new worker starting a PIN flow invalidates any lingering recent-auth
+        // panel from the previous worker. The panel will reappear after this
+        // worker's PIN check succeeds.
+        $existing = $this->kioskService->getRecentAuth($kiosk);
+        if ($existing && (int) $existing['employee_id'] !== (int) $employee->id) {
+            $this->kioskService->forgetRecentAuth();
+        }
+
         $clockedIn = $this->getCurrentOngoingTimesheet($kiosk->eh_kiosk_id, $employee->eh_employee_id);
         $layoutProps = $this->kioskService->getKioskLayoutProps($kiosk);
 
@@ -168,6 +177,11 @@ class KioskAuthController extends Controller
                 return redirect()->back()->with('error', 'Your PIN was not correct. Please check and try again.');
             }
         }
+
+        $this->kioskService->rememberRecentAuth($kiosk, $employee);
+
+        // Refresh layoutProps so the just-set recentAuth is visible to the rendered page.
+        $layoutProps = $this->kioskService->getKioskLayoutProps($kiosk);
 
         return $this->renderClockInOutPage($kioskId, $employeeId, $employee, $kiosk, $layoutProps, $clockedIn);
     }

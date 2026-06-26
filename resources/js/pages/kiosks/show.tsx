@@ -116,7 +116,7 @@ export default function Kiosk() {
                             <Clock className="text-primary h-12 w-12" />
                         </div>
                     </div>
-                    <h1 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">Welcome to the Time Clock</h1>
+                    <h1 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">Welcome to Superior Kiosk</h1>
                     <p className="text-muted-foreground max-w-md">Select your name from the list and enter your PIN to clock in or out.</p>
                 </div>
             </div>

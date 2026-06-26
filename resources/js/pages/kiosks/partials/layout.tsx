@@ -1,10 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
-import { LogOut, Monitor, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
+import { ChevronRight, Glasses, LogOut, Menu, Monitor, ShieldCheck, UserPlus, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import KioskSettingMenu from './KioskSettingMenu';
 import EmployeeList from './employeeList';
@@ -27,6 +28,13 @@ interface GuestSigner {
     signed_at_formatted: string;
 }
 
+interface RecentAuth {
+    employee_id: number;
+    eh_employee_id: number | string;
+    name: string;
+    expires_at: string;
+}
+
 interface KioskLayoutProps {
     children: React.ReactNode;
     employees: Array<any>;
@@ -41,8 +49,23 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
     const [search, setSearch] = useState<string>('');
     const [exitAdminDialogOpen, setExitAdminDialogOpen] = useState(false);
     const [isExiting, setIsExiting] = useState(false);
-    const { auth, kioskAccessMode } = usePage().props as unknown as { auth: { user: any }; kioskAccessMode: string | null };
+    const { auth, kioskAccessMode, recentAuth } = usePage().props as unknown as {
+        auth: { user: any };
+        kioskAccessMode: string | null;
+        recentAuth?: RecentAuth | null;
+    };
     const isQrSession = kioskAccessMode === 'qr';
+
+    // Hide the recent-auth panel client-side as soon as the server-reported window expires,
+    // so the worker can't tap stale actions after the session has timed out.
+    const [authActive, setAuthActive] = useState<boolean>(() => Boolean(recentAuth));
+    useEffect(() => {
+        setAuthActive(Boolean(recentAuth));
+        if (!recentAuth) return;
+        const ms = Math.max(0, new Date(recentAuth.expires_at).getTime() - Date.now());
+        const t = setTimeout(() => setAuthActive(false), ms);
+        return () => clearTimeout(t);
+    }, [recentAuth?.employee_id, recentAuth?.expires_at]);
 
     const handleExitAdminMode = () => {
         setIsExiting(true);
@@ -120,12 +143,17 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 <img src="/superior-group-logo-white.svg" alt="Logo" className="hidden h-8 dark:block" />
                 <img src="/superior-group-logo.svg" alt="Logo" className="h-8 dark:hidden" />
 
-                {!isQrSession && (
-                    <div className="flex items-center gap-2">
-                        <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} managers={kiosk.managers ?? []} defaultStartTime={kiosk.default_start_time} />
-                        <KioskTokenDialog kioskId={kiosk.id} />
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {authActive && recentAuth && (
+                        <AdditionalActionsBar kioskEhId={kiosk.eh_kiosk_id} recentAuth={recentAuth} />
+                    )}
+                    {!isQrSession && (
+                        <>
+                            <KioskSettingMenu kioskId={kiosk.id} adminMode={adminMode} employees={employees} managers={kiosk.managers ?? []} defaultStartTime={kiosk.default_start_time} />
+                            <KioskTokenDialog kioskId={kiosk.id} />
+                        </>
+                    )}
+                </div>
             </header>
 
             {/* Layout container */}
@@ -267,5 +295,77 @@ export default function KioskLayout({ children, employees, kiosk, selectedEmploy
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+/**
+ * Compact "More actions" trigger for the just-authed worker. Opens a Sheet
+ * drawer with each follow-up action as a large tappable card — comfortable for
+ * iPad touch, scales to many actions without crowding the kiosk layout.
+ * Add new entries to `actions` to surface them.
+ */
+function AdditionalActionsBar({
+    kioskEhId,
+    recentAuth,
+}: {
+    kioskEhId: string;
+    recentAuth: RecentAuth;
+}) {
+    const [open, setOpen] = useState(false);
+
+    const actions: {
+        href: string;
+        icon: typeof Glasses;
+        label: string;
+        description: string;
+    }[] = [
+        {
+            href: `/kiosks/${kioskEhId}/ppe/authed/${recentAuth.employee_id}`,
+            icon: Glasses,
+            label: 'Collect PPE / RPE',
+            description: 'Record items taken from the site cabinet.',
+        },
+        // Add more actions here as they become available.
+    ];
+
+    return (
+        <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                    <Menu className="h-4 w-4" />
+                    Menu
+                </Button>
+            </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:max-w-md">
+                    <SheetHeader>
+                        <SheetTitle>Menu</SheetTitle>
+                        <SheetDescription>
+                            Signed in as <span className="text-foreground font-medium">{recentAuth.name}</span>.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="flex flex-col gap-2 p-4">
+                        {actions.map((a) => {
+                            const Icon = a.icon;
+                            return (
+                                <Link
+                                    key={a.href}
+                                    href={a.href}
+                                    onClick={() => setOpen(false)}
+                                    className="bg-card hover:bg-muted/50 group flex items-center gap-4 rounded-lg border p-4 text-left transition"
+                                >
+                                    <div className="bg-muted text-muted-foreground flex h-11 w-11 shrink-0 items-center justify-center rounded-lg">
+                                        <Icon className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-foreground text-sm font-semibold">{a.label}</p>
+                                        <p className="text-muted-foreground text-xs">{a.description}</p>
+                                    </div>
+                                    <ChevronRight className="text-muted-foreground h-4 w-4 transition group-hover:translate-x-0.5" />
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </SheetContent>
+            </Sheet>
     );
 }

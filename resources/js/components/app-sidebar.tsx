@@ -29,6 +29,7 @@ import {
     FormInput,
     Gauge,
     GitCompare,
+    Glasses,
     GraduationCap,
     Hammer,
     HardHat,
@@ -311,6 +312,12 @@ const safety = [
                 name: 'Toolbox Talks',
                 url: '/toolbox-talks',
                 icon: HardHat,
+                permission: 'prestarts.view',
+            },
+            {
+                name: 'PPE/RPE Register',
+                url: '/ppe-register',
+                icon: Glasses,
                 permission: 'prestarts.view',
             },
             {

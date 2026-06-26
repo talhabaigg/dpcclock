@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Location extends Model
 {
@@ -33,6 +34,7 @@ class Location extends Model
         'longitude',
         'master_hourly_rate',
         'sell_multiplier_percentage',
+        'ppe_public_token',
     ];
 
     protected $casts = [
@@ -215,5 +217,24 @@ class Location extends Model
     public function swms()
     {
         return $this->hasMany(Swms::class);
+    }
+
+    public function ppeIssuances()
+    {
+        return $this->hasMany(PpeIssuance::class);
+    }
+
+    /**
+     * Returns the stable PPE cabinet token, generating one on first read.
+     * Token is location-scoped because each cabinet QR is bound to a job.
+     */
+    public function ensurePpePublicToken(): string
+    {
+        if (! $this->ppe_public_token) {
+            $this->ppe_public_token = (string) Str::uuid();
+            $this->save();
+        }
+
+        return $this->ppe_public_token;
     }
 }

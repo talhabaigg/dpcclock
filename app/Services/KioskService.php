@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Clock;
 use App\Models\DailyPrestart;
 use App\Models\DailyPrestartSignature;
+use App\Models\Employee;
 use App\Models\Kiosk;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -121,6 +122,59 @@ class KioskService
             'employees' => $employees,
             'guestSigners' => $guestSigners,
             'hasTodayPrestart' => $prestart !== null,
+            'recentAuth' => $this->getRecentAuth($kiosk),
+        ];
+    }
+
+    /**
+     * Recent-auth window: set when a worker passes the kiosk PIN check, used by
+     * the layout to expose post-auth follow-up actions (e.g. Collect PPE) without
+     * forcing a second PIN. Scoped to the kiosk that performed the auth.
+     */
+    public const RECENT_AUTH_TTL_SECONDS = 120;
+
+    public function rememberRecentAuth(Kiosk $kiosk, Employee $employee): void
+    {
+        Session::put('kiosk_recent_auth', [
+            'kiosk_id' => $kiosk->id,
+            'employee_id' => $employee->id,
+            'eh_employee_id' => $employee->eh_employee_id,
+            'expires_at' => now()->addSeconds(self::RECENT_AUTH_TTL_SECONDS)->toIso8601String(),
+        ]);
+    }
+
+    public function forgetRecentAuth(): void
+    {
+        Session::forget('kiosk_recent_auth');
+    }
+
+    public function getRecentAuth(?Kiosk $kiosk = null): ?array
+    {
+        $auth = Session::get('kiosk_recent_auth');
+        if (! $auth || empty($auth['expires_at'])) {
+            return null;
+        }
+
+        if (now()->greaterThan(Carbon::parse($auth['expires_at']))) {
+            Session::forget('kiosk_recent_auth');
+
+            return null;
+        }
+
+        if ($kiosk && (int) ($auth['kiosk_id'] ?? 0) !== $kiosk->id) {
+            return null;
+        }
+
+        $employee = Employee::find($auth['employee_id']);
+        if (! $employee) {
+            return null;
+        }
+
+        return [
+            'employee_id' => $employee->id,
+            'eh_employee_id' => $employee->eh_employee_id,
+            'name' => $employee->preferred_name ?? $employee->name,
+            'expires_at' => $auth['expires_at'],
         ];
     }
 

@@ -135,6 +135,13 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::post('/t/{token}/submit', [ToolboxSignController::class, 'submit'])->name('toolbox-sign.submit')->middleware('throttle:10,1');
 });
 
+// PPE/RPE Register — public PPE cabinet QR (location-bound, no auth, NO clock in/out access)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/ppe/{token}', [\App\Http\Controllers\PpeFormController::class, 'publicShow'])->name('ppe-sign.show');
+    Route::post('/ppe/{token}/verify-pin', [\App\Http\Controllers\PpeFormController::class, 'publicVerifyPin'])->name('ppe-sign.verify-pin')->middleware('throttle:20,1');
+    Route::post('/ppe/{token}/submit', [\App\Http\Controllers\PpeFormController::class, 'publicSubmit'])->name('ppe-sign.submit')->middleware('throttle:10,1');
+});
+
 // SWMS bulk signing — public routes (token-based, no auth)
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/swms-sign/{token}', [SwmsSigningController::class, 'show'])->name('swms-sign.show');
@@ -1590,6 +1597,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ============================================
+    // PPE / RPE REGISTER (admin views — public form lives at /ppe/{token})
+    // ============================================
+    Route::middleware('permission:prestarts.view')->group(function () {
+        Route::get('/ppe-register', [\App\Http\Controllers\PpeRegisterController::class, 'selectLocation'])->name('ppe-register.select-location');
+
+        Route::prefix('/locations/{location}/ppe-register')->name('locations.ppe-register.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\PpeRegisterController::class, 'index'])->name('index');
+            Route::get('/qr', [\App\Http\Controllers\PpeRegisterController::class, 'qr'])->name('qr');
+            Route::get('/{ppeIssuance}', [\App\Http\Controllers\PpeRegisterController::class, 'show'])->name('show');
+            Route::delete('/{ppeIssuance}', [\App\Http\Controllers\PpeRegisterController::class, 'destroy'])->name('destroy')
+                ->middleware('permission:prestarts.delete');
+            Route::post('/{ppeIssuance}/restore', [\App\Http\Controllers\PpeRegisterController::class, 'restore'])->name('restore')
+                ->middleware('permission:prestarts.delete');
+        });
+    });
+
+    // ============================================
     // PRESTART ABSENTEES
     // ============================================
     Route::middleware('permission:prestarts.view')->group(function () {
@@ -1711,6 +1735,15 @@ Route::middleware('kiosk.access')->group(function () {
     // Guest prestart signing (kiosk context, no employee)
     Route::get('/kiosk/{kioskId}/prestart/guest', [DailyPrestartController::class, 'showKioskGuestPrestart'])->name('kiosk.prestart.guest');
     Route::post('/kiosk/{kioskId}/prestart/guest/sign', [DailyPrestartController::class, 'signKioskGuestPrestart'])->name('kiosk.prestart.guest.sign');
+
+    // PPE/RPE issuance from kiosk iPad (device-cookie gated via kiosk.access)
+    Route::get('/kiosks/{kioskId}/ppe', [\App\Http\Controllers\PpeFormController::class, 'kioskShow'])->name('kiosk.ppe.show');
+    Route::post('/kiosks/{kioskId}/ppe/verify-pin', [\App\Http\Controllers\PpeFormController::class, 'kioskVerifyPin'])->name('kiosk.ppe.verify-pin')->middleware('throttle:20,1');
+    Route::post('/kiosks/{kioskId}/ppe/submit', [\App\Http\Controllers\PpeFormController::class, 'kioskSubmit'])->name('kiosk.ppe.submit')->middleware('throttle:10,1');
+
+    // Session-authed PPE form — entered after PIN check via "Additional actions"; no second PIN
+    Route::get('/kiosks/{kioskId}/ppe/authed/{employeeId}', [\App\Http\Controllers\PpeFormController::class, 'kioskAuthedShow'])->name('kiosk.ppe.authed.show');
+    Route::post('/kiosks/{kioskId}/ppe/authed/{employeeId}/submit', [\App\Http\Controllers\PpeFormController::class, 'kioskAuthedSubmit'])->name('kiosk.ppe.authed.submit')->middleware('throttle:10,1');
 });
 
 Route::get('/kiosk', function () {
