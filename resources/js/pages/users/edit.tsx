@@ -81,8 +81,27 @@ type Vendor = {
     name: string;
 };
 
+type TokenStats = {
+    total_tokens: number;
+    input_tokens: number;
+    output_tokens: number;
+    message_count: number;
+    estimated_cost: number;
+    limit: number;
+    voice_minutes: number;
+    voice_calls: number;
+    voice_cost: number;
+    total_cost: number;
+};
+
+function formatTokenNumber(num: number): string {
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+    return num.toLocaleString();
+}
+
 export default function UserEdit() {
-    const { user, roles, flash, kiosks, directPermissions, groupedPermissions, categories, vendors } = usePage<{
+    const { user, roles, flash, kiosks, directPermissions, groupedPermissions, categories, vendors, tokenStats } = usePage<{
         user: User;
         roles: Role[];
         flash: { success: string; error: string };
@@ -91,6 +110,7 @@ export default function UserEdit() {
         groupedPermissions: GroupedPermissions;
         categories: string[];
         vendors: Vendor[];
+        tokenStats: TokenStats;
     }>().props;
 
     const getInitials = useInitials();
@@ -546,6 +566,81 @@ export default function UserEdit() {
                                         Links uploaded receipts to this user's credit card and helps route them for processing.
                                     </p>
                                     {errors.premier_vendor_id && <p className="text-destructive text-sm">{errors.premier_vendor_id}</p>}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* AI Usage */}
+                    {tokenStats && (
+                        <Card>
+                            <CardHeader className="px-4 sm:px-6">
+                                <CardTitle className="text-base sm:text-lg">AI Usage</CardTitle>
+                                <CardDescription>This user's token consumption and estimated AI cost</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 px-4 sm:px-6">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">Tokens used</span>
+                                        <span className="font-medium tabular-nums">
+                                            {formatTokenNumber(tokenStats.total_tokens)} / {formatTokenNumber(tokenStats.limit)}
+                                        </span>
+                                    </div>
+                                    <div className="bg-muted relative h-2 w-full overflow-hidden rounded-full">
+                                        <div
+                                            className={cn(
+                                                'h-full transition-all duration-500',
+                                                tokenStats.limit > 0 && tokenStats.total_tokens / tokenStats.limit >= 0.9
+                                                    ? 'bg-destructive'
+                                                    : tokenStats.limit > 0 && tokenStats.total_tokens / tokenStats.limit >= 0.7
+                                                      ? 'bg-foreground/60'
+                                                      : 'bg-foreground/80',
+                                            )}
+                                            style={{
+                                                width: `${tokenStats.limit > 0 ? Math.min((tokenStats.total_tokens / tokenStats.limit) * 100, 100) : 0}%`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                    <div className="bg-muted/50 rounded-md p-3">
+                                        <dt className="text-muted-foreground text-xs">Input</dt>
+                                        <dd className="mt-1 text-sm font-medium tabular-nums">{formatTokenNumber(tokenStats.input_tokens)}</dd>
+                                    </div>
+                                    <div className="bg-muted/50 rounded-md p-3">
+                                        <dt className="text-muted-foreground text-xs">Output</dt>
+                                        <dd className="mt-1 text-sm font-medium tabular-nums">{formatTokenNumber(tokenStats.output_tokens)}</dd>
+                                    </div>
+                                    <div className="bg-muted/50 rounded-md p-3">
+                                        <dt className="text-muted-foreground text-xs">Messages</dt>
+                                        <dd className="mt-1 text-sm font-medium tabular-nums">{tokenStats.message_count.toLocaleString()}</dd>
+                                    </div>
+                                    {(tokenStats.voice_calls > 0 || tokenStats.voice_minutes > 0) && (
+                                        <div className="bg-muted/50 rounded-md p-3">
+                                            <dt className="text-muted-foreground text-xs">Voice</dt>
+                                            <dd className="mt-1 text-sm font-medium tabular-nums">
+                                                {tokenStats.voice_calls} calls · {tokenStats.voice_minutes.toFixed(1)}m
+                                            </dd>
+                                        </div>
+                                    )}
+                                </dl>
+
+                                <div className="space-y-1 border-t pt-3">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">Chat cost</span>
+                                        <span className="font-medium tabular-nums">${tokenStats.estimated_cost.toFixed(4)}</span>
+                                    </div>
+                                    {tokenStats.voice_cost > 0 && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-muted-foreground">Voice cost</span>
+                                            <span className="font-medium tabular-nums">${tokenStats.voice_cost.toFixed(4)}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium">Total cost</span>
+                                        <span className="font-semibold tabular-nums">${tokenStats.total_cost.toFixed(4)}</span>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

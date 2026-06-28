@@ -49,6 +49,12 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
         permission: undefined,
     },
+    {
+        title: 'AI Usage',
+        href: '/settings/ai-usage',
+        icon: null,
+        permission: undefined,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

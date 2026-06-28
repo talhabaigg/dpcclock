@@ -7,6 +7,7 @@ use App\Models\EmployeeFile;
 use App\Models\EmployeeFileType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class EmployeeFileController extends Controller
 {
@@ -67,6 +68,40 @@ class EmployeeFileController extends Controller
 
     public function store(Request $request, Employee $employee)
     {
+        // "Other" uploads: the user typed a free-text document name + picked a category.
+        // Resolve to a per-category shared "Other" file type (created lazily, never seeded),
+        // and store the typed name in `notes`. The shared type is inactive + non-matching so
+        // it never appears in the picker or counts as a required document.
+        if ($request->filled('custom_name')) {
+            $request->validate([
+                'custom_name' => 'required|string|max:255',
+                'custom_category' => 'required|string|max:255',
+            ]);
+
+            $category = $request->input('custom_category');
+            $otherType = EmployeeFileType::firstOrCreate(
+                ['slug' => 'other-'.Str::slug($category)],
+                [
+                    'name' => 'Other',
+                    'category' => [$category],
+                    'expiry_requirement' => 'optional',
+                    'requires_completed_date' => false,
+                    'allow_multiple' => true,
+                    'is_active' => false,
+                    'conditions' => ['rule_groups' => [[
+                        'match' => 'all',
+                        'rules' => [['field' => 'employment_type', 'operator' => 'is', 'value' => '__never__']],
+                        'result' => 'none',
+                    ]]],
+                ]
+            );
+
+            $request->merge([
+                'employee_file_type_id' => $otherType->id,
+                'notes' => $request->input('custom_name'),
+            ]);
+        }
+
         $validated = $request->validate([
             'employee_file_type_id' => 'required|exists:employee_file_types,id',
             'document_number' => 'nullable|string|max:255',
@@ -155,7 +190,11 @@ class EmployeeFileController extends Controller
 
     private function formatFile(EmployeeFile $file): array
     {
-        $hasVersions = $file->fileType->hasVersions();
+        $type = $file->fileType;
+        // Shared per-category "Other" type: free-text doc whose real name lives in `notes`.
+        $isOther = $type && ! $type->is_active && $type->name === 'Other';
+        // Catch-all / "Other" types are not versioned — each upload is its own document.
+        $hasVersions = $type && $type->hasVersions() && ! $type->allow_multiple;
         $versionCount = $hasVersions
             ? EmployeeFile::where('employee_id', $file->employee_id)
                 ->where('employee_file_type_id', $file->employee_file_type_id)
@@ -175,14 +214,15 @@ class EmployeeFileController extends Controller
             'created_at' => $file->created_at->toDateString(),
             'selected_options' => $file->selected_options,
             'file_type' => [
-                'id' => $file->fileType->id,
-                'name' => $file->fileType->name,
-                'category' => $file->fileType->category,
-                'has_back_side' => $file->fileType->has_back_side,
-                'expiry_requirement' => $file->fileType->expiry_requirement,
-                'requires_completed_date' => $file->fileType->requires_completed_date,
-                'options' => $file->fileType->options,
+                'id' => $type?->id ?? 0,
+                'name' => $isOther && $file->notes ? $file->notes : ($type?->name ?? 'Unknown'),
+                'category' => $type?->category,
+                'has_back_side' => $type?->has_back_side ?? false,
+                'expiry_requirement' => $type?->expiry_requirement ?? 'optional',
+                'requires_completed_date' => $type?->requires_completed_date ?? false,
+                'options' => $type?->options,
                 'has_versions' => $hasVersions,
+                'is_other' => $isOther,
             ],
             'version_count' => $versionCount,
             'front_url' => $frontMedia ? route('employees.files.download', [$file->employee_id, $file->id, 'file_front']) : null,

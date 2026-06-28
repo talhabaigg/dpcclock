@@ -431,7 +431,7 @@ export default function RolesIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Roles & Permissions" />
 
-            <div className="flex flex-col gap-4 p-3 sm:p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-3 sm:p-4">
                 {/* Flash Messages */}
                 {flash.success && (
                     <div className="bg-primary/5 border-primary/20 text-primary flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">

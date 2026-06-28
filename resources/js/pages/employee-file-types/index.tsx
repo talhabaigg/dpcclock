@@ -11,7 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronDown, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Check, ChevronDown, EllipsisVertical, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
@@ -112,10 +113,10 @@ const LEVEL_LABELS: Record<Level, string> = {
     none: 'Not Required',
 };
 
-const LEVEL_BADGE_VARIANT: Record<Level, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-    mandatory: 'destructive',
-    preferred: 'default',
-    optional: 'secondary',
+const LEVEL_BADGE_VARIANT: Record<Level, 'default' | 'secondary' | 'outline'> = {
+    mandatory: 'default',
+    preferred: 'secondary',
+    optional: 'outline',
     none: 'outline',
 };
 
@@ -158,7 +159,18 @@ function fieldLabel(field: string): string {
     }
 }
 
-function ruleSummary(rule: ConditionRule, worktypes: { id: number; name: string }[], locations: { id: number; name: string }[]): string {
+interface RuleView {
+    label: string;
+    values: string[];
+}
+
+function ruleView(
+    rule: ConditionRule,
+    worktypes: { id: number; name: string }[],
+    locations: { id: number; name: string }[],
+    index: number,
+    match: 'all' | 'any',
+): RuleView {
     const op = OPERATOR_LABELS[rule.operator as Operator] ?? rule.operator;
     const labelFor = (v: string) => {
         if (rule.field === 'worktype') return worktypes.find((w) => String(w.id) === v)?.name ?? v;
@@ -166,8 +178,11 @@ function ruleSummary(rule: ConditionRule, worktypes: { id: number; name: string 
         return v;
     };
     const values = Array.isArray(rule.value) ? rule.value : (rule.value ? [rule.value] : []);
-    const valueLabel = values.length === 0 ? '…' : values.map(labelFor).join(', ');
-    return `${fieldLabel(rule.field)} ${op} ${valueLabel}`;
+    const prefix = index > 0 ? `${match === 'all' ? 'and' : 'or'} ` : '';
+    return {
+        label: `${prefix}${fieldLabel(rule.field)} ${op}`,
+        values: values.length === 0 ? ['…'] : values.map(labelFor),
+    };
 }
 
 interface MultiSelectOption { value: string; label: string }
@@ -253,17 +268,16 @@ function conditionSummary(
     conditions: LegacyConditions | null,
     worktypes: { id: number; name: string }[],
     locations: { id: number; name: string }[],
-): { groups: { text: string; result: Level }[]; allEmployees: boolean } {
+): { groups: { rules: RuleView[]; result: Level }[]; allEmployees: boolean } {
     const c = normalizeConditions(conditions);
     if (!c || c.rule_groups.length === 0) return { groups: [], allEmployees: true };
 
     const groups = c.rule_groups
         .filter((g) => g.rules.length > 0)
-        .map((g) => {
-            const parts = g.rules.map((r) => ruleSummary(r, worktypes, locations));
-            const joiner = g.match === 'all' ? ' AND ' : ' OR ';
-            return { text: parts.join(joiner), result: g.result };
-        });
+        .map((g) => ({
+            result: g.result,
+            rules: g.rules.map((r, i) => ruleView(r, worktypes, locations, i, g.match)),
+        }));
 
     return { groups, allEmployees: groups.length === 0 };
 }
@@ -382,15 +396,14 @@ export default function EmployeeFileTypesIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employee File Types" />
 
-            <div className="flex flex-col gap-4 p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
                 {flash?.success && (
                     <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/20 dark:text-green-300">
                         {flash.success}
                     </div>
                 )}
 
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">Employee File Types</h2>
+                <div className="flex items-center justify-end">
                     <Button size="sm" onClick={openCreate} className="gap-1.5">
                         <Plus size={14} />
                         Add File Type
@@ -398,24 +411,21 @@ export default function EmployeeFileTypesIndex() {
                 </div>
 
                 <div className="rounded-lg border">
-                    <Table>
+                    <Table className="table-fixed text-xs [&_td]:py-2 [&_th]:py-2">
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Document Name</TableHead>
-                                <TableHead>Categories</TableHead>
-                                <TableHead>Expiry</TableHead>
-                                <TableHead>Completed Date</TableHead>
-                                <TableHead>Two-Sided</TableHead>
-                                <TableHead>Multiple</TableHead>
-                                <TableHead>Required For</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-24">Actions</TableHead>
+                                <TableHead className="w-[22%]">Document Name</TableHead>
+                                <TableHead className="w-[14%]">Categories</TableHead>
+                                <TableHead className="w-[18%]">Properties</TableHead>
+                                <TableHead className="w-[30%]">Required For</TableHead>
+                                <TableHead className="w-[9%]">Status</TableHead>
+                                <TableHead className="w-[7%] text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {fileTypes.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                                    <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
                                         No file types yet. Create one to get started.
                                     </TableCell>
                                 </TableRow>
@@ -424,28 +434,55 @@ export default function EmployeeFileTypesIndex() {
                                 const summary = conditionSummary(ft.conditions, worktypes, locations);
                                 return (
                                     <TableRow key={ft.id} className={!ft.is_active ? 'opacity-50' : ''}>
-                                        <TableCell className="font-medium">{ft.name}</TableCell>
+                                        <TableCell className="font-medium whitespace-normal break-words">{ft.name}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-wrap gap-1">
                                                 {(ft.category ?? []).map((cat) => (
-                                                    <Badge key={cat} variant="outline" className="text-[10px]">{cat}</Badge>
+                                                    <Badge key={cat} variant="outline" className="h-auto max-w-full items-start overflow-visible whitespace-normal break-words py-0.5 text-[10px] leading-snug">{cat}</Badge>
                                                 ))}
                                                 {(!ft.category || ft.category.length === 0) && <span className="text-muted-foreground text-sm">—</span>}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm capitalize">{ft.expiry_requirement ?? 'optional'}</TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">{ft.requires_completed_date ? 'Yes' : 'No'}</TableCell>
-                                        <TableCell>{ft.has_back_side ? 'Yes' : 'No'}</TableCell>
-                                        <TableCell>{ft.allow_multiple ? 'Yes' : 'No'}</TableCell>
-                                        <TableCell className="w-[320px] max-w-[320px] align-top text-sm">
+                                        <TableCell>
+                                            {(() => {
+                                                const props: string[] = [];
+                                                if (ft.expiry_requirement === 'required') props.push('Expiry required');
+                                                else if (ft.expiry_requirement === 'optional') props.push('Expiry optional');
+                                                if (ft.requires_completed_date) props.push('Completed date');
+                                                if (ft.has_back_side) props.push('Two-sided');
+                                                if (ft.allow_multiple) props.push('Multiple');
+                                                return props.length === 0 ? (
+                                                    <span className="text-muted-foreground">—</span>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {props.map((p) => (
+                                                            <Badge key={p} variant="outline" className="text-[10px] font-normal">{p}</Badge>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </TableCell>
+                                        <TableCell className="align-top">
                                             {summary.allEmployees ? (
-                                                <span className="text-muted-foreground">All employees — Mandatory</span>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant={LEVEL_BADGE_VARIANT.mandatory} className="shrink-0 capitalize">{LEVEL_LABELS.mandatory}</Badge>
+                                                    <span className="text-muted-foreground">All employees</span>
+                                                </div>
                                             ) : (
-                                                <div className="flex flex-col gap-1">
-                                                    {summary.groups.map((g, idx) => (
-                                                        <div key={idx} className="flex items-start gap-2">
-                                                            <Badge variant={LEVEL_BADGE_VARIANT[g.result]} className="shrink-0 text-[10px] capitalize">{LEVEL_LABELS[g.result]}</Badge>
-                                                            <span className="min-w-0 flex-1 text-muted-foreground text-xs whitespace-normal break-words">{g.text}</span>
+                                                <div className="flex flex-col gap-3">
+                                                    {summary.groups.map((g, gi) => (
+                                                        <div key={gi} className="flex flex-col gap-1.5 border-l-2 border-border pl-3">
+                                                            <Badge variant={LEVEL_BADGE_VARIANT[g.result]} className="w-fit shrink-0 capitalize">{LEVEL_LABELS[g.result]}</Badge>
+                                                            {g.rules.map((r, ri) => (
+                                                                <div key={ri} className="flex flex-col gap-1">
+                                                                    <span className="text-muted-foreground">{r.label}</span>
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {r.values.map((v, vi) => (
+                                                                            <Badge key={vi} variant="secondary" className="h-auto max-w-full items-start whitespace-normal break-words py-0.5 font-normal">{v}</Badge>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -454,17 +491,28 @@ export default function EmployeeFileTypesIndex() {
                                         <TableCell>
                                             <Badge variant={ft.is_active ? 'default' : 'secondary'}>{ft.is_active ? 'Active' : 'Inactive'}</Badge>
                                         </TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(ft)}>
-                                                    <Pencil size={14} />
-                                                </Button>
-                                                {ft.is_active && (
-                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => deactivate(ft.id)}>
-                                                        <Trash2 size={14} />
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Row actions">
+                                                        <EllipsisVertical size={14} />
                                                     </Button>
-                                                )}
-                                            </div>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                                                    <DropdownMenuItem onClick={() => openEdit(ft)}>Edit</DropdownMenuItem>
+                                                    {ft.is_active && (
+                                                        <>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                className="text-destructive focus:text-destructive"
+                                                                onClick={() => deactivate(ft.id)}
+                                                            >
+                                                                Deactivate
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 );

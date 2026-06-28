@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { DatePickerDemo } from '@/components/date-picker';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { router } from '@inertiajs/react';
@@ -17,7 +18,10 @@ interface FileType {
     expiry_requirement: 'required' | 'optional' | 'none';
     requires_completed_date: boolean;
     options: string[] | null;
+    is_other?: boolean;
 }
+
+const OTHER_VALUE = 'other';
 
 interface Props {
     open: boolean;
@@ -29,6 +33,7 @@ interface Props {
 export default function UploadFileDialog({ open, onOpenChange, employeeId, fileTypes }: Props) {
     const [category, setCategory] = useState('');
     const [typeId, setTypeId] = useState('');
+    const [customName, setCustomName] = useState('');
     const [expiresAt, setExpiresAt] = useState<Date | undefined>(undefined);
     const [completedAt, setCompletedAt] = useState<Date | undefined>(undefined);
     const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -36,21 +41,23 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
     const [fileBack, setFileBack] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
+    const isOther = typeId === OTHER_VALUE;
     const selectedType = fileTypes.find((t) => String(t.id) === typeId);
 
     const categories = useMemo(() => {
-        const cats = new Set(fileTypes.flatMap((ft) => ft.category ?? ['Other']));
+        const cats = new Set(fileTypes.filter((ft) => !ft.is_other).flatMap((ft) => ft.category ?? ['Other']));
         return Array.from(cats).sort();
     }, [fileTypes]);
 
     const filteredTypes = useMemo(() => {
         if (!category) return [];
-        return fileTypes.filter((ft) => (ft.category ?? ['Other']).includes(category));
+        return fileTypes.filter((ft) => !ft.is_other && (ft.category ?? ['Other']).includes(category));
     }, [fileTypes, category]);
 
     const reset = () => {
         setCategory('');
         setTypeId('');
+        setCustomName('');
         setExpiresAt(undefined);
         setCompletedAt(undefined);
         setSelectedOptions([]);
@@ -59,16 +66,19 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
     };
 
     const handleSubmit = () => {
-        if (!typeId || !fileFront) return;
+        if (!fileFront || (isOther ? !customName.trim() : !typeId)) return;
         setSubmitting(true);
 
-        const data: Record<string, string | File | string[]> = {
-            employee_file_type_id: typeId,
-            file_front: fileFront,
-        };
+        const data: Record<string, string | File | string[]> = { file_front: fileFront };
+        if (isOther) {
+            data.custom_name = customName.trim();
+            data.custom_category = category;
+        } else {
+            data.employee_file_type_id = typeId;
+            if (completedAt) data.completed_at = format(completedAt, 'yyyy-MM-dd');
+            if (selectedOptions.length > 0) data.selected_options = selectedOptions;
+        }
         if (expiresAt) data.expires_at = format(expiresAt, 'yyyy-MM-dd');
-        if (completedAt) data.completed_at = format(completedAt, 'yyyy-MM-dd');
-        if (selectedOptions.length > 0) data.selected_options = selectedOptions;
         if (fileBack) data.file_back = fileBack;
 
         router.post(`/employees/${employeeId}/files`, data, {
@@ -130,6 +140,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
                                             {ft.name}
                                         </SelectItem>
                                     ))}
+                                    <SelectItem value={OTHER_VALUE}>Other</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -137,6 +148,17 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
 
                     {typeId && (
                         <>
+                            {isOther && (
+                                <div className="flex flex-col gap-1.5">
+                                    <Label>Document Name</Label>
+                                    <Input
+                                        value={customName}
+                                        onChange={(e) => setCustomName(e.target.value)}
+                                        placeholder="Enter the qualification / document name"
+                                    />
+                                </div>
+                            )}
+
                             {selectedType?.options && selectedType.options.length > 0 && (
                                 <div className="flex flex-col gap-1.5">
                                     <Label>Options</Label>
@@ -174,11 +196,11 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
                                 </div>
                             )}
 
-                            {selectedType?.expiry_requirement !== 'none' && (
+                            {(isOther || selectedType?.expiry_requirement !== 'none') && (
                                 <div className="flex flex-col gap-1.5">
                                     <Label>
                                         Expiry Date
-                                        {selectedType?.expiry_requirement === 'optional' && (
+                                        {(isOther || selectedType?.expiry_requirement === 'optional') && (
                                             <span className="text-muted-foreground ml-1 text-xs font-normal">(Optional)</span>
                                         )}
                                     </Label>
@@ -230,7 +252,7 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
                         Cancel
                     </Button>
-                    <Button onClick={handleSubmit} disabled={submitting || !typeId || !fileFront}>
+                    <Button onClick={handleSubmit} disabled={submitting || !fileFront || (isOther ? !customName.trim() : !typeId)}>
                         {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Upload
                     </Button>

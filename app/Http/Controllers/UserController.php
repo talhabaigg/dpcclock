@@ -127,6 +127,7 @@ class UserController extends Controller
 
         return Inertia::render('users/edit', [
             'user' => $user,
+            'tokenStats' => $user->tokenStats(),
             'permissions' => $user->getAllPermissions(),
             'directPermissions' => $user->getDirectPermissions()->pluck('name'),
             'groupedPermissions' => $groupedPermissions,

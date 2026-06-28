@@ -52,6 +52,10 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('settings/notifications');
     })->name('notifications');
 
+    Route::get('settings/ai-usage', function () {
+        return Inertia::render('settings/ai-usage');
+    })->name('ai-usage');
+
     // Test push notification route
     Route::post('settings/notifications/test', function () {
         $user = auth()->user();

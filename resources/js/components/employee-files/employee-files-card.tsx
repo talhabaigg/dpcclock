@@ -27,6 +27,7 @@ interface FileType {
     requires_completed_date: boolean;
     options: string[] | null;
     has_versions?: boolean;
+    is_other?: boolean;
 }
 
 interface EmployeeFileRecord {
