@@ -25,15 +25,127 @@ class KioskService
             ->get()
             ->keyBy('eh_employee_id'); // index by employee ID for faster lookup
 
-        return $employees->map(function ($employee) use ($activeClocks) {
+        // Physical sign-out times from today's prestart signatures, keyed by local
+        // employee id. This is the immutable "left site" stamp, independent of the
+        // (amendable) clock-out time.
+        $signOuts = $this->todayEmployeeSignOuts($kiosk);
+
+        return $employees->map(function ($employee) use ($activeClocks, $signOuts) {
             $activeClock = $activeClocks->get($employee->eh_employee_id);
             $employee->clocked_in = ! is_null($activeClock);
             $employee->clock_in_time = $activeClock
                 ? Carbon::parse($activeClock->clock_in)->format('h:i A')
                 : null;
 
+            $signedOutAt = $signOuts->get($employee->id);
+            $employee->signed_out_time = $signedOutAt
+                ? Carbon::parse($signedOutAt)->format('h:i A')
+                : null;
+
             return $employee;
         });
+    }
+
+    /**
+     * Today's physical sign-out timestamps for this kiosk's location, keyed by
+     * local employee id. Empty if there is no active prestart today.
+     */
+    private function todayEmployeeSignOuts(Kiosk $kiosk): Collection
+    {
+        $kiosk->loadMissing('location');
+        $prestart = $this->todayPrestart($kiosk);
+
+        if (! $prestart) {
+            return collect();
+        }
+
+        return DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+            ->whereNotNull('employee_id')
+            ->whereNotNull('signed_out_at')
+            ->pluck('signed_out_at', 'employee_id');
+    }
+
+    /**
+     * The active prestart for this kiosk's location today, or null.
+     */
+    private function todayPrestart(Kiosk $kiosk): ?DailyPrestart
+    {
+        if (! $kiosk->location) {
+            return null;
+        }
+
+        return DailyPrestart::active()
+            ->forLocation($kiosk->location->id)
+            ->forDate(today('Australia/Brisbane')->toDateString())
+            ->first();
+    }
+
+    /**
+     * Shape a guest signature row for the kiosk sidebar.
+     */
+    private function mapGuestSigner(DailyPrestartSignature $sig): array
+    {
+        return [
+            'id' => $sig->id,
+            'guest_name' => $sig->guest_name,
+            'guest_company' => $sig->guest_company,
+            'signed_at' => $sig->signed_at,
+            'signed_at_formatted' => Carbon::parse($sig->signed_at)->format('h:i A'),
+            'signed_out_at' => $sig->signed_out_at,
+            'signed_out_at_formatted' => $sig->signed_out_at
+                ? Carbon::parse($sig->signed_out_at)->format('h:i A')
+                : null,
+        ];
+    }
+
+    /**
+     * Stamp a guest's physical sign-out time (no PIN — guests just tap to leave).
+     * No-op if already signed out. Returns the refreshed guest signer list.
+     */
+    public function signOutGuest(Kiosk $kiosk, DailyPrestartSignature $signature): Collection
+    {
+        if ($signature->employee_id === null && $signature->signed_out_at === null) {
+            $signature->signed_out_at = now();
+            $signature->save();
+        }
+
+        return $this->getTodayGuestSigners($kiosk);
+    }
+
+    /**
+     * Stamp an employee's physical "left site" time on today's prestart signature.
+     * Called from the (PIN-protected) clock-out flow. Always records now() — the
+     * real moment at the kiosk — overwriting any earlier stamp from the same day.
+     */
+    public function stampEmployeeSignOut(Kiosk $kiosk, int $employeeId): void
+    {
+        $prestart = $this->todayPrestart($kiosk);
+
+        if (! $prestart) {
+            return;
+        }
+
+        DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+            ->where('employee_id', $employeeId)
+            ->update(['signed_out_at' => now()]);
+    }
+
+    /**
+     * Clear an employee's physical sign-out stamp for today — used when they
+     * re-enter (clock back in) so the sidebar shows them on site again.
+     */
+    public function clearEmployeeSignOut(Kiosk $kiosk, int $employeeId): void
+    {
+        $prestart = $this->todayPrestart($kiosk);
+
+        if (! $prestart) {
+            return;
+        }
+
+        DailyPrestartSignature::where('daily_prestart_id', $prestart->id)
+            ->where('employee_id', $employeeId)
+            ->whereNotNull('signed_out_at')
+            ->update(['signed_out_at' => null]);
     }
 
     /**
@@ -60,13 +172,7 @@ class KioskService
             ->whereNull('employee_id')
             ->orderBy('signed_at', 'desc')
             ->get()
-            ->map(fn ($sig) => [
-                'id' => $sig->id,
-                'guest_name' => $sig->guest_name,
-                'guest_company' => $sig->guest_company,
-                'signed_at' => $sig->signed_at,
-                'signed_at_formatted' => Carbon::parse($sig->signed_at)->format('h:i A'),
-            ]);
+            ->map(fn ($sig) => $this->mapGuestSigner($sig));
     }
 
     /**
@@ -109,13 +215,7 @@ class KioskService
                 ->whereNull('employee_id')
                 ->orderBy('signed_at', 'desc')
                 ->get()
-                ->map(fn ($sig) => [
-                    'id' => $sig->id,
-                    'guest_name' => $sig->guest_name,
-                    'guest_company' => $sig->guest_company,
-                    'signed_at' => $sig->signed_at,
-                    'signed_at_formatted' => Carbon::parse($sig->signed_at)->format('h:i A'),
-                ])
+                ->map(fn ($sig) => $this->mapGuestSigner($sig))
             : collect();
 
         return [

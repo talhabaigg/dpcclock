@@ -1,9 +1,10 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Head, usePage } from '@inertiajs/react';
-import { CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Users, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import KioskLayout from './partials/layout';
+import KioskLayout, { useKioskSidebar } from './partials/layout';
 
 interface Employee {
     id: number;
@@ -24,6 +25,8 @@ interface GuestSigner {
     guest_company: string;
     signed_at: string;
     signed_at_formatted: string;
+    signed_out_at?: string | null;
+    signed_out_at_formatted?: string | null;
 }
 
 export default function Kiosk() {
@@ -85,41 +88,48 @@ export default function Kiosk() {
     return (
         <KioskLayout employees={employees} kiosk={kiosk} adminMode={adminMode} guestSigners={guestSigners} hasTodayPrestart={hasTodayPrestart}>
             <Head title={kiosk.name ?? 'Kiosk'} />
-            <div className="flex flex-col items-center justify-center gap-8 p-6 text-center">
-                {/* Flash Messages */}
-                <div
-                    className={cn(
-                        'w-full max-w-md transition-all duration-300',
-                        isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0',
-                    )}
-                >
-                    {flashMessage.success && (
-                        <Alert className="border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30">
-                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                            <AlertDescription className="ml-2 text-lg font-medium text-emerald-700 dark:text-emerald-300">
-                                {flashMessage.success}
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                    {flashMessage.error && (
-                        <Alert variant="destructive">
-                            <XCircle className="h-5 w-5" />
-                            <AlertDescription className="ml-2 text-lg font-medium">{flashMessage.error}</AlertDescription>
-                        </Alert>
-                    )}
-                </div>
-
-                {/* Welcome Message */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-center">
-                        <div className="bg-primary/10 rounded-full p-4">
-                            <Clock className="text-primary h-12 w-12" />
-                        </div>
-                    </div>
-                    <h1 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">Welcome to Superior Kiosk</h1>
-                    <p className="text-muted-foreground max-w-md">Select your name from the list and enter your PIN to clock in or out.</p>
-                </div>
-            </div>
+            <KioskWelcome flashMessage={flashMessage} isVisible={isVisible} />
         </KioskLayout>
+    );
+}
+
+function KioskWelcome({ flashMessage, isVisible }: { flashMessage: { success?: string; error?: string }; isVisible: boolean }) {
+    const openSidebar = useKioskSidebar();
+
+    return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-8 p-6 text-center">
+            {/* Flash Messages */}
+            <div className={cn('w-full max-w-md transition-all duration-300', isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0')}>
+                {flashMessage.success && (
+                    <Alert className="border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <AlertDescription className="ml-2 text-lg font-medium text-emerald-700 dark:text-emerald-300">{flashMessage.success}</AlertDescription>
+                    </Alert>
+                )}
+                {flashMessage.error && (
+                    <Alert variant="destructive">
+                        <XCircle className="h-5 w-5" />
+                        <AlertDescription className="ml-2 text-lg font-medium">{flashMessage.error}</AlertDescription>
+                    </Alert>
+                )}
+            </div>
+
+            {/* Welcome Message */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-center">
+                    <div className="bg-primary/10 rounded-full p-4">
+                        <Clock className="text-primary h-12 w-12" />
+                    </div>
+                </div>
+                <h1 className="text-foreground text-2xl font-semibold tracking-tight md:text-3xl">Welcome to Superior Kiosk</h1>
+                <p className="text-muted-foreground max-w-md">Employees, select your name to clock in or out. Visitors, tap Guest Sign In to register your visit.</p>
+            </div>
+
+            {/* Mobile-only: the employee list lives in a drawer, so surface it as a clear action */}
+            <Button size="lg" className="h-14 w-full max-w-xs gap-2 text-base lg:hidden" onClick={openSidebar}>
+                <Users className="h-5 w-5" />
+                Select Employee
+            </Button>
+        </div>
     );
 }

@@ -4,7 +4,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft, CheckCircle2, LogIn } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import KioskDialogBox from '../components/kiosk-dialog';
 import KioskLayout from '../partials/layout';
 
@@ -63,21 +63,6 @@ export default function ClockIn() {
             },
         });
     };
-
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-
-        window.addEventListener('resize', handleResize);
-        handleResize();
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, []);
 
     const content = (
         <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
@@ -163,9 +148,7 @@ export default function ClockIn() {
         </div>
     );
 
-    return isMobile ? (
-        <div className="bg-background min-h-screen">{content}</div>
-    ) : (
+    return (
         <KioskLayout
             employees={employees}
             kiosk={kiosk}

@@ -122,6 +122,10 @@ class ClockController extends Controller
             [] // eh_location_id intentionally left empty
         );
 
+        // Re-entry: clear any earlier physical sign-out so the sidebar shows them
+        // back on site. The next clock-out will re-stamp the latest departure.
+        app(KioskService::class)->clearEmployeeSignOut($kiosk, (int) $employee->id);
+
         return redirect()
             ->route('kiosks.show', $data['kioskId'])
             ->with('success', 'Clocked in successfully at '.$clock->clock_in->format('g:i A'));
@@ -485,6 +489,15 @@ class ClockController extends Controller
                 'respirator_type' => $silica['performed'] && ($silica['swms_compliant'] ?? false) ? ($silica['respirator_type'] ?? null) : null,
                 'clock_out_date' => now('Australia/Brisbane')->toDateString(),
             ]);
+        }
+
+        // Capture the physical "left site" time on today's prestart signature.
+        // This stamps now() — the real moment at the kiosk — and is kept separate
+        // from the (amendable) clock_out time above so the safety record survives
+        // any later timesheet edits.
+        $kiosk = Kiosk::find($validated['kioskId']);
+        if ($kiosk) {
+            app(KioskService::class)->stampEmployeeSignOut($kiosk, (int) $validated['employeeId']);
         }
 
         // Redirect back with success message

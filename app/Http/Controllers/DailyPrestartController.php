@@ -978,6 +978,24 @@ class DailyPrestartController extends Controller
             ->with('success', 'Guest prestart signed. Thanks, ' . trim($data['guest_name']) . '!');
     }
 
+    /**
+     * Capture a guest's physical departure from the kiosk. No PIN — a guest (or a
+     * supervisor on their behalf) just taps "Sign out" and we stamp the time.
+     */
+    public function signOutKioskGuest(Request $request, $kioskId, DailyPrestartSignature $signature)
+    {
+        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->firstOrFail();
+
+        abort_unless($signature->employee_id === null, 404);
+
+        $guests = app(KioskService::class)->signOutGuest($kiosk, $signature);
+        broadcast(new GuestPrestartSignedEvent($kiosk->id, $guests))->toOthers();
+
+        return redirect()
+            ->route('kiosks.show', $kiosk->id)
+            ->with('success', 'Guest signed out — ' . ($signature->guest_name ?? 'guest') . ' marked as left site.');
+    }
+
     private function fetchWeatherForLocation(int $locationId): ?array
     {
         $location = Location::find($locationId);

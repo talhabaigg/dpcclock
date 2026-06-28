@@ -249,20 +249,6 @@ export default function Clockout() {
             });
         });
     };
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-
-        window.addEventListener('resize', handleResize);
-        handleResize(); // Initial check on mount
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, []);
 
     const AvailableEndTimes = () => {
         const times = [];
@@ -895,12 +881,7 @@ export default function Clockout() {
         </div>
     );
 
-    return isMobile ? (
-        <>
-            <Head title="Clock Out" />
-            {content}
-        </>
-    ) : (
+    return (
         <KioskLayout
             employees={employees}
             kiosk={kiosk}

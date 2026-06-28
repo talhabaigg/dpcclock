@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -147,13 +148,6 @@ export default function PrestartSign() {
         );
     };
 
-    const [isMobile, setIsMobile] = useState(false);
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const activityFiles = prestart.media?.filter((m) => m.collection_name === 'activity_files') ?? [];
     const safetyConcernFiles = prestart.media?.filter((m) => m.collection_name === 'safety_concern_files') ?? [];
@@ -176,48 +170,47 @@ export default function PrestartSign() {
 
             {/* Back Button */}
             <div className="absolute top-4 left-4">
-                <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-full hover:bg-accent touch-manipulation">
+                <Button asChild variant="outline" size="lg" className="touch-manipulation gap-2 rounded-full shadow-sm">
+                    <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
                         <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
+                        Back
+                    </Link>
+                </Button>
             </div>
 
-            <div className="w-full max-w-2xl space-y-4 pt-12">
+            <div className="w-full max-w-2xl space-y-4 pt-14">
                 {/* Employee Header */}
-                <div className="flex flex-col items-center">
-                    <Avatar className="border-primary/20 mb-2 h-16 w-16 border-4 shadow-lg">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
-                            {getInitials(employee.display_name)}
-                        </AvatarFallback>
+                <div className="flex flex-col items-center text-center">
+                    <Avatar className="border-border mb-3 h-16 w-16 border shadow-sm">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">{getInitials(employee.display_name)}</AvatarFallback>
                     </Avatar>
                     <h2 className="text-xl font-bold">{employee.display_name}</h2>
-                    <div className="mt-1 flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-blue-600">
-                        <FileText className="h-4 w-4" />
-                        <span className="text-sm font-medium">Daily Prestart - {prestart.work_date_formatted}</span>
-                    </div>
+                    <Badge variant="secondary" className="mt-2 gap-1.5 font-medium">
+                        <FileText className="h-3.5 w-3.5" />
+                        Daily Prestart · {prestart.work_date_formatted}
+                    </Badge>
                 </div>
 
                 {/* Prestart Content */}
                 <Card>
-                    <CardHeader className="pb-3">
+                    <CardHeader>
                         <CardTitle className="text-base">Prestart Summary</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4 text-sm">
+                    <CardContent className="space-y-5 text-sm">
                         <WeatherWidget weather={prestart.weather as any} workDate={prestart.work_date} dense />
 
                         {prestart.activities && prestart.activities.length > 0 && (
                             <div>
-                                <p className="mb-1 font-medium text-muted-foreground">Activities</p>
-                                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                <p className="text-muted-foreground mb-1.5 text-xs font-semibold tracking-wide uppercase">Activities</p>
+                                <ul className="text-muted-foreground list-disc space-y-1 pl-5">
                                     {prestart.activities.map((a, i) => (
                                         <li key={i}>{a.description}</li>
                                     ))}
                                 </ul>
                                 {activityFiles.length > 0 && (
-                                    <div className="mt-1 space-y-0.5 pl-5">
+                                    <div className="mt-1.5 space-y-0.5 pl-5">
                                         {activityFiles.map((f) => (
-                                            <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
+                                            <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="text-primary block text-xs hover:underline">
                                                 {f.file_name}
                                             </a>
                                         ))}
@@ -228,16 +221,16 @@ export default function PrestartSign() {
 
                         {prestart.safety_concerns && prestart.safety_concerns.length > 0 && (
                             <div>
-                                <p className="mb-1 font-medium text-muted-foreground">Safety Concerns</p>
-                                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                <p className="text-muted-foreground mb-1.5 text-xs font-semibold tracking-wide uppercase">Safety Concerns</p>
+                                <ul className="text-muted-foreground list-disc space-y-1 pl-5">
                                     {prestart.safety_concerns.map((s, i) => (
                                         <li key={i}>{s.description}</li>
                                     ))}
                                 </ul>
                                 {safetyConcernFiles.length > 0 && (
-                                    <div className="mt-1 space-y-0.5 pl-5">
+                                    <div className="mt-1.5 space-y-0.5 pl-5">
                                         {safetyConcernFiles.map((f) => (
-                                            <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 hover:underline">
+                                            <a key={f.id} href={f.original_url} target="_blank" rel="noreferrer" className="text-primary block text-xs hover:underline">
                                                 {f.file_name}
                                             </a>
                                         ))}
@@ -247,8 +240,8 @@ export default function PrestartSign() {
                         )}
 
                         <div>
-                            <p className="mb-1 font-medium text-muted-foreground">Daily Checklist</p>
-                            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                            <p className="text-muted-foreground mb-1.5 text-xs font-semibold tracking-wide uppercase">Daily Checklist</p>
+                            <ul className="text-muted-foreground list-disc space-y-1 pl-5">
                                 {DAILY_CHECKLIST.map((item, i) => (
                                     <li key={i}>{item}</li>
                                 ))}
@@ -257,23 +250,20 @@ export default function PrestartSign() {
 
                         {trainings && trainings.length > 0 && (
                             <div>
-                                <p className="mb-1.5 flex items-center gap-1.5 font-medium text-muted-foreground">
-                                    <GraduationCap className="h-4 w-4" />
+                                <p className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+                                    <GraduationCap className="h-3.5 w-3.5" />
                                     Booked Training
                                 </p>
                                 <div className="space-y-2">
                                     {trainings.map((t) => (
-                                        <div
-                                            key={t.id}
-                                            className="overflow-hidden rounded-lg border border-indigo-200/70 bg-gradient-to-br from-indigo-50 to-blue-50/60 dark:border-indigo-900/50 dark:from-indigo-950/30 dark:to-blue-950/20"
-                                        >
+                                        <div key={t.id} className="bg-muted/40 overflow-hidden rounded-lg border">
                                             <div className="flex items-start gap-3 p-3">
-                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                                <div className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
                                                     <GraduationCap className="h-5 w-5" />
                                                 </div>
                                                 <div className="min-w-0 flex-1">
                                                     <p className="font-semibold leading-tight">{t.title}</p>
-                                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                                         {t.time && (
                                                             <span className="flex items-center gap-1">
                                                                 <Clock className="h-3 w-3" />
@@ -296,20 +286,13 @@ export default function PrestartSign() {
                                                     {t.employees.length > 0 && (
                                                         <div className="mt-2 flex flex-wrap gap-1">
                                                             {t.employees.map((e) => (
-                                                                <span
-                                                                    key={e.id}
-                                                                    className="rounded-full bg-white/70 px-2 py-0.5 text-xs text-indigo-900 dark:bg-white/10 dark:text-indigo-200"
-                                                                >
+                                                                <span key={e.id} className="bg-background text-foreground rounded-full border px-2 py-0.5 text-xs">
                                                                     {e.display_name || e.preferred_name || e.name}
                                                                 </span>
                                                             ))}
                                                         </div>
                                                     )}
-                                                    {t.notes && (
-                                                        <p className="mt-2 border-t border-indigo-200/50 pt-2 text-xs italic text-muted-foreground dark:border-indigo-900/50">
-                                                            {t.notes}
-                                                        </p>
-                                                    )}
+                                                    {t.notes && <p className="text-muted-foreground mt-2 border-t pt-2 text-xs italic">{t.notes}</p>}
                                                 </div>
                                             </div>
                                         </div>
@@ -318,28 +301,34 @@ export default function PrestartSign() {
                             </div>
                         )}
 
-                        <label className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors touch-manipulation', allAcknowledged ? 'border-emerald-300 bg-emerald-50' : 'border-border')}>
+                        <label
+                            className={cn(
+                                'flex cursor-pointer touch-manipulation items-start gap-3 rounded-lg border p-3 transition-colors',
+                                allAcknowledged ? 'border-primary/50 bg-primary/5' : 'border-border hover:bg-accent',
+                            )}
+                        >
                             <Checkbox checked={allAcknowledged} onCheckedChange={() => setAllAcknowledged((prev) => !prev)} className="mt-0.5 h-5 w-5" />
-                            <span className={cn('flex-1 font-medium', allAcknowledged && 'text-emerald-800')}>I acknowledge and confirm all of the above activities, safety concerns, and checklist items</span>
+                            <span className="text-foreground flex-1 font-medium">I acknowledge and confirm all of the above activities, safety concerns, and checklist items</span>
                         </label>
                     </CardContent>
                 </Card>
 
                 {/* Signature Pad */}
                 <Card>
-                    <CardHeader className="pb-3">
+                    <CardHeader>
                         <CardTitle className="text-base">Sign Below</CardTitle>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             By signing, you confirm you have read and understood today's prestart and that you are required to attend the prestart meeting in person.
                         </p>
                     </CardHeader>
                     <CardContent>
-                        <div className="rounded-md border bg-white">
+                        {/* Canvas stays white so the captured signature image is legible */}
+                        <div className="overflow-hidden rounded-md border bg-white">
                             <canvas ref={canvasRef} className="h-40 w-full cursor-crosshair touch-none" />
                         </div>
-                        {sigError && <p className="mt-1 text-sm text-destructive">{sigError}</p>}
-                        <div className="mt-2 flex gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={clearSignature}>
+                        {sigError && <p className="text-destructive mt-2 text-sm">{sigError}</p>}
+                        <div className="mt-2 flex justify-end">
+                            <Button type="button" variant="ghost" size="sm" onClick={clearSignature}>
                                 Clear
                             </Button>
                         </div>
@@ -347,24 +336,15 @@ export default function PrestartSign() {
                 </Card>
 
                 {/* Sign & Clock In Button */}
-                <div className="flex flex-col items-center gap-3 pb-6">
-                    {!allAccepted && (
-                        <p className="text-sm text-muted-foreground">Accept all items above to enable signing</p>
-                    )}
+                <div className="flex flex-col items-center gap-2 pb-6">
+                    {!allAccepted && <p className="text-muted-foreground text-sm">Accept all items above to enable signing</p>}
                     <Button
                         onClick={handleSignAndClockIn}
                         disabled={showProcessing || !allAccepted}
-                        className={cn(
-                            'h-16 w-64 gap-3 rounded-2xl text-lg font-bold',
-                            'bg-emerald-500 text-white shadow-lg',
-                            'hover:bg-emerald-600 hover:shadow-xl',
-                            'active:scale-[0.98]',
-                            'touch-manipulation transition-all duration-200',
-                        )}
+                        size="lg"
+                        className="h-14 w-64 gap-2 rounded-xl text-base font-semibold"
                     >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-                            <LogIn className="h-4 w-4" />
-                        </div>
+                        <LogIn className="h-5 w-5" />
                         Sign & Clock In
                     </Button>
                 </div>
@@ -372,12 +352,7 @@ export default function PrestartSign() {
         </div>
     );
 
-    return isMobile ? (
-        <div className="bg-background min-h-screen">
-            <Head title="Prestart Sign" />
-            {content}
-        </div>
-    ) : (
+    return (
         <KioskLayout
             employees={employees ?? []}
             kiosk={kiosk}

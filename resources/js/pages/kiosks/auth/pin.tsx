@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useInitials } from '@/hooks/use-initials';
-import { cn } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -92,21 +91,6 @@ export default function ShowPin() {
         }
     }, [form.data.pin]);
 
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-
-        window.addEventListener('resize', handleResize);
-        handleResize();
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, []);
-
     const content = (
         <div className="relative flex h-full w-full flex-col items-center justify-center px-4 py-8">
             <Head title="Kiosk PIN" />
@@ -133,18 +117,19 @@ export default function ShowPin() {
 
             {/* Back Button */}
             <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
-                <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button variant="ghost" size="icon" className={cn('h-12 w-12 rounded-full', 'hover:bg-accent', 'touch-manipulation')}>
+                <Button asChild variant="outline" size="lg" className="touch-manipulation gap-2 rounded-full shadow-sm">
+                    <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
                         <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
+                        Back
+                    </Link>
+                </Button>
             </div>
 
             {/* Main Content */}
             <div className="flex flex-col items-center">
                 {/* Employee Avatar & Greeting */}
                 <div className="mb-8 flex flex-col items-center">
-                    <Avatar className="border-primary/20 mb-4 h-20 w-20 border-4 shadow-lg">
+                    <Avatar className="border-border mb-4 h-20 w-20 border shadow-sm">
                         <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">{getInitials(employee.display_name || employee.name)}</AvatarFallback>
                     </Avatar>
                     <h2 className="text-foreground text-2xl font-bold">Hi, {(employee.display_name || employee.name).split(' ')[0]}!</h2>
@@ -162,7 +147,7 @@ export default function ShowPin() {
                     {form.errors.pin && <p className="text-destructive mb-4 text-sm">{form.errors.pin}</p>}
 
                     {/* Success Message */}
-                    {flash?.success && <p className="mb-4 text-sm text-emerald-600">{flash.success}</p>}
+                    {flash?.success && <p className="text-primary mb-4 text-sm">{flash.success}</p>}
 
                     {/* Numpad */}
                     <PinNumpad onClick={handleNumClick} disabled={showProcessing} />
@@ -176,9 +161,7 @@ export default function ShowPin() {
         </div>
     );
 
-    return isMobile ? (
-        <div className="bg-background min-h-screen">{content}</div>
-    ) : (
+    return (
         <KioskLayout
             employees={employees}
             kiosk={kiosk}

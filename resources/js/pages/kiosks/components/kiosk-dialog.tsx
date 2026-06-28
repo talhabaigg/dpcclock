@@ -10,9 +10,25 @@ interface DialogBoxProps {
     description?: string;
     children?: React.ReactNode;
     variant?: 'default' | 'success' | 'error' | 'loading';
+    /** When provided, the footer shows a Cancel + confirm button pair instead of a single OK. */
+    onConfirm?: () => void;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    confirmDisabled?: boolean;
 }
 
-const KioskDialogBox: React.FC<DialogBoxProps> = ({ isOpen, onClose, title, description, children, variant = 'default' }) => {
+const KioskDialogBox: React.FC<DialogBoxProps> = ({
+    isOpen,
+    onClose,
+    title,
+    description,
+    children,
+    variant = 'default',
+    onConfirm,
+    confirmLabel = 'Confirm',
+    cancelLabel = 'Cancel',
+    confirmDisabled = false,
+}) => {
     const icons = {
         default: <AlertCircle className="text-primary h-16 w-16" />,
         success: <CheckCircle2 className="h-16 w-16 text-emerald-500" />,
@@ -66,8 +82,34 @@ const KioskDialogBox: React.FC<DialogBoxProps> = ({ isOpen, onClose, title, desc
                     {children && <div className="text-muted-foreground mt-4 w-full text-center">{children}</div>}
                 </div>
 
-                {/* Action Button */}
-                {variant !== 'loading' && (
+                {/* Action Button(s) */}
+                {variant !== 'loading' && onConfirm && (
+                    <div className="bg-muted/30 grid grid-cols-2 border-t">
+                        <Button
+                            onClick={onClose}
+                            variant="ghost"
+                            className={cn('h-14 w-full rounded-none border-r text-base font-semibold', 'touch-manipulation transition-colors hover:bg-muted/50')}
+                        >
+                            {cancelLabel}
+                        </Button>
+                        <Button
+                            onClick={onConfirm}
+                            disabled={confirmDisabled}
+                            variant="ghost"
+                            className={cn(
+                                'h-14 w-full rounded-none text-base font-semibold',
+                                'touch-manipulation transition-colors hover:bg-muted/50',
+                                variant === 'error' && 'text-destructive hover:text-destructive',
+                                variant === 'success' && 'text-emerald-600 hover:text-emerald-600',
+                                variant === 'default' && 'text-primary hover:text-primary',
+                            )}
+                        >
+                            {confirmLabel}
+                        </Button>
+                    </div>
+                )}
+
+                {variant !== 'loading' && !onConfirm && (
                     <div className="bg-muted/30 border-t">
                         <Button
                             onClick={onClose}

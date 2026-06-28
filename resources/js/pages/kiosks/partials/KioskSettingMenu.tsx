@@ -17,10 +17,11 @@ import { router, useForm, usePage } from '@inertiajs/react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useInitials } from '@/hooks/use-initials';
-import { ArrowLeft, Clock, Lock, Search, Settings, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, Clock, Lock, QrCode, Search, Settings, ShieldCheck, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PinNumpad from '../auth/components/numpad';
 import PinInputBox from '../auth/components/pinInputBox';
+import KioskTokenDialog from './qrcode';
 
 interface Manager {
     id: number;
@@ -85,6 +86,7 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers, defaultStar
     }, [form.data.pin]);
 
     const [menuOpen, setMenuOpen] = useState(false);
+    const [qrOpen, setQrOpen] = useState(false);
     const [adminPinDialogOpen, setAdminPinDialogOpen] = useState(false);
     const [updateStartDialogOpen, setUpdateStartDialogOpen] = useState(false);
     const [lockDeviceDialogOpen, setLockDeviceDialogOpen] = useState(false);
@@ -189,14 +191,24 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers, defaultStar
         <>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <DropdownMenuTrigger asChild>
-                    <button className="rounded-full bg-gray-900 p-2 hover:bg-gray-700" aria-label="Kiosk settings" type="button">
-                        <Settings className="text-white" />
-                    </button>
+                    <Button variant="secondary" size="icon" aria-label="Kiosk settings">
+                        <Settings className="h-4 w-4" />
+                    </Button>
                 </DropdownMenuTrigger>
 
                 <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>Settings</DropdownMenuLabel>
                     <DropdownMenuSeparator />
+
+                    <DropdownMenuItem
+                        onClick={() => {
+                            setMenuOpen(false);
+                            setQrOpen(true);
+                        }}
+                    >
+                        <QrCode className="mr-2 h-4 w-4" />
+                        Show QR Code
+                    </DropdownMenuItem>
 
                     {!adminMode && (
                         <DropdownMenuItem onClick={handleOpenAdminDialog}>
@@ -234,6 +246,9 @@ const KioskSettingMenu = ({ kioskId, adminMode, employees, managers, defaultStar
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* QR login dialog (opened from the settings menu) */}
+            <KioskTokenDialog kioskId={kioskId} open={qrOpen} onOpenChange={setQrOpen} hideTrigger />
 
             {/* Admin PIN Dialog */}
             <Dialog open={adminPinDialogOpen} onOpenChange={handleCloseAdminDialog}>

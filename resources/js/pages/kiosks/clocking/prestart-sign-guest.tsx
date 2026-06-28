@@ -153,13 +153,6 @@ export default function PrestartSignGuest() {
         );
     };
 
-    const [isMobile, setIsMobile] = useState(false);
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        handleResize();
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const activityFiles = prestart.media?.filter((m) => m.collection_name === 'activity_files') ?? [];
     const safetyConcernFiles = prestart.media?.filter((m) => m.collection_name === 'safety_concern_files') ?? [];
@@ -412,12 +405,7 @@ export default function PrestartSignGuest() {
         </div>
     );
 
-    return isMobile ? (
-        <div className="bg-background min-h-screen">
-            <Head title="Guest Prestart Sign" />
-            {content}
-        </div>
-    ) : (
+    return (
         <KioskLayout
             employees={employees ?? []}
             kiosk={kiosk}

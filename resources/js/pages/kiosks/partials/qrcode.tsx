@@ -9,13 +9,21 @@ import { toast } from 'sonner';
 
 interface KioskTokenDialogProps {
     kioskId: number;
+    /** Controlled open state (e.g. when triggered from the settings menu). */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    /** Hide the built-in trigger button when opened from elsewhere. */
+    hideTrigger?: boolean;
 }
 
-const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
+const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId, open: controlledOpen, onOpenChange, hideTrigger }) => {
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
-    const [open, setOpen] = useState<boolean>(false);
+    const [internalOpen, setInternalOpen] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+
+    const open = controlledOpen ?? internalOpen;
+    const setOpen = onOpenChange ?? setInternalOpen;
 
     const fetchToken = async () => {
         try {
@@ -63,12 +71,14 @@ const KioskTokenDialog: React.FC<KioskTokenDialogProps> = ({ kioskId }) => {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                    <QrCode className="h-4 w-4" />
-                    <span className="hidden sm:inline">Show QR</span>
-                </Button>
-            </DialogTrigger>
+            {!hideTrigger && (
+                <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                        <QrCode className="h-4 w-4" />
+                        <span className="hidden sm:inline">Show QR</span>
+                    </Button>
+                </DialogTrigger>
+            )}
 
             <DialogContent className="sm:max-w-md">
                 <DialogHeader className="text-center">

@@ -15,12 +15,14 @@ class DailyPrestartSignature extends Model
         'signature',
         'content_snapshot',
         'signed_at',
+        'signed_out_at',
         'clock_id',
     ];
 
     protected $casts = [
         'content_snapshot' => 'array',
         'signed_at' => 'datetime',
+        'signed_out_at' => 'datetime',
     ];
 
     protected $appends = ['is_guest', 'display_name'];

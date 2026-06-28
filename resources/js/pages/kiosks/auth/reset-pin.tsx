@@ -101,7 +101,7 @@ export default function ResetPin() {
                 <div
                     className={cn(
                         'flex h-8 w-8 items-center justify-center rounded-full',
-                        isValid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary/10 text-primary',
+                        'bg-primary/10 text-primary',
                     )}
                 >
                     {isValid ? <CheckCircle2 className="h-4 w-4" /> : icon}
@@ -128,7 +128,7 @@ export default function ResetPin() {
                                     'focus:border-primary focus:ring-primary/20 focus:ring-2 focus:outline-none',
                                     'touch-manipulation',
                                     isFilled ? 'border-primary/50 bg-primary/5' : 'border-border',
-                                    isValid && 'border-emerald-500/50 bg-emerald-500/5',
+                                    isValid && 'border-primary bg-primary/10',
                                 )}
                                 maxLength={1}
                                 onChange={handleInputChange(field, index)}
@@ -176,20 +176,6 @@ export default function ResetPin() {
         }, 500);
     };
 
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-
-        window.addEventListener('resize', handleResize);
-        handleResize();
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, []);
 
     const pinsMatch = form.data.new_pin.length === 4 && form.data.new_pin === form.data.confirm_pin;
     const canSubmit = form.data.email_pin.length === 4 && pinsMatch;
@@ -217,11 +203,12 @@ export default function ResetPin() {
 
             {/* Back Button */}
             <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
-                <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
-                    <Button variant="ghost" size="icon" className={cn('h-12 w-12 rounded-full', 'hover:bg-accent', 'touch-manipulation')}>
+                <Button asChild variant="outline" size="lg" className="touch-manipulation gap-2 rounded-full shadow-sm">
+                    <Link href={route('kiosks.show', { kiosk: kiosk.id })}>
                         <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
+                        Back
+                    </Link>
+                </Button>
             </div>
 
             {/* Main Content */}
@@ -290,9 +277,7 @@ export default function ResetPin() {
         </div>
     );
 
-    return isMobile ? (
-        <div className="bg-background min-h-screen">{content}</div>
-    ) : (
+    return (
         <KioskLayout
             employees={employees}
             kiosk={kiosk}

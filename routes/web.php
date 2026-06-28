@@ -1762,6 +1762,7 @@ Route::middleware('kiosk.access')->group(function () {
     // Guest prestart signing (kiosk context, no employee)
     Route::get('/kiosk/{kioskId}/prestart/guest', [DailyPrestartController::class, 'showKioskGuestPrestart'])->name('kiosk.prestart.guest');
     Route::post('/kiosk/{kioskId}/prestart/guest/sign', [DailyPrestartController::class, 'signKioskGuestPrestart'])->name('kiosk.prestart.guest.sign');
+    Route::post('/kiosk/{kioskId}/prestart/guest/{signature}/sign-out', [DailyPrestartController::class, 'signOutKioskGuest'])->name('kiosk.prestart.guest.sign-out');
 
     // PPE/RPE issuance from kiosk iPad (device-cookie gated via kiosk.access)
     Route::get('/kiosks/{kioskId}/ppe', [\App\Http\Controllers\PpeFormController::class, 'kioskShow'])->name('kiosk.ppe.show');
