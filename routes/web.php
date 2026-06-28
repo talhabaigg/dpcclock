@@ -1621,6 +1621,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::prefix('/locations/{location}/whs-deliverables')->name('locations.whs-deliverables.')->group(function () {
             Route::get('/', [\App\Http\Controllers\WhsDeliverableController::class, 'index'])->name('index');
+            Route::get('/register/{type}/pdf', [\App\Http\Controllers\WhsDeliverableController::class, 'registerPdf'])->name('register-pdf');
             Route::get('/create', [\App\Http\Controllers\WhsDeliverableController::class, 'create'])->name('create')
                 ->middleware('permission:whs-deliverables.create');
             Route::post('/', [\App\Http\Controllers\WhsDeliverableController::class, 'store'])->name('store')

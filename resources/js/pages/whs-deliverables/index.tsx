@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Bell, ImageIcon, Plus, Search, Zap } from 'lucide-react';
+import { Bell, Download, ImageIcon, Plus, Search, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import WhsDeliverableFiltersSheet from './filters-sheet';
 import {
@@ -104,6 +104,20 @@ export default function WhsDeliverablesIndex({ location, entries, filters, expir
                                 onReset={() => applyFilters({ expiry: null, notify: null })}
                                 onSwitchLocation={switchLocation}
                             />
+                            {filters.type && (
+                                <Button variant="outline" size="sm" asChild className="h-9 gap-1.5 text-xs">
+                                    <a
+                                        href={`${baseUrl}/register/${filters.type}/pdf`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title={`Download ${types[filters.type]?.label ?? ''} register PDF`}
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">Download register</span>
+                                        <span className="sm:hidden">PDF</span>
+                                    </a>
+                                </Button>
+                            )}
                             {can('whs-deliverables.create') && (
                                 <Button size="sm" asChild className="h-9 gap-1.5 text-xs">
                                     <Link href={`${baseUrl}/create`}>

@@ -114,6 +114,7 @@ interface Employee {
     preferred_name: string | null;
     email: string;
     mobile_number?: string | null;
+    date_of_birth?: string | null;
     pin: string;
     external_id?: string;
     eh_employee_id?: string;
@@ -697,6 +698,18 @@ export default function EmployeeShow() {
                                             {emp.email}
                                         </a>
                                     ) : null}
+                                </DetailItem>
+                                <Separator />
+                                <DetailItem label="Phone Number">
+                                    {emp.mobile_number ? (
+                                        <a href={`tel:${emp.mobile_number}`} className="text-primary hover:underline">
+                                            {emp.mobile_number}
+                                        </a>
+                                    ) : null}
+                                </DetailItem>
+                                <Separator />
+                                <DetailItem label="Date of Birth">
+                                    {emp.date_of_birth ? formatDate(emp.date_of_birth) : null}
                                 </DetailItem>
                                 <Separator />
                                 <DetailItem label="External ID">

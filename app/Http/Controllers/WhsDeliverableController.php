@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use Spatie\Browsershot\Browsershot;
 
 class WhsDeliverableController extends Controller
 {
@@ -259,6 +260,62 @@ class WhsDeliverableController extends Controller
             'Content-Type' => $media->mime_type ?? 'image/jpeg',
             'Content-Disposition' => 'inline; filename="'.$media->file_name.'"',
             'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    /**
+     * Stream a one-table register PDF for the given type at this project. Used by the
+     * "Download register" button on the index when the user has filtered to a single type.
+     */
+    public function registerPdf(Location $location, string $type)
+    {
+        $this->authorizeLocation($location);
+        abort_unless(array_key_exists($type, WhsDeliverable::TYPES), 404);
+
+        $entries = WhsDeliverable::where('location_id', $location->id)
+            ->where('type', $type)
+            ->orderBy('name')
+            ->get();
+
+        $logoPath = public_path('logo-cms.png');
+        $logoBase64 = file_exists($logoPath)
+            ? 'data:image/png;base64,'.base64_encode(file_get_contents($logoPath))
+            : '';
+
+        $html = view('whs-deliverables.register-pdf', [
+            'location' => $location,
+            'type' => $type,
+            'config' => WhsDeliverable::TYPES[$type],
+            'entries' => $entries,
+            'logoBase64' => $logoBase64,
+        ])->render();
+
+        $browsershot = Browsershot::html($html);
+
+        if ($nodeBinary = env('BROWSERSHOT_NODE_BINARY')) {
+            $browsershot->setNodeBinary($nodeBinary);
+        }
+        if ($npmBinary = env('BROWSERSHOT_NPM_BINARY')) {
+            $browsershot->setNpmBinary($npmBinary);
+        }
+        if ($chromePath = env('BROWSERSHOT_CHROME_PATH')) {
+            $browsershot->setChromePath($chromePath);
+        }
+
+        $pdf = $browsershot
+            ->noSandbox()
+            ->landscape()
+            ->format('A4')
+            ->margins(15, 12, 15, 12, 'mm')
+            ->showBackground()
+            ->pdf();
+
+        $typeLabel = WhsDeliverable::TYPES[$type]['label'];
+        $filename = "{$typeLabel} register - {$location->name}.pdf";
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
         ]);
     }
 
