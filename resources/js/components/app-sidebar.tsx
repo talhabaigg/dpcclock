@@ -59,6 +59,7 @@ import {
     UsersRound,
     Wind,
     Workflow,
+    Wrench,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 import { NavDocuments } from './nav-documents';
@@ -319,6 +320,12 @@ const safety = [
                 url: '/ppe-register',
                 icon: Glasses,
                 permission: 'prestarts.view',
+            },
+            {
+                name: 'WHS Deliverables',
+                url: '/whs-deliverables',
+                icon: Wrench,
+                permission: 'whs-deliverables.view',
             },
             {
                 name: 'Absentees',

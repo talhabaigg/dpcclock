@@ -20,6 +20,7 @@ class CommentController extends Controller
         'App\\Models\\ForecastProject' => \App\Models\ForecastProject::class,
         'daily_prestart' => \App\Models\DailyPrestart::class,
         'toolbox_talk' => \App\Models\ToolboxTalk::class,
+        'whs_deliverable' => \App\Models\WhsDeliverable::class,
     ];
 
     /**
@@ -257,6 +258,10 @@ class CommentController extends Controller
             $commentable instanceof \App\Models\ToolboxTalk => [
                 url(route('toolbox-talks.show', $commentable)),
                 'a toolbox talk',
+            ],
+            $commentable instanceof \App\Models\WhsDeliverable => [
+                url(route('locations.whs-deliverables.show', [$commentable->location_id, $commentable->id])),
+                "WHS deliverable {$commentable->name}",
             ],
             default => [null, null],
         };

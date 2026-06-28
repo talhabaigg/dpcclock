@@ -1614,6 +1614,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ============================================
+    // WHS DELIVERABLES (plant / electrical / asset / lifting register, scoped per project)
+    // ============================================
+    Route::middleware('permission:whs-deliverables.view')->group(function () {
+        Route::get('/whs-deliverables', [\App\Http\Controllers\WhsDeliverableController::class, 'selectLocation'])->name('whs-deliverables.select-location');
+
+        Route::prefix('/locations/{location}/whs-deliverables')->name('locations.whs-deliverables.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\WhsDeliverableController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\WhsDeliverableController::class, 'create'])->name('create')
+                ->middleware('permission:whs-deliverables.create');
+            Route::post('/', [\App\Http\Controllers\WhsDeliverableController::class, 'store'])->name('store')
+                ->middleware('permission:whs-deliverables.create');
+            Route::get('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'show'])->name('show');
+            Route::get('/{whsDeliverable}/edit', [\App\Http\Controllers\WhsDeliverableController::class, 'edit'])->name('edit')
+                ->middleware('permission:whs-deliverables.edit');
+            Route::get('/{whsDeliverable}/photo', [\App\Http\Controllers\WhsDeliverableController::class, 'photo'])->name('photo');
+            Route::put('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'update'])->name('update')
+                ->middleware('permission:whs-deliverables.edit');
+            Route::patch('/{whsDeliverable}/notify', [\App\Http\Controllers\WhsDeliverableController::class, 'toggleNotify'])->name('notify')
+                ->middleware('permission:whs-deliverables.edit');
+            Route::delete('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'destroy'])->name('destroy')
+                ->middleware('permission:whs-deliverables.delete');
+            Route::post('/{whsDeliverable}/restore', [\App\Http\Controllers\WhsDeliverableController::class, 'restore'])->name('restore')
+                ->middleware('permission:whs-deliverables.delete');
+        });
+    });
+
+    // ============================================
     // PRESTART ABSENTEES
     // ============================================
     Route::middleware('permission:prestarts.view')->group(function () {

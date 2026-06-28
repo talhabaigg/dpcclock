@@ -376,6 +376,16 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // WHS DELIVERABLES
+        // ============================================
+        'WHS Deliverables' => [
+            'whs-deliverables.view' => 'View WHS deliverables register',
+            'whs-deliverables.create' => 'Create WHS deliverables',
+            'whs-deliverables.edit' => 'Edit WHS deliverables',
+            'whs-deliverables.delete' => 'Delete WHS deliverables',
+        ],
+
+        // ============================================
         // EMPLOYEE TRANSFERS
         // ============================================
         'Employee Transfers' => [
@@ -516,6 +526,11 @@ class RolesAndPermissionsSeeder extends Seeder
             // Silica Register
             'silica-register.view',
             'silica-register.configure',
+            // WHS Deliverables
+            'whs-deliverables.view',
+            'whs-deliverables.create',
+            'whs-deliverables.edit',
+            'whs-deliverables.delete',
         ],
 
         'site-supervisor' => [
@@ -572,6 +587,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'trainings.edit',
             // Silica Register
             'silica-register.view',
+            // WHS Deliverables
+            'whs-deliverables.view',
+            'whs-deliverables.create',
+            'whs-deliverables.edit',
             // Employment Applications (view + screen)
             'employment-applications.view',
             'employment-applications.screen',
