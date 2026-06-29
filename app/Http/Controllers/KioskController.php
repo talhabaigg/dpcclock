@@ -181,7 +181,7 @@ class KioskController extends Controller
         $data = $request->validate([
             'zones' => 'required|array',
             'zones.*.employee_id' => 'required|exists:employees,id',
-            'zones.*.zone' => 'nullable',
+            'zones.*.zone' => 'nullable|string|in:1,2,3',
             'zones.*.top_up' => 'boolean', // Assuming you want to handle top-up as well
         ]);
         // dd($data);

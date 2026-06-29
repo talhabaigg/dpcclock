@@ -226,11 +226,14 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                         <ChartContainer config={chartConfig} className="h-full w-full">
                             <LineChart data={trendData} margin={{ top: 10, right: 25, bottom: 0, left: 0 }}>
                                 <XAxis
-                                    dataKey="label"
+                                    dataKey="week_ending"
                                     tick={{ fontSize: 10, fill: '#a1a1aa' }}
                                     tickLine={false}
                                     axisLine={false}
                                     interval={0}
+                                    tickFormatter={(value) =>
+                                        trendData.find((d) => d.week_ending === value)?.label || ''
+                                    }
                                 />
                                 <YAxis
                                     tick={{ fontSize: 10, fill: '#a1a1aa' }}
@@ -264,7 +267,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                                 {/* Annotate latest data point */}
                                 {lastPoint && (
                                     <ReferenceDot
-                                        x={lastPoint.label || lastPoint.week_ending}
+                                        x={lastPoint.week_ending}
                                         y={lastPoint.count}
                                         r={3}
                                         fill="var(--primary)"
@@ -380,11 +383,14 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                     <ChartContainer config={chartConfig} className="h-full w-full">
                         <LineChart data={trendData} margin={{ top: 16, right: 32, bottom: 8, left: 8 }}>
                             <XAxis
-                                dataKey="label"
+                                dataKey="week_ending"
                                 tick={{ fontSize: 12, fill: '#a1a1aa' }}
                                 tickLine={false}
                                 axisLine={false}
                                 interval={0}
+                                tickFormatter={(value) =>
+                                    trendData.find((d) => d.week_ending === value)?.label || ''
+                                }
                             />
                             <YAxis
                                 tick={{ fontSize: 12, fill: '#a1a1aa' }}
@@ -417,7 +423,7 @@ export default function EmployeesOnSiteCard({ data, isEditing }: EmployeesOnSite
                             />
                             {lastPoint && (
                                 <ReferenceDot
-                                    x={lastPoint.label || lastPoint.week_ending}
+                                    x={lastPoint.week_ending}
                                     y={lastPoint.count}
                                     r={4}
                                     fill="var(--primary)"

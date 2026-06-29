@@ -65,11 +65,25 @@ const splitTime = (t: string) => {
     return { h, m };
 };
 
+const normalizeZone = (raw: string | null): string => {
+    if (!raw) return '';
+    if (raw === '1' || raw === '2' || raw === '3') return raw;
+    if (raw.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && typeof parsed[0] === 'string') return parsed[0];
+        } catch {
+            // fall through
+        }
+    }
+    return '';
+};
+
 export default function Edit({ kiosk, employees, errors, flash, events, allEmployees, users }: Props) {
     const { data, setData, post, processing, isDirty, reset } = useForm({
         zones: employees.map((emp) => ({
             employee_id: emp.id,
-            zone: emp.pivot.zone ?? '',
+            zone: normalizeZone(emp.pivot.zone ?? null),
             top_up: emp.pivot.top_up ?? false,
         })),
     });
@@ -203,9 +217,8 @@ export default function Edit({ kiosk, employees, errors, flash, events, allEmplo
 
                                                     <div className="flex flex-wrap items-center gap-3">
                                                         <ToggleGroup
-                                                            type="single"
-                                                            value={data.zones[idx].zone}
-                                                            onValueChange={(v) => updateZone(idx, v)}
+                                                            value={data.zones[idx].zone ? [data.zones[idx].zone] : []}
+                                                            onValueChange={(v) => updateZone(idx, v[0] ?? '')}
                                                             className="rounded-md border"
                                                         >
                                                             <ToggleGroupItem value="1" className="px-3 text-xs">
