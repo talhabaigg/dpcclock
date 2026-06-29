@@ -10,6 +10,7 @@ class DailyPrestartSignature extends Model
     protected $fillable = [
         'daily_prestart_id',
         'employee_id',
+        'employment_type',
         'guest_name',
         'guest_company',
         'signature',
@@ -26,6 +27,17 @@ class DailyPrestartSignature extends Model
     ];
 
     protected $appends = ['is_guest', 'display_name'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $row): void {
+            if ($row->employment_type === null && $row->employee_id !== null) {
+                $row->employment_type = Employee::query()
+                    ->whereKey($row->employee_id)
+                    ->value('employment_type');
+            }
+        });
+    }
 
     public function prestart(): BelongsTo
     {

@@ -10,10 +10,22 @@ class PrestartAbsentee extends Model
     protected $fillable = [
         'daily_prestart_id',
         'employee_id',
+        'employment_type',
         'reason',
         'notes',
         'updated_by',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $row): void {
+            if ($row->employment_type === null && $row->employee_id !== null) {
+                $row->employment_type = Employee::query()
+                    ->whereKey($row->employee_id)
+                    ->value('employment_type');
+            }
+        });
+    }
 
     public const REASON_OPTIONS = [
         'annual_leave' => 'Annual Leave',

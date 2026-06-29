@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\PayRun;
+use App\Models\PayRunLeaveAccrual;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -114,10 +115,21 @@ class ProbePayrunEarnings extends Command
             }
         }
 
-        $earningsLines = $this->collectEarningsLines($items);
+        $earningsByEmp = $this->extractEarningsByEmployee($json, $items);
+        $earningsLines = [];
+        foreach ($earningsByEmp as $lines) {
+            foreach ($lines as $line) {
+                $earningsLines[] = $line;
+            }
+        }
+        if (empty($earningsLines)) {
+            $earningsLines = $this->collectEarningsLines($items);
+        }
+
         $this->newLine();
         $this->info('── Earnings lines summary ──');
         $this->line('Total lines: '.count($earningsLines));
+        $this->line('Distinct employees: '.count($earningsByEmp));
 
         if (empty($earningsLines)) {
             $this->warn('No earnings line items found in the payload.');
@@ -182,6 +194,188 @@ class ProbePayrunEarnings extends Command
         foreach (array_slice($earningsLines, 0, $sample) as $i => $line) {
             $this->line("--- line #{$i} ---");
             $this->line(json_encode($line, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        }
+
+        $this->classifyEmploymentTypes($earningsByEmp, $sample);
+    }
+
+    /**
+     * Returns map of employee_id => [earnings line, ...] regardless of whether the
+     * endpoint returned a flat list, a list of payslips, or an emp-id-keyed object.
+     */
+    private function extractEarningsByEmployee(mixed $json, array $items): array
+    {
+        $byEmp = [];
+
+        // Shape A: earningslines endpoint — { earningsLines: { empId: [lines...] }, payRunId: ... }
+        if (is_array($json) && isset($json['earningsLines']) && is_array($json['earningsLines']) && ! array_is_list($json['earningsLines'])) {
+            foreach ($json['earningsLines'] as $empId => $lines) {
+                if (is_array($lines)) {
+                    $byEmp[(string) $empId] = $lines;
+                }
+            }
+            return $byEmp;
+        }
+
+        // Shape B: payslip endpoint — list of payslips, each with employeeId + earningsLines
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $empId = $item['employeeId'] ?? $item['EmployeeId'] ?? null;
+            if ($empId === null) {
+                continue;
+            }
+            $lines = [];
+            foreach (['earningsLines', 'EarningsLines', 'earnings', 'Earnings'] as $k) {
+                if (isset($item[$k]) && is_array($item[$k])) {
+                    $lines = $item[$k];
+                    break;
+                }
+            }
+            if (! empty($lines)) {
+                $byEmp[(string) $empId] = array_merge($byEmp[(string) $empId] ?? [], $lines);
+            }
+        }
+
+        return $byEmp;
+    }
+
+    /**
+     * Per-employee Casual-vs-Permanent classification based on payCategoryName
+     * containing "Casual", cross-checked against the leave-accrual signal
+     * (presence of an Annual Leave accrual row in pay_run_leave_accruals).
+     */
+    private function classifyEmploymentTypes(array $earningsByEmp, int $sample): void
+    {
+        $byEmployee = $this->buildEmployeeClassification($earningsByEmp);
+
+        $this->newLine();
+        $this->info('── Employment type classification (payCategoryName signal) ──');
+
+        if (empty($byEmployee)) {
+            $this->warn('No per-employee data extractable from this payload shape.');
+            return;
+        }
+
+        $casual = array_filter($byEmployee, fn ($e) => $e['classification'] === 'Casual');
+        $permanent = array_filter($byEmployee, fn ($e) => $e['classification'] === 'Permanent');
+
+        $this->line('Total employees: '.count($byEmployee));
+        $this->line('  Casual (any pay category contains "Casual"): '.count($casual));
+        $this->line('  Permanent (no Casual pay category): '.count($permanent));
+
+        $this->newLine();
+        $this->info("── Sample {$sample} per class ──");
+        foreach (array_slice($casual, 0, $sample, true) as $empId => $emp) {
+            $matched = implode(', ', $emp['casual_categories']);
+            $this->line("  [Casual]    {$empId} {$emp['name']} — matched: {$matched}");
+        }
+        foreach (array_slice($permanent, 0, $sample, true) as $empId => $emp) {
+            $cats = implode(', ', array_slice($emp['all_categories'], 0, 4));
+            $this->line("  [Permanent] {$empId} {$emp['name']} — categories: {$cats}");
+        }
+
+        $this->crossCheckWithLeaveAccruals($byEmployee);
+    }
+
+    private function buildEmployeeClassification(array $earningsByEmp): array
+    {
+        $byEmployee = [];
+
+        $names = \App\Models\Employee::query()
+            ->whereIn('eh_employee_id', array_keys($earningsByEmp))
+            ->pluck('name', 'eh_employee_id')
+            ->toArray();
+
+        foreach ($earningsByEmp as $empId => $lines) {
+            $empKey = (string) $empId;
+            $byEmployee[$empKey] = [
+                'name' => $names[$empKey] ?? '(unknown)',
+                'casual_categories' => [],
+                'all_categories' => [],
+            ];
+
+            foreach ($lines as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $catName = $line['payCategoryName'] ?? $line['PayCategoryName'] ?? '';
+                if ($catName === '') {
+                    continue;
+                }
+                $byEmployee[$empKey]['all_categories'][$catName] = true;
+                if (stripos($catName, 'casual') !== false) {
+                    $byEmployee[$empKey]['casual_categories'][$catName] = true;
+                }
+            }
+
+            $byEmployee[$empKey]['casual_categories'] = array_keys($byEmployee[$empKey]['casual_categories']);
+            $byEmployee[$empKey]['all_categories'] = array_keys($byEmployee[$empKey]['all_categories']);
+            $byEmployee[$empKey]['classification'] = ! empty($byEmployee[$empKey]['casual_categories']) ? 'Casual' : 'Permanent';
+        }
+
+        return $byEmployee;
+    }
+
+    private function crossCheckWithLeaveAccruals(array $byEmployee): void
+    {
+        $payRunId = (int) ($this->option('pay-run-id') ?: $this->pickLatestFinalisedPayRun());
+        $payRun = PayRun::query()->where('eh_pay_run_id', $payRunId)->first();
+
+        $this->newLine();
+        $this->info('── Cross-check: payslip signal vs leave-accrual signal ──');
+
+        if (! $payRun) {
+            $this->warn('No local PayRun row for this pay run id — run the leave accrual sync first to enable cross-check.');
+            return;
+        }
+
+        $hasAnnualByEmp = PayRunLeaveAccrual::query()
+            ->where('pay_run_id', $payRun->id)
+            ->where('leave_category_name', 'like', '%Annual%')
+            ->where('amount', '>', 0)
+            ->pluck('eh_employee_id')
+            ->map(fn ($v) => (string) $v)
+            ->flip()
+            ->toArray();
+
+        $bothCasual = 0;
+        $bothPerm = 0;
+        $casualButHasAnnual = 0;
+        $permButNoAnnual = 0;
+
+        foreach ($byEmployee as $empId => $emp) {
+            $hasAnnual = isset($hasAnnualByEmp[(string) $empId]);
+            $payslipSays = $emp['classification'];
+            if ($payslipSays === 'Casual' && ! $hasAnnual) {
+                $bothCasual++;
+            } elseif ($payslipSays === 'Permanent' && $hasAnnual) {
+                $bothPerm++;
+            } elseif ($payslipSays === 'Casual' && $hasAnnual) {
+                $casualButHasAnnual++;
+            } else {
+                $permButNoAnnual++;
+            }
+        }
+
+        $total = count($byEmployee);
+        $agreement = $bothCasual + $bothPerm;
+
+        $this->table(
+            ['Payslip says ↓ / Annual accrual →', 'Has annual (+ve)', 'No annual'],
+            [
+                ['Casual', $casualButHasAnnual, $bothCasual],
+                ['Permanent', $bothPerm, $permButNoAnnual],
+            ]
+        );
+
+        $this->line("Agreement (both signals align): {$agreement} / {$total}");
+        if ($casualButHasAnnual > 0) {
+            $this->warn("  • {$casualButHasAnnual} employees: payslip says Casual but accrued Annual Leave — investigate (mid-period type change? misnamed pay category?)");
+        }
+        if ($permButNoAnnual > 0) {
+            $this->warn("  • {$permButNoAnnual} employees: payslip says Permanent but no Annual accrual — likely zero paid hours / full unpaid leave (confirms the fragility of leave-accrual signal alone)");
         }
     }
 
