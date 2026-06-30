@@ -144,6 +144,28 @@ class EmploymentHeroService
     }
 
     /**
+     * Get earnings lines for a specific pay run, keyed by employee id.
+     */
+    public function getEarningsLines(int $payRunId): array
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Basic '.base64_encode($this->apiKey.':'),
+        ])->timeout(60)->get("{$this->baseUrl}/business/{$this->businessId}/payrun/{$payRunId}/earningslines");
+
+        if ($response->failed()) {
+            Log::error('Failed to get earnings lines from Employment Hero', [
+                'payRunId' => $payRunId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new \RuntimeException('Failed to get earnings lines: '.$response->body());
+        }
+
+        return $response->json();
+    }
+
+    /**
      * Get leave balances report as at a given date.
      */
     public function getLeaveBalances(string $asAtDate): array

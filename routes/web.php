@@ -1086,6 +1086,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/labour-dashboard/leave-balances', [LabourDashboardController::class, 'getLeaveBalances'])->name('labour-dashboard.leave-balances');
         Route::post('/labour-dashboard/workforce-stats', [LabourDashboardController::class, 'getWorkforceStats'])->name('labour-dashboard.workforce-stats');
         Route::post('/labour-dashboard/sick-leave-indicators', [LabourDashboardController::class, 'getSickLeaveIndicators'])->name('labour-dashboard.sick-leave-indicators');
+        Route::post('/labour-dashboard/leave-by-employment-type', [LabourDashboardController::class, 'getLeaveByEmploymentType'])->name('labour-dashboard.leave-by-employment-type');
+        Route::post('/labour-dashboard/leave-by-employment-type/drill', [LabourDashboardController::class, 'getLeaveByEmploymentTypeDrill'])->name('labour-dashboard.leave-by-employment-type.drill');
         Route::post('/labour-dashboard/sync-leave-accruals', [LabourDashboardController::class, 'syncLeaveAccruals'])->name('labour-dashboard.sync-leave-accruals');
         Route::get('/labour-dashboard/sync-status', [LabourDashboardController::class, 'syncStatus'])->name('labour-dashboard.sync-status');
     });

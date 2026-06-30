@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AnnualLeaveTrend, { type AnnualLeaveTrendPoint } from './annual-leave-trend';
 import HoursMatrixTable, { type HoursMatrixRow, type NonStandardBreakdownItem } from './hours-matrix-table';
 import LeaveBalanceTable, { type LeaveBalanceRow } from './leave-balance-table';
+import LeaveByEmploymentType, { type LeaveByEmploymentTypeData } from './leave-by-employment-type';
 import SickLeaveEmployees, { type SickLeaveEmployee } from './sick-leave-employees';
 import SickLeaveIndicators, { type SickLeaveIndicatorRow } from './sick-leave-indicators';
 import SickLeaveTrend from './sick-leave-trend';
@@ -83,6 +84,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
     const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceRow[]>([]);
     const [workforceStats, setWorkforceStats] = useState<WorkforceStatsData | null>(null);
     const [sickIndicators, setSickIndicators] = useState<SickLeaveIndicatorRow[]>([]);
+    const [leaveByEmploymentType, setLeaveByEmploymentType] = useState<LeaveByEmploymentTypeData | null>(null);
     const [locationSearch, setLocationSearch] = useState('');
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
     const [syncMessage, setSyncMessage] = useState('');
@@ -127,6 +129,11 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         date_from: format(initial.dateFrom, 'yyyy-MM-dd'),
         date_to: format(initial.dateTo, 'yyyy-MM-dd'),
     });
+
+    // Use a ref + AbortController for this fetch because the project-filter race we hit
+    // would let a late-arriving all-projects response overwrite a just-set scoped response,
+    // leaving the widget showing different numbers than the drill dialog (same backend).
+    const leaveByEmploymentTypeAbortRef = useRef<AbortController | null>(null);
 
     const syncHttp = useHttp<{ from: string }>({
         from: format(initial.dateFrom, 'yyyy-MM-dd'),
@@ -209,6 +216,35 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
         sickIndicatorsHttp.post('/labour-dashboard/sick-leave-indicators', {
             onSuccess: (response: SickLeaveIndicatorRow[]) => { if (response) setSickIndicators(response); },
         });
+
+        // Cancel any prior in-flight fetch for this widget before starting a new one,
+        // so the most recent click is the only one that ends up in state.
+        leaveByEmploymentTypeAbortRef.current?.abort();
+        const controller = new AbortController();
+        leaveByEmploymentTypeAbortRef.current = controller;
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+        fetch('/labour-dashboard/leave-by-employment-type', {
+            method: 'POST',
+            credentials: 'same-origin',
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(payload),
+        })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = (await res.json()) as LeaveByEmploymentTypeData;
+                if (controller.signal.aborted) return;
+                setLeaveByEmploymentType(json);
+            })
+            .catch((err) => {
+                if (err.name === 'AbortError') return;
+                // Silent fail — the widget just stays in its previous state.
+            });
     };
 
     const syncLeaveAccruals = () => {
@@ -339,6 +375,7 @@ export default function LabourDashboard({ locations }: LabourDashboardProps) {
                     dateTo={format(dateTo, 'yyyy-MM-dd')}
                     allLocationIds={selectedLocationIds}
                 />
+                <LeaveByEmploymentType data={leaveByEmploymentType} dateFrom={dateFrom} dateTo={dateTo} locationIds={selectedLocationIds} />
                 <SickLeaveTrend weeklyTrend={sickLeaveData.weekly_trend} projectTrend={sickLeaveData.project_trend} projectNames={sickLeaveData.project_names}>
                     <SickLeaveEmployees data={sickLeaveData.employee_summary} />
                 </SickLeaveTrend>

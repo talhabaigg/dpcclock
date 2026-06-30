@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Clock;
+use App\Models\DailyPrestart;
+use App\Models\DailyPrestartSignature;
 use App\Models\Employee;
 use App\Models\Location;
 use App\Models\PayRun;
 use App\Models\PayRunLeaveAccrual;
+use App\Models\PrestartAbsentee;
 use App\Models\Worktype;
 use App\Services\EmploymentHeroService;
 use Carbon\Carbon;
@@ -1158,6 +1161,503 @@ class LabourDashboardController extends Controller
         }
 
         return response()->json($results);
+    }
+
+    public function getLeaveByEmploymentType(Request $request)
+    {
+        $request->validate([
+            'location_ids' => 'required|array|min:1',
+            'location_ids.*' => 'integer|exists:locations,id',
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+        ]);
+
+        $locationIds = $request->input('location_ids');
+        $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
+
+        // Casuals don't accrue leave in the pay system; their absences are
+        // recorded via the prestart kiosk. Each absentee row = 1 day = 8 hrs.
+        // Full-time/part-time leave is taken from clocks (Personal/Carer + Annual Leave worktypes).
+        $casualDayHours = 8;
+
+        // Resolve selected locations -> all eh_location_ids (self + children)
+        $selectedLocations = Location::whereIn('id', $locationIds)->get();
+        $allEhLocationIds = [];
+        foreach ($selectedLocations as $location) {
+            $allEhLocationIds[] = $location->eh_location_id;
+            $subIds = Location::where('eh_parent_id', $location->eh_location_id)
+                ->pluck('eh_location_id')->toArray();
+            $allEhLocationIds = array_merge($allEhLocationIds, $subIds);
+        }
+        $allEhLocationIds = array_values(array_unique(array_filter($allEhLocationIds)));
+
+        $sickLeaveWorkTypeIds = Worktype::where('name', 'like', '%Personal%Carer%Leave%')
+            ->pluck('eh_worktype_id')->toArray();
+        $annualLeaveWorkTypeIds = Worktype::where('name', 'like', '%Annual Leave%')
+            ->pluck('eh_worktype_id')->toArray();
+        $workcoverWorkTypeIds = Worktype::where('name', 'like', '%Workcover%')
+            ->pluck('eh_worktype_id')->toArray();
+        $allAbsenceWorkTypeIds = array_values(array_unique(array_merge(
+            $sickLeaveWorkTypeIds, $annualLeaveWorkTypeIds, $workcoverWorkTypeIds
+        )));
+
+        // --- Full-time bucket (= Full Time + Part Time, anyone who accrues leave) ---
+        $ftLikeTypes = ['Full Time', 'Part Time'];
+
+        $sqlInList = fn (array $ids) => $ids ? implode(',', array_map('intval', $ids)) : '0';
+
+        // Hours from clocks: sick + annual + total absence (sick+annual+workcover).
+        $clockTotals = Clock::query()
+            ->join('employees', 'employees.eh_employee_id', '=', 'clocks.eh_employee_id')
+            ->whereIn('clocks.eh_location_id', $allEhLocationIds)
+            ->where('clocks.clock_in', '>=', $dateFrom)
+            ->where('clocks.clock_in', '<=', $dateTo)
+            ->where('clocks.status', 'Processed')
+            ->whereNotNull('clocks.hours_worked')
+            ->where('clocks.hours_worked', '>', 0)
+            ->whereIn('employees.employment_type', $ftLikeTypes)
+            ->selectRaw('
+                SUM(CASE WHEN clocks.eh_worktype_id IN ('.$sqlInList($sickLeaveWorkTypeIds).') THEN clocks.hours_worked ELSE 0 END) as sick_hours,
+                SUM(CASE WHEN clocks.eh_worktype_id IN ('.$sqlInList($annualLeaveWorkTypeIds).') THEN clocks.hours_worked ELSE 0 END) as annual_hours,
+                SUM(CASE WHEN clocks.eh_worktype_id IN ('.$sqlInList($allAbsenceWorkTypeIds).') THEN clocks.hours_worked ELSE 0 END) as all_hours
+            ')
+            ->first();
+
+        $ftSickHours = (float) ($clockTotals->sick_hours ?? 0);
+        $ftAnnualHours = (float) ($clockTotals->annual_hours ?? 0);
+        $ftAllHours = (float) ($clockTotals->all_hours ?? 0);
+
+        // Headcount of FT/PT employees who clocked anything (any worktype) in the period.
+        $ftCount = Clock::query()
+            ->join('employees', 'employees.eh_employee_id', '=', 'clocks.eh_employee_id')
+            ->whereIn('clocks.eh_location_id', $allEhLocationIds)
+            ->where('clocks.clock_in', '>=', $dateFrom)
+            ->where('clocks.clock_in', '<=', $dateTo)
+            ->whereIn('clocks.status', ['Processed', 'Approved'])
+            ->whereIn('employees.employment_type', $ftLikeTypes)
+            ->distinct()
+            ->count('employees.id');
+
+        // --- Casual bucket (derived from prestart absentees) ---
+        // "All absences" = sick + annual + workcover (the reasons that are actual absences
+        // from work, as opposed to other_project / not-rostered / training / rdo).
+        $casualAbsenceReasons = ['sick_leave', 'annual_leave', 'workcover'];
+
+        $absentees = PrestartAbsentee::query()
+            ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+            ->whereIn('daily_prestarts.location_id', $locationIds)
+            ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->where('prestart_absentees.employment_type', 'Casual')
+            ->whereIn('prestart_absentees.reason', $casualAbsenceReasons)
+            ->selectRaw("
+                SUM(CASE WHEN prestart_absentees.reason = 'sick_leave' THEN 1 ELSE 0 END) as sick_days,
+                SUM(CASE WHEN prestart_absentees.reason = 'annual_leave' THEN 1 ELSE 0 END) as annual_days,
+                COUNT(*) as all_days
+            ")
+            ->first();
+
+        $casualSickHours = (float) ($absentees->sick_days ?? 0) * $casualDayHours;
+        $casualAnnualHours = (float) ($absentees->annual_days ?? 0) * $casualDayHours;
+        $casualAllHours = (float) ($absentees->all_days ?? 0) * $casualDayHours;
+
+        // Casual headcount: unique casual employees seen on a prestart at the selected
+        // locations during the period (signed in OR marked absent).
+        $casualSignedIds = DailyPrestartSignature::query()
+            ->join('daily_prestarts', 'daily_prestarts.id', '=', 'daily_prestart_signatures.daily_prestart_id')
+            ->whereIn('daily_prestarts.location_id', $locationIds)
+            ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->where('daily_prestart_signatures.employment_type', 'Casual')
+            ->whereNotNull('daily_prestart_signatures.employee_id')
+            ->distinct()
+            ->pluck('daily_prestart_signatures.employee_id')
+            ->all();
+
+        $casualAbsentIds = PrestartAbsentee::query()
+            ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+            ->whereIn('daily_prestarts.location_id', $locationIds)
+            ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->where('prestart_absentees.employment_type', 'Casual')
+            ->whereNotNull('prestart_absentees.employee_id')
+            ->distinct()
+            ->pluck('prestart_absentees.employee_id')
+            ->all();
+
+        $casualCount = count(array_unique(array_merge($casualSignedIds, $casualAbsentIds)));
+
+        // Earliest casual absentee on file (any project) — used in the widget footer so a
+        // manager can tell whether their filter pre-dates the data we have.
+        $earliestCasualAbsenteeDate = PrestartAbsentee::query()
+            ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+            ->where('prestart_absentees.employment_type', 'Casual')
+            ->whereIn('prestart_absentees.reason', $casualAbsenceReasons)
+            ->min('daily_prestarts.work_date');
+
+        // --- Casual conversion pipeline (period-scoped) ---
+        // Every hire starts as Casual. After 6 weeks they're either kept on as Casual
+        // (retained) or moved to Full Time (converted). Period scope: employees whose
+        // 6-week conversion-due-date falls within [date_from, date_to]. Project scope:
+        // they must have appeared on a prestart at one of the selected projects (at any
+        // time, not just the date range — their conversion was a decision made for them,
+        // even if they didn't sign in during this exact period).
+        $conversionWeeks = 6;
+
+        // start_date range that produces a due date in [date_from, date_to].
+        // due_date = start_date + 6w  =>  start_date = due_date - 6w
+        $startDateMin = $dateFrom->copy()->subWeeks($conversionWeeks)->toDateString();
+        $startDateMax = $dateTo->copy()->subWeeks($conversionWeeks)->toDateString();
+
+        $pipelineProjectEmpIds = array_values(array_unique(array_merge(
+            DailyPrestartSignature::query()
+                ->join('daily_prestarts', 'daily_prestarts.id', '=', 'daily_prestart_signatures.daily_prestart_id')
+                ->whereIn('daily_prestarts.location_id', $locationIds)
+                ->whereNotNull('daily_prestart_signatures.employee_id')
+                ->distinct()
+                ->pluck('daily_prestart_signatures.employee_id')
+                ->all(),
+            PrestartAbsentee::query()
+                ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+                ->whereIn('daily_prestarts.location_id', $locationIds)
+                ->whereNotNull('prestart_absentees.employee_id')
+                ->distinct()
+                ->pluck('prestart_absentees.employee_id')
+                ->all(),
+        )));
+
+        $pipelineCounts = ['converted' => 0, 'retained' => 0];
+        if (!empty($pipelineProjectEmpIds)) {
+            $pipelineRows = Employee::query()
+                ->whereIn('id', $pipelineProjectEmpIds)
+                ->whereNull('deleted_at')
+                ->whereNotNull('start_date')
+                ->where('start_date', '>=', '2000-01-01') // exclude sentinel/junk dates
+                ->whereBetween('start_date', [$startDateMin, $startDateMax])
+                ->get(['id', 'start_date', 'employment_type']);
+
+            foreach ($pipelineRows as $emp) {
+                if (in_array($emp->employment_type, ['Full Time', 'Part Time'], true)) {
+                    $pipelineCounts['converted']++;
+                } elseif ($emp->employment_type === 'Casual') {
+                    $pipelineCounts['retained']++;
+                }
+                // employment_type blank/null → skip (can't classify)
+            }
+        }
+
+        $pipelineEligible = $pipelineCounts['converted'] + $pipelineCounts['retained'];
+
+        return response()->json([
+            'sick_ft_hours' => round($ftSickHours, 2),
+            'sick_casual_hours' => round($casualSickHours, 2),
+            'annual_ft_hours' => round($ftAnnualHours, 2),
+            'annual_casual_hours' => round($casualAnnualHours, 2),
+            'all_ft_hours' => round($ftAllHours, 2),
+            'all_casual_hours' => round($casualAllHours, 2),
+            'ft_count' => $ftCount,
+            'casual_count' => $casualCount,
+            'earliest_casual_absentee_date' => $earliestCasualAbsenteeDate,
+            'conversion' => [
+                'converted_count' => $pipelineCounts['converted'],
+                'retained_count' => $pipelineCounts['retained'],
+                'eligible_count' => $pipelineEligible,
+                'conversion_pct' => $pipelineEligible > 0 ? round(($pipelineCounts['converted'] / $pipelineEligible) * 100, 1) : 0,
+                'retention_pct' => $pipelineEligible > 0 ? round(($pipelineCounts['retained'] / $pipelineEligible) * 100, 1) : 0,
+                'conversion_weeks' => $conversionWeeks,
+                'start_date_window' => ['from' => $startDateMin, 'to' => $startDateMax],
+            ],
+        ]);
+    }
+
+    public function getLeaveByEmploymentTypeDrill(Request $request)
+    {
+        $request->validate([
+            'location_ids' => 'required|array|min:1',
+            'location_ids.*' => 'integer|exists:locations,id',
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+            'bucket' => 'required|in:sick_ft,sick_casual,annual_ft,annual_casual,all_ft,all_casual,headcount_ft,headcount_casual,conversion_converted,conversion_retained',
+        ]);
+
+        $locationIds = $request->input('location_ids');
+        $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
+        $bucket = $request->input('bucket');
+        $casualDayHours = 8;
+
+        // Resolve eh_location_ids (self + children) for clock-side queries.
+        $selectedLocations = Location::whereIn('id', $locationIds)->get();
+        $allEhLocationIds = [];
+        foreach ($selectedLocations as $location) {
+            $allEhLocationIds[] = $location->eh_location_id;
+            $subIds = Location::where('eh_parent_id', $location->eh_location_id)
+                ->pluck('eh_location_id')->toArray();
+            $allEhLocationIds = array_merge($allEhLocationIds, $subIds);
+        }
+        $allEhLocationIds = array_values(array_unique(array_filter($allEhLocationIds)));
+
+        $ftLikeTypes = ['Full Time', 'Part Time'];
+
+        // Conversion pipeline drills — period-scoped by 6-week-after-start-date hitting the
+        // selected date range, project-scoped by prestart presence at selected locations.
+        if ($bucket === 'conversion_converted' || $bucket === 'conversion_retained') {
+            $conversionWeeks = 6;
+            $startDateMin = $dateFrom->copy()->subWeeks($conversionWeeks)->toDateString();
+            $startDateMax = $dateTo->copy()->subWeeks($conversionWeeks)->toDateString();
+
+            $pipelineProjectEmpIds = array_values(array_unique(array_merge(
+                DailyPrestartSignature::query()
+                    ->join('daily_prestarts', 'daily_prestarts.id', '=', 'daily_prestart_signatures.daily_prestart_id')
+                    ->whereIn('daily_prestarts.location_id', $locationIds)
+                    ->whereNotNull('daily_prestart_signatures.employee_id')
+                    ->distinct()
+                    ->pluck('daily_prestart_signatures.employee_id')->all(),
+                PrestartAbsentee::query()
+                    ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+                    ->whereIn('daily_prestarts.location_id', $locationIds)
+                    ->whereNotNull('prestart_absentees.employee_id')
+                    ->distinct()
+                    ->pluck('prestart_absentees.employee_id')->all(),
+            )));
+
+            $targetTypes = $bucket === 'conversion_converted' ? $ftLikeTypes : ['Casual'];
+
+            $rows = Employee::query()
+                ->whereIn('id', $pipelineProjectEmpIds ?: [0])
+                ->whereNull('deleted_at')
+                ->whereNotNull('start_date')
+                ->where('start_date', '>=', '2000-01-01')
+                ->whereBetween('start_date', [$startDateMin, $startDateMax])
+                ->whereIn('employment_type', $targetTypes)
+                ->orderBy('start_date', 'desc')
+                ->get(['id', 'name', 'preferred_name', 'external_id', 'start_date', 'employment_type']);
+
+            $today = Carbon::today();
+            $data = $rows->map(function ($emp) use ($conversionWeeks, $today) {
+                $start = $emp->start_date instanceof \Carbon\Carbon ? $emp->start_date : Carbon::parse($emp->start_date);
+                $dueDate = $start->copy()->addWeeks($conversionWeeks);
+                return [
+                    'employee_id' => $emp->id,
+                    'name' => $emp->preferred_name ?: $emp->name,
+                    'external_id' => $emp->external_id,
+                    'employment_type' => $emp->employment_type,
+                    'start_date' => $start->toDateString(),
+                    'due_date' => $dueDate->toDateString(),
+                    'weeks_since_start' => (int) round($start->diffInDays($today) / 7),
+                    'archived' => false,
+                ];
+            })->values();
+
+            return response()->json([
+                'bucket' => $bucket,
+                'unit' => 'employees',
+                'rows' => $data,
+            ]);
+        }
+
+        $isCasual = str_ends_with($bucket, '_casual');
+
+        if (!$isCasual) {
+            // FT cohort — pull from clocks. Worktype scope depends on bucket.
+            $sickIds = Worktype::where('name', 'like', '%Personal%Carer%Leave%')->pluck('eh_worktype_id')->toArray();
+            $annualIds = Worktype::where('name', 'like', '%Annual Leave%')->pluck('eh_worktype_id')->toArray();
+            $workcoverIds = Worktype::where('name', 'like', '%Workcover%')->pluck('eh_worktype_id')->toArray();
+
+            $workTypeIds = match ($bucket) {
+                'sick_ft' => $sickIds,
+                'annual_ft' => $annualIds,
+                'all_ft' => array_values(array_unique(array_merge($sickIds, $annualIds, $workcoverIds))),
+                'headcount_ft' => [], // any worktype
+                default => [],
+            };
+
+            $query = Clock::query()
+                ->join('employees', 'employees.eh_employee_id', '=', 'clocks.eh_employee_id')
+                ->leftJoin('worktypes', 'worktypes.eh_worktype_id', '=', 'clocks.eh_worktype_id')
+                ->whereIn('clocks.eh_location_id', $allEhLocationIds)
+                ->where('clocks.clock_in', '>=', $dateFrom)
+                ->where('clocks.clock_in', '<=', $dateTo)
+                ->whereIn('clocks.status', $bucket === 'headcount_ft' ? ['Processed', 'Approved'] : ['Processed'])
+                ->whereIn('employees.employment_type', $ftLikeTypes);
+
+            if ($bucket === 'headcount_ft') {
+                // Distinct employee summary — total hours across any worktype in range.
+                $rows = $query
+                    ->whereNotNull('clocks.hours_worked')
+                    ->where('clocks.hours_worked', '>', 0)
+                    ->groupBy('employees.id', 'employees.name', 'employees.preferred_name', 'employees.external_id', 'employees.employment_type', 'employees.deleted_at')
+                    ->selectRaw('
+                        employees.id as employee_id,
+                        employees.name,
+                        employees.preferred_name,
+                        employees.external_id,
+                        employees.employment_type,
+                        employees.deleted_at,
+                        SUM(clocks.hours_worked) as hours,
+                        COUNT(DISTINCT DATE(clocks.clock_in)) as days
+                    ')
+                    ->orderByDesc('hours')
+                    ->get();
+            } else {
+                $rows = $query
+                    ->whereIn('clocks.eh_worktype_id', $workTypeIds ?: [0])
+                    ->whereNotNull('clocks.hours_worked')
+                    ->where('clocks.hours_worked', '>', 0)
+                    ->groupBy('employees.id', 'employees.name', 'employees.preferred_name', 'employees.external_id', 'employees.employment_type', 'employees.deleted_at')
+                    ->selectRaw('
+                        employees.id as employee_id,
+                        employees.name,
+                        employees.preferred_name,
+                        employees.external_id,
+                        employees.employment_type,
+                        employees.deleted_at,
+                        SUM(clocks.hours_worked) as hours,
+                        COUNT(DISTINCT DATE(clocks.clock_in)) as days
+                    ')
+                    ->orderByDesc('hours')
+                    ->get();
+            }
+
+            $data = $rows->map(fn ($r) => [
+                'employee_id' => $r->employee_id,
+                'name' => $r->preferred_name ?: $r->name,
+                'external_id' => $r->external_id,
+                'employment_type' => $r->employment_type,
+                'hours' => round((float) $r->hours, 2),
+                'days' => (int) $r->days,
+                'archived' => $r->deleted_at !== null,
+            ])->values();
+
+            return response()->json([
+                'bucket' => $bucket,
+                'unit' => 'hours',
+                'rows' => $data,
+            ]);
+        }
+
+        // Casual cohort — pull from prestart absentees / signatures.
+        if ($bucket === 'headcount_casual') {
+            $signed = DailyPrestartSignature::query()
+                ->join('daily_prestarts', 'daily_prestarts.id', '=', 'daily_prestart_signatures.daily_prestart_id')
+                ->leftJoin('employees', 'employees.id', '=', 'daily_prestart_signatures.employee_id')
+                ->whereIn('daily_prestarts.location_id', $locationIds)
+                ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+                ->where('daily_prestart_signatures.employment_type', 'Casual')
+                ->whereNotNull('daily_prestart_signatures.employee_id')
+                ->groupBy('employees.id', 'employees.name', 'employees.preferred_name', 'employees.external_id', 'employees.deleted_at')
+                ->selectRaw('
+                    employees.id as employee_id,
+                    employees.name,
+                    employees.preferred_name,
+                    employees.external_id,
+                    employees.deleted_at,
+                    COUNT(DISTINCT daily_prestarts.work_date) as days_signed,
+                    MAX(daily_prestarts.work_date) as last_seen
+                ')
+                ->get()
+                ->keyBy('employee_id');
+
+            $absent = PrestartAbsentee::query()
+                ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+                ->whereIn('daily_prestarts.location_id', $locationIds)
+                ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+                ->where('prestart_absentees.employment_type', 'Casual')
+                ->whereNotNull('prestart_absentees.employee_id')
+                ->groupBy('prestart_absentees.employee_id')
+                ->selectRaw('
+                    prestart_absentees.employee_id,
+                    COUNT(DISTINCT daily_prestarts.work_date) as days_absent,
+                    MAX(daily_prestarts.work_date) as last_absent
+                ')
+                ->get()
+                ->keyBy('employee_id');
+
+            $allEmpIds = $signed->keys()->merge($absent->keys())->unique();
+            $employees = Employee::withTrashed()
+                ->whereIn('id', $allEmpIds)
+                ->get(['id', 'name', 'preferred_name', 'external_id', 'deleted_at'])
+                ->keyBy('id');
+
+            $data = $allEmpIds->map(function ($id) use ($signed, $absent, $employees) {
+                $s = $signed->get($id);
+                $a = $absent->get($id);
+                $emp = $employees->get($id);
+                $lastSeen = collect([$s?->last_seen, $a?->last_absent])->filter()->max();
+                return [
+                    'employee_id' => (int) $id,
+                    'name' => $emp?->preferred_name ?: $emp?->name ?: 'Unknown',
+                    'external_id' => $emp?->external_id,
+                    'days_signed' => (int) ($s?->days_signed ?? 0),
+                    'days_absent' => (int) ($a?->days_absent ?? 0),
+                    'last_seen' => $lastSeen,
+                    'archived' => $emp?->deleted_at !== null,
+                ];
+            })->sortByDesc('days_signed')->values();
+
+            return response()->json([
+                'bucket' => $bucket,
+                'unit' => 'days',
+                'rows' => $data,
+            ]);
+        }
+
+        // Casual sick / annual / all — aggregate prestart_absentees.
+        $reasons = match ($bucket) {
+            'sick_casual' => ['sick_leave'],
+            'annual_casual' => ['annual_leave'],
+            'all_casual' => ['sick_leave', 'annual_leave', 'workcover'],
+        };
+
+        $rows = PrestartAbsentee::query()
+            ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
+            ->leftJoin('employees', 'employees.id', '=', 'prestart_absentees.employee_id')
+            ->whereIn('daily_prestarts.location_id', $locationIds)
+            ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->where('prestart_absentees.employment_type', 'Casual')
+            ->whereIn('prestart_absentees.reason', $reasons)
+            ->whereNotNull('prestart_absentees.employee_id')
+            ->orderBy('employees.name')
+            ->orderBy('daily_prestarts.work_date')
+            ->get([
+                'prestart_absentees.id',
+                'prestart_absentees.employee_id',
+                'prestart_absentees.reason',
+                'prestart_absentees.notes',
+                'daily_prestarts.work_date',
+                'employees.name',
+                'employees.preferred_name',
+                'employees.external_id',
+                'employees.deleted_at',
+            ]);
+
+        // Group by employee.
+        $byEmployee = $rows->groupBy('employee_id')->map(function ($empRows) use ($casualDayHours) {
+            $first = $empRows->first();
+            $byReason = $empRows->groupBy('reason')->map->count();
+            $dates = $empRows->map(fn ($r) => [
+                'date' => (string) $r->work_date,
+                'reason' => $r->reason,
+                'notes' => $r->notes,
+            ])->values();
+
+            return [
+                'employee_id' => (int) $first->employee_id,
+                'name' => $first->preferred_name ?: $first->name ?: 'Unknown',
+                'external_id' => $first->external_id,
+                'days' => $empRows->count(),
+                'hours' => round($empRows->count() * $casualDayHours, 2),
+                'sick_days' => (int) ($byReason['sick_leave'] ?? 0),
+                'annual_days' => (int) ($byReason['annual_leave'] ?? 0),
+                'workcover_days' => (int) ($byReason['workcover'] ?? 0),
+                'dates' => $dates,
+                'archived' => $first->deleted_at !== null,
+            ];
+        })->sortByDesc('days')->values();
+
+        return response()->json([
+            'bucket' => $bucket,
+            'unit' => 'days',
+            'rows' => $byEmployee,
+        ]);
     }
 
     public function syncLeaveAccruals(Request $request, EmploymentHeroService $ehService)
