@@ -369,6 +369,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employment-applications/{employmentApplication}/reopen', [EmploymentApplicationController::class, 'reopen'])->name('employment-applications.reopen');
     });
 
+    // Admin-only: hard reset an application back to "new" — wipes checklists,
+    // logs, comments, forms, signing requests, screening interview, employee
+    // links. Controller re-checks isAdmin() in case middleware is bypassed.
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/employment-applications/{employmentApplication}/reset', [EmploymentApplicationController::class, 'reset'])->name('employment-applications.reset');
+    });
+
     // Status updates are open to any role that owns a stage in the pipeline —
     // screen (early stages), whs-review, whs (final review), approve. The
     // controller gates each target status to the matching permission.

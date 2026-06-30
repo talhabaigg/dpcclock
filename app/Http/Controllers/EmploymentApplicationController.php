@@ -934,6 +934,21 @@ class EmploymentApplicationController extends Controller
     }
 
     /**
+     * Admin-only: wipe all workflow data (checklists, logs, comments, form
+     * requests, signing requests, screening interview, linked employees) and
+     * reset the application back to a brand new state. Applicant-supplied
+     * fields (name, contact, references, skills) are preserved.
+     */
+    public function reset(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $employmentApplication->resetToFresh();
+
+        return back()->with('success', 'Application reset to new — workflow data wiped.');
+    }
+
+    /**
      * Proxy for Google Places autocomplete suggestions.
      */
     public function addressSuggestions(Request $request): \Illuminate\Http\JsonResponse

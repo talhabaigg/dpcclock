@@ -52,6 +52,7 @@ import {
     FileSignature,
     UserCheck,
     Reply,
+    RotateCcw,
     XCircle,
     XIcon,
 } from 'lucide-react';
@@ -1266,6 +1267,8 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const canApprove = auth.isAdmin || permissions.includes('employment-applications.approve');
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
+    const [showResetDialog, setShowResetDialog] = useState(false);
+    const [resetProcessing, setResetProcessing] = useState(false);
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [showOnboardModal, setShowOnboardModal] = useState(false);
     const [showSubmissionPane, setShowSubmissionPane] = useState(false);
@@ -1356,6 +1359,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         declineForm.post(route('employment-applications.decline', app.id), {
             preserveScroll: true,
             onSuccess: () => setShowDeclineDialog(false),
+        });
+    }
+
+    function handleReset() {
+        setResetProcessing(true);
+        router.post(route('employment-applications.reset', app.id), {}, {
+            preserveScroll: false,
+            onFinish: () => {
+                setResetProcessing(false);
+                setShowResetDialog(false);
+            },
         });
     }
 
@@ -2174,6 +2188,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </button>
                                 )}
 
+                                {auth.isAdmin && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowResetDialog(true)}
+                                        className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
+                                    >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        Reset to New (Admin)
+                                    </button>
+                                )}
+
                                 {/* Mini map */}
                                 {app.latitude && app.longitude && (
                                     <a
@@ -2294,6 +2319,37 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                         <Button variant="outline" onClick={() => setShowDeclineDialog(false)}>Cancel</Button>
                         <Button variant="destructive" onClick={handleDecline} disabled={declineForm.processing}>
                             {declineForm.processing ? 'Declining...' : 'Decline'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reset to New — admin-only hard reset */}
+            <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reset to New</DialogTitle>
+                        <DialogDescription>
+                            Permanently delete all workflow data on {app.first_name} {app.surname}'s enquiry and reset it to a brand new state. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
+                        <p className="mb-2 font-medium text-foreground">The following will be hard-deleted:</p>
+                        <ul className="list-disc space-y-1 pl-4">
+                            <li>All checklists and checklist activity logs</li>
+                            <li>All comments and attachments</li>
+                            <li>All form requests and signing requests</li>
+                            <li>Face-to-face screening interview</li>
+                            <li>Linked employee records</li>
+                        </ul>
+                        <p className="mt-2">
+                            Applicant-supplied data (name, contact, references, skills) is preserved. Auto-attach checklists will be re-applied.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowResetDialog(false)} disabled={resetProcessing}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleReset} disabled={resetProcessing}>
+                            {resetProcessing ? 'Resetting...' : 'Reset to New'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -266,6 +266,13 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
 
             $this->screeningInterview()->delete();
 
+            // Reference checks are FK-only (no Eloquent relation on this model)
+            // and cascade only when the application itself is deleted — wipe
+            // them explicitly so a reset clears completed referee responses.
+            DB::table('employment_application_reference_checks')
+                ->where('employment_application_id', $this->id)
+                ->delete();
+
             $this->employees()->detach();
 
             $this->forceFill([
