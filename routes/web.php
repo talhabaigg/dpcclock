@@ -374,6 +374,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // links. Controller re-checks isAdmin() in case middleware is bypassed.
     Route::middleware('role:admin')->group(function () {
         Route::post('/employment-applications/{employmentApplication}/reset', [EmploymentApplicationController::class, 'reset'])->name('employment-applications.reset');
+        Route::delete('/employment-applications/{employmentApplication}', [EmploymentApplicationController::class, 'destroy'])->name('employment-applications.destroy');
     });
 
     // Status updates are open to any role that owns a stage in the pipeline —

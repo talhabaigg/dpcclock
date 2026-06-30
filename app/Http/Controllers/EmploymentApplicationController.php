@@ -949,6 +949,28 @@ class EmploymentApplicationController extends Controller
     }
 
     /**
+     * Admin-only: permanently delete an application and all of its data.
+     * Wipes morph-linked workflow rows first (they have no DB-level FK cascade),
+     * then deletes the application — FK cascades handle references, skills,
+     * screening, reference checks, and the employee pivot.
+     */
+    public function destroy(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $label = $employmentApplication->displayLabel();
+
+        DB::transaction(function () use ($employmentApplication) {
+            $employmentApplication->wipeWorkflowData();
+            $employmentApplication->delete();
+        });
+
+        return redirect()
+            ->route('employment-applications.index')
+            ->with('success', "{$label}'s enquiry has been permanently deleted.");
+    }
+
+    /**
      * Proxy for Google Places autocomplete suggestions.
      */
     public function addressSuggestions(Request $request): \Illuminate\Http\JsonResponse

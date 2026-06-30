@@ -250,30 +250,7 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
     public function resetToFresh(): void
     {
         DB::transaction(function () {
-            $checklistIds = $this->checklists()->pluck('id');
-            $itemIds = ChecklistItem::whereIn('checklist_id', $checklistIds)->pluck('id');
-
-            Activity::where('subject_type', ChecklistItem::class)
-                ->whereIn('subject_id', $itemIds)
-                ->delete();
-
-            $this->checklists()->delete();
-
-            $this->comments()->withTrashed()->get()->each->forceDelete();
-
-            $this->formRequests()->get()->each->delete();
-            $this->signingRequests()->get()->each->delete();
-
-            $this->screeningInterview()->delete();
-
-            // Reference checks are FK-only (no Eloquent relation on this model)
-            // and cascade only when the application itself is deleted — wipe
-            // them explicitly so a reset clears completed referee responses.
-            DB::table('employment_application_reference_checks')
-                ->where('employment_application_id', $this->id)
-                ->delete();
-
-            $this->employees()->detach();
+            $this->wipeWorkflowData();
 
             $this->forceFill([
                 'status' => self::STATUS_NEW,
@@ -284,6 +261,41 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
 
             $this->attachAutoChecklists();
         });
+    }
+
+    /**
+     * Hard-delete every morph-linked or FK-only workflow row attached to this
+     * application. Shared by resetToFresh() (which then re-attaches fresh
+     * checklists) and the admin destroy action (which then deletes the parent
+     * row, letting FK cascades clean up references/skills/screening/employee
+     * pivot).
+     */
+    public function wipeWorkflowData(): void
+    {
+        $checklistIds = $this->checklists()->pluck('id');
+        $itemIds = ChecklistItem::whereIn('checklist_id', $checklistIds)->pluck('id');
+
+        Activity::where('subject_type', ChecklistItem::class)
+            ->whereIn('subject_id', $itemIds)
+            ->delete();
+
+        $this->checklists()->delete();
+
+        $this->comments()->withTrashed()->get()->each->forceDelete();
+
+        $this->formRequests()->get()->each->delete();
+        $this->signingRequests()->get()->each->delete();
+
+        $this->screeningInterview()->delete();
+
+        // Reference checks are FK-only (no Eloquent relation on this model)
+        // and cascade only when the application itself is deleted — wipe
+        // them explicitly so a reset clears completed referee responses.
+        DB::table('employment_application_reference_checks')
+            ->where('employment_application_id', $this->id)
+            ->delete();
+
+        $this->employees()->detach();
     }
 
     public function formPlaceholderValues(): array

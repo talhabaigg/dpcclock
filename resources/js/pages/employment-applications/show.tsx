@@ -53,6 +53,7 @@ import {
     UserCheck,
     Reply,
     RotateCcw,
+    Trash,
     XCircle,
     XIcon,
 } from 'lucide-react';
@@ -1269,6 +1270,9 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
     const [showResetDialog, setShowResetDialog] = useState(false);
     const [resetProcessing, setResetProcessing] = useState(false);
+    const [showDeleteAppDialog, setShowDeleteAppDialog] = useState(false);
+    const [deleteAppProcessing, setDeleteAppProcessing] = useState(false);
+    const [deleteAppConfirmText, setDeleteAppConfirmText] = useState('');
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [showOnboardModal, setShowOnboardModal] = useState(false);
     const [showSubmissionPane, setShowSubmissionPane] = useState(false);
@@ -1370,6 +1374,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                 setResetProcessing(false);
                 setShowResetDialog(false);
             },
+        });
+    }
+
+    function handleDeleteApplication() {
+        setDeleteAppProcessing(true);
+        router.delete(route('employment-applications.destroy', app.id), {
+            onFinish: () => setDeleteAppProcessing(false),
         });
     }
 
@@ -2199,6 +2210,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </button>
                                 )}
 
+                                {auth.isAdmin && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setDeleteAppConfirmText(''); setShowDeleteAppDialog(true); }}
+                                        className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
+                                    >
+                                        <Trash className="h-3.5 w-3.5" />
+                                        Delete Application (Admin)
+                                    </button>
+                                )}
+
                                 {/* Mini map */}
                                 {app.latitude && app.longitude && (
                                     <a
@@ -2350,6 +2372,52 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                         <Button variant="outline" onClick={() => setShowResetDialog(false)} disabled={resetProcessing}>Cancel</Button>
                         <Button variant="destructive" onClick={handleReset} disabled={resetProcessing}>
                             {resetProcessing ? 'Resetting...' : 'Reset to New'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Application — admin-only hard delete */}
+            <Dialog open={showDeleteAppDialog} onOpenChange={setShowDeleteAppDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Application</DialogTitle>
+                        <DialogDescription>
+                            Permanently delete {app.first_name} {app.surname}'s enquiry and every related record. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
+                        <p className="mb-2 font-medium text-foreground">Everything will be hard-deleted:</p>
+                        <ul className="list-disc space-y-1 pl-4">
+                            <li>The application itself (no soft-delete — gone for good)</li>
+                            <li>All checklists, items and activity logs</li>
+                            <li>All comments and attachments</li>
+                            <li>All form requests and signing requests</li>
+                            <li>Face-to-face screening interview</li>
+                            <li>Reference list, reference checks and skills</li>
+                            <li>Linked employee records (the employees themselves are not deleted)</li>
+                        </ul>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="delete_confirm">
+                            Type <span className="font-semibold text-foreground">{app.first_name}</span> to confirm
+                        </Label>
+                        <Input
+                            id="delete_confirm"
+                            value={deleteAppConfirmText}
+                            onChange={(e) => setDeleteAppConfirmText(e.target.value)}
+                            placeholder={app.first_name}
+                            autoComplete="off"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDeleteAppDialog(false)} disabled={deleteAppProcessing}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteApplication}
+                            disabled={deleteAppProcessing || deleteAppConfirmText.trim() !== app.first_name}
+                        >
+                            {deleteAppProcessing ? 'Deleting...' : 'Delete Permanently'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
