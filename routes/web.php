@@ -417,6 +417,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employee-transfers/{employeeTransfer}/recommendation', [EmployeeTransferController::class, 'submitRecommendation'])->name('employee-transfers.recommendation');
     });
 
+    // Admin-only: hard delete a transfer. Controller re-checks isAdmin().
+    Route::middleware('role:admin')->group(function () {
+        Route::delete('/employee-transfers/{employeeTransfer}', [EmployeeTransferController::class, 'destroy'])->name('employee-transfers.destroy');
+    });
+
     // ============================================
     // WORKER SCREENING
     // ============================================

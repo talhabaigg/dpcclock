@@ -404,4 +404,23 @@ class EmployeeTransferController extends Controller
         return redirect()->route('employee-transfers.show', $employeeTransfer)
             ->with('success', 'Recommendation submitted.');
     }
+
+    /**
+     * Admin-only: permanently delete a transfer. Model uses SoftDeletes so we
+     * forceDelete() to bypass the trash. Transfers are self-contained — no
+     * morph-linked rows (comments/forms/signing/checklists), no FK children,
+     * no media — so nothing else needs cleaning.
+     */
+    public function destroy(EmployeeTransfer $employeeTransfer, Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $label = trim($employeeTransfer->employee_name ?: "Transfer #{$employeeTransfer->id}");
+
+        $employeeTransfer->forceDelete();
+
+        return redirect()
+            ->route('employee-transfers.index')
+            ->with('success', "{$label}'s transfer has been permanently deleted.");
+    }
 }

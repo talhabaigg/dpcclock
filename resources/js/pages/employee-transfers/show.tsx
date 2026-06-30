@@ -11,7 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Input } from '@/components/ui/input';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowRight,
@@ -19,6 +20,7 @@ import {
     FileWarning,
     Loader2,
     Shield,
+    Trash,
     User,
     Wrench,
     XCircle,
@@ -550,12 +552,22 @@ function RecommendationDialog({ transfer, role, label, open, onOpenChange }: {
 
 export default function Show({ transfer, injuries, isReceivingForeman, isCurrentForeman, sickLeaveSummary }: PageProps) {
     const [recDialog, setRecDialog] = useState<{ role: string; label: string } | null>(null);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
     const pageAuth = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean } }>().props.auth;
     const permissions = pageAuth.permissions ?? [];
     const isAdmin = !!pageAuth.isAdmin;
     const canApprove = isAdmin || permissions.includes('employee-transfers.approve');
     const canSafetyReview = isAdmin || permissions.includes('employee-transfers.safety-review');
+
+    function handleDeleteTransfer() {
+        setDeleteProcessing(true);
+        router.delete(route('employee-transfers.destroy', transfer.id), {
+            onFinish: () => setDeleteProcessing(false),
+        });
+    }
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employee Transfers', href: '/employee-transfers' },
@@ -589,6 +601,16 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                         </div>
                         {transfer.employee_position && <p className="mt-1 text-sm text-muted-foreground">{transfer.employee_position}</p>}
                     </div>
+                    {isAdmin && (
+                        <button
+                            type="button"
+                            onClick={() => { setDeleteConfirmText(''); setShowDeleteDialog(true); }}
+                            className="flex items-center gap-1.5 self-start text-xs text-muted-foreground hover:text-destructive"
+                        >
+                            <Trash className="h-3.5 w-3.5" />
+                            Delete Transfer (Admin)
+                        </button>
+                    )}
                 </div>
 
                 {/* ── Terminal status banner at top ── */}
@@ -968,6 +990,45 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                     onOpenChange={(open) => !open && setRecDialog(null)}
                 />
             )}
+
+            {/* Delete Transfer — admin-only hard delete */}
+            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Transfer</DialogTitle>
+                        <DialogDescription>
+                            Permanently delete {transfer.employee_name}'s transfer request. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
+                        <p>
+                            The transfer record will be hard-deleted (force-deleted past the soft-delete trash). The employee themselves, their kiosks, and any unrelated records are not affected.
+                        </p>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="delete_confirm">
+                            Type <span className="font-semibold text-foreground">{transfer.employee_name}</span> to confirm
+                        </Label>
+                        <Input
+                            id="delete_confirm"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            placeholder={transfer.employee_name}
+                            autoComplete="off"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDeleteDialog(false)} disabled={deleteProcessing}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteTransfer}
+                            disabled={deleteProcessing || deleteConfirmText.trim() !== transfer.employee_name.trim()}
+                        >
+                            {deleteProcessing ? 'Deleting...' : 'Delete Permanently'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
