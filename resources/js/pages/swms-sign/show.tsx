@@ -273,9 +273,9 @@ function PinPad({
 }
 
 const DECLARATION_LINES = [
-    'I have read and understood the Safe Work Method Statement (SWMS) applicable to the work I am undertaking.',
-    'The hazards, risks, and control measures associated with this work have been explained to me.',
-    'I understand the safe work procedures, personal protective equipment (PPE), and safety requirements outlined in this SWMS.',
+    'I have personally attended the face-to-face induction.',
+    'I acknowledge that I have either read this Safe Work Method Statement (SWMS) or, where required, had it explained to me in a manner that I understand.',
+    'I have been given the opportunity to ask questions, have had those questions answered to my satisfaction, and confirm that I understand the hazards, risks, control measures, PPE requirements and safe work procedures applicable to the work I am undertaking.',
     'I agree to follow the control measures and work methods described in this SWMS at all times.',
     'I understand that if the scope of work changes, new hazards are identified, or the SWMS is amended, I must review and comply with the updated SWMS before continuing work.',
     'I will immediately stop work and consult my supervisor if I do not understand any part of this SWMS or if I identify any hazard or risk not adequately controlled.',

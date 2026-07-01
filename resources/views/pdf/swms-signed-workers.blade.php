@@ -104,6 +104,37 @@
             padding: 24px 0;
             font-style: italic;
         }
+        .acknowledgement {
+            margin-top: 20px;
+            margin-bottom: 24px;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background: #f9fafb;
+            page-break-inside: avoid;
+        }
+        .acknowledgement h2 {
+            font-size: 11px;
+            font-weight: 700;
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 6px;
+        }
+        .acknowledgement p.intro {
+            font-size: 10px;
+            color: #4b5563;
+            margin-bottom: 8px;
+        }
+        .acknowledgement ol {
+            padding-left: 18px;
+            font-size: 10px;
+            color: #1f2937;
+        }
+        .acknowledgement ol li {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -138,6 +169,20 @@
             <div class="label">Generated</div>
             <div class="value">{{ now('Australia/Brisbane')->format('d/m/Y H:i') }}</div>
         </div>
+    </div>
+
+    <div class="acknowledgement">
+        <h2>Worker Acknowledgement</h2>
+        <p class="intro">By signing this SWMS, each worker listed below has confirmed the following:</p>
+        <ol>
+            <li>I have personally attended the face-to-face induction.</li>
+            <li>I acknowledge that I have either read this Safe Work Method Statement (SWMS) or, where required, had it explained to me in a manner that I understand.</li>
+            <li>I have been given the opportunity to ask questions, have had those questions answered to my satisfaction, and confirm that I understand the hazards, risks, control measures, PPE requirements and safe work procedures applicable to the work I am undertaking.</li>
+            <li>I agree to follow the control measures and work methods described in this SWMS at all times.</li>
+            <li>I understand that if the scope of work changes, new hazards are identified, or the SWMS is amended, I must review and comply with the updated SWMS before continuing work.</li>
+            <li>I will immediately stop work and consult my supervisor if I do not understand any part of this SWMS or if I identify any hazard or risk not adequately controlled.</li>
+            <li>I understand that failure to comply with this SWMS may place myself and others at risk of injury and may result in disciplinary action.</li>
+        </ol>
     </div>
 
     <table class="signatures">
