@@ -85,11 +85,22 @@ interface DocumentTemplate {
     body_html: string | null;
 }
 
+interface FormFieldPreview {
+    id: number;
+    label: string;
+    type: string;
+    is_required: boolean;
+    options: string[];
+    help_text: string | null;
+    placeholder: string | null;
+}
+
 interface FormTemplateOption {
     id: number;
     name: string;
     description: string | null;
     fields_count: number;
+    fields: FormFieldPreview[];
 }
 
 interface AvailablePlaceholder {
@@ -218,6 +229,7 @@ export default function NewSend() {
     const [addOpen, setAddOpen] = useState(false);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [previewMode, setPreviewMode] = useState<'document' | 'digital'>('digital');
+    const [customEditing, setCustomEditing] = useState(true);
 
     const resumeDraft = (id: number) => {
         // Full navigation so the page re-seeds cleanly from the draft.
@@ -809,7 +821,7 @@ export default function NewSend() {
                         </aside>
 
                         {/* ── CENTER: preview ── */}
-                        <section className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-8">
+                        <section className={`min-h-0 overflow-y-auto bg-muted/40 ${selectedItem?.kind === 'custom' && customEditing ? '' : 'p-4 sm:p-8'}`}>
                             <PreviewPane
                                 item={selectedItem}
                                 template={selectedItem?.kind === 'template' ? templateById.get(selectedItem.templateId) : undefined}
@@ -821,6 +833,10 @@ export default function NewSend() {
                                 pdfLoading={pdfLoading}
                                 previewMode={previewMode}
                                 setPreviewMode={setPreviewMode}
+                                customEditing={customEditing}
+                                setCustomEditing={setCustomEditing}
+                                availablePlaceholders={availablePlaceholders}
+                                updateCustom={updateCustom}
                             />
                         </section>
 
@@ -992,7 +1008,8 @@ function AddMenu({
 // ─── Preview pane ──────────────────────────────────────────────────────────
 
 function PreviewPane({
-    item, template, form, valueMap, labelMap, letterheadLogoUrl, onPreviewPdf, pdfLoading, previewMode, setPreviewMode,
+    item, template, form, valueMap, labelMap, letterheadLogoUrl, onPreviewPdf, pdfLoading,
+    previewMode, setPreviewMode, customEditing, setCustomEditing, availablePlaceholders, updateCustom,
 }: {
     item: Item | null;
     template?: DocumentTemplate;
@@ -1004,6 +1021,10 @@ function PreviewPane({
     pdfLoading: boolean;
     previewMode: 'document' | 'digital';
     setPreviewMode: (m: 'document' | 'digital') => void;
+    customEditing: boolean;
+    setCustomEditing: (v: boolean) => void;
+    availablePlaceholders: AvailablePlaceholder[];
+    updateCustom: (uid: string, patch: Partial<Extract<Item, { kind: 'custom' }>>) => void;
 }) {
     if (!item) {
         return (
@@ -1030,63 +1051,90 @@ function PreviewPane({
     }
 
     if (item.kind === 'form') {
-        return (
-            <Sheet>
-                <div className="py-8 text-center">
-                    <ClipboardList className="mx-auto h-10 w-10 text-muted-foreground" />
-                    <p className="mt-3 text-sm font-semibold">{form?.name}</p>
-                    {form?.description && <p className="mt-1 text-xs text-muted-foreground">{form.description}</p>}
-                    <p className="mt-2 text-xs text-muted-foreground">{form?.fields_count ?? 0} field{form?.fields_count === 1 ? '' : 's'} — the recipient fills these in via a hosted form.</p>
-                </div>
-            </Sheet>
-        );
+        return <FormFieldsPreview form={form} />;
     }
 
     const html = item.kind === 'template' ? (template?.body_html ?? '') : item.html;
     const title = item.kind === 'template' ? template?.name : (item.title.trim() || 'Untitled document');
     const hasBody = bodyTextOf(html) !== '';
     const rendered = renderPreviewHtml(html, valueMap, labelMap);
+    const isCustom = item.kind === 'custom';
+    const showEditor = isCustom && customEditing;
 
     return (
-        <div className="mx-auto max-w-[816px]">
-            <div className="mb-3 flex items-center justify-between gap-2">
-                {/* Style toggle */}
-                <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
-                    <button
-                        type="button"
-                        onClick={() => setPreviewMode('document')}
-                        className={`rounded px-2.5 py-1 font-medium transition-colors ${previewMode === 'document' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Document
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setPreviewMode('digital')}
-                        className={`rounded px-2.5 py-1 font-medium transition-colors ${previewMode === 'digital' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                        Digital
-                    </button>
-                </div>
+        <div className={showEditor ? 'm-3 flex h-[calc(100%-1.5rem)] flex-col overflow-hidden' : 'mx-auto max-w-[816px]'}>
+            <div className={`flex items-center justify-between gap-2 ${showEditor ? 'border-b px-3 py-2' : 'mb-3'}`}>
+                {/* Mode toggle: Write/Preview for custom docs; Document/Digital for templates */}
+                {isCustom ? (
+                    <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
+                        <button
+                            type="button"
+                            onClick={() => setCustomEditing(true)}
+                            className={`rounded px-2.5 py-1 font-medium transition-colors ${customEditing ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Write
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setCustomEditing(false)}
+                            className={`rounded px-2.5 py-1 font-medium transition-colors ${!customEditing ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Preview
+                        </button>
+                    </div>
+                ) : (
+                    <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
+                        <button
+                            type="button"
+                            onClick={() => setPreviewMode('document')}
+                            className={`rounded px-2.5 py-1 font-medium transition-colors ${previewMode === 'document' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Document
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPreviewMode('digital')}
+                            className={`rounded px-2.5 py-1 font-medium transition-colors ${previewMode === 'digital' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        >
+                            Digital
+                        </button>
+                    </div>
+                )}
                 <Button variant="outline" size="sm" onClick={onPreviewPdf} disabled={!hasBody || pdfLoading}>
                     {pdfLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
                     Preview PDF
                 </Button>
             </div>
 
-            {!hasBody ? (
-                <div className="doc-page">
-                    <p className="py-12 text-center text-sm text-muted-foreground">Start writing in the Fields panel to see a preview.</p>
-                </div>
-            ) : previewMode === 'document' ? (
-                // PDF-fidelity: real letterhead + the document's PDF CSS on a white page.
-                <div className="doc-page">
-                    <div className="doc-letterhead">
-                        <img src={letterheadLogoUrl} alt="Letterhead" />
+            {showEditor && item.kind === 'custom' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="border-b px-3 py-3">
+                        <Label htmlFor={`ct-${item.uid}`} className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Title</Label>
+                        <Input
+                            id={`ct-${item.uid}`}
+                            value={item.title}
+                            onChange={(e) => updateCustom(item.uid, { title: e.target.value })}
+                            placeholder="e.g. Welcome letter"
+                            className="mt-1 border-0 px-0 text-base font-semibold shadow-none focus-visible:ring-0"
+                        />
                     </div>
-                    <div className="doc-preview" dangerouslySetInnerHTML={{ __html: rendered }} />
+                    <div className="min-h-0 flex-1">
+                        <TiptapEditor
+                            content={item.json}
+                            onChange={(json, html) => updateCustom(item.uid, { json, html })}
+                            placeholders={availablePlaceholders.map((p) => ({ key: p.key, label: p.label }))}
+                            customGroupLabel="Recipient"
+                        />
+                    </div>
                 </div>
-            ) : (
-                // Clean digital reading style.
+            ) : !hasBody ? (
+                <div className="doc-page">
+                    <p className="py-12 text-center text-sm text-muted-foreground">
+                        {isCustom ? 'Switch to Write to start composing this document.' : 'Start writing in the Fields panel to see a preview.'}
+                    </p>
+                </div>
+            ) : isCustom || previewMode === 'digital' ? (
+                // Custom docs preview + template digital mode share the clean reading style.
                 <Sheet>
                     {title && <h2 className="mb-4 text-center text-lg font-semibold">{title}</h2>}
                     <div
@@ -1094,6 +1142,14 @@ function PreviewPane({
                         dangerouslySetInnerHTML={{ __html: rendered }}
                     />
                 </Sheet>
+            ) : (
+                // PDF-fidelity: real letterhead + the document's PDF CSS on a white page.
+                <div className="doc-page">
+                    <div className="doc-letterhead">
+                        <img src={letterheadLogoUrl} alt="Letterhead" />
+                    </div>
+                    <div className="doc-preview" dangerouslySetInnerHTML={{ __html: rendered }} />
+                </div>
             )}
         </div>
     );
@@ -1101,6 +1157,118 @@ function PreviewPane({
 
 function Sheet({ children }: { children: React.ReactNode }) {
     return <div className="mx-auto max-w-2xl rounded-lg border bg-background p-6 shadow-sm sm:p-10">{children}</div>;
+}
+
+function FormFieldsPreview({ form }: { form?: FormTemplateOption }) {
+    if (!form) return null;
+    const fields = form.fields ?? [];
+
+    return (
+        <Sheet>
+            <header className="mb-5 border-b pb-4">
+                <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Form
+                </div>
+                <h2 className="mt-2 text-lg font-semibold leading-tight">{form.name}</h2>
+                {form.description && <p className="mt-1 text-sm text-muted-foreground">{form.description}</p>}
+                <p className="mt-2 text-[11px] text-muted-foreground">Recipient completes {fields.length} field{fields.length === 1 ? '' : 's'} via a hosted form.</p>
+            </header>
+
+            {fields.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">No fields on this form.</p>
+            ) : (
+                <ol className="space-y-4">
+                    {fields.map((f) => <FormFieldRow key={f.id} field={f} />)}
+                </ol>
+            )}
+        </Sheet>
+    );
+}
+
+function FormFieldRow({ field }: { field: FormFieldPreview }) {
+    // Structural blocks — render as-is rather than as fields.
+    if (field.type === 'heading') {
+        return <li className="pt-2 text-sm font-semibold">{field.label}</li>;
+    }
+    if (field.type === 'paragraph') {
+        return <li className="text-xs leading-relaxed text-muted-foreground">{field.label}</li>;
+    }
+    if (field.type === 'page_break') {
+        return <li className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-muted-foreground"><span className="h-px flex-1 bg-border" />Page break<span className="h-px flex-1 bg-border" /></li>;
+    }
+
+    return (
+        <li>
+            <div className="flex items-baseline justify-between gap-2">
+                <label className="text-sm font-medium">
+                    {field.label}
+                    {field.is_required && <span className="ml-1 text-destructive">*</span>}
+                </label>
+                <span className="flex-shrink-0 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{fieldTypeLabel(field.type)}</span>
+            </div>
+            {field.help_text && <p className="mt-0.5 text-xs text-muted-foreground">{field.help_text}</p>}
+            <FormFieldMock field={field} />
+        </li>
+    );
+}
+
+function FormFieldMock({ field }: { field: FormFieldPreview }) {
+    const base = 'mt-1.5 w-full rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground';
+    switch (field.type) {
+        case 'textarea':
+            return <div className={`${base} h-16`}>{field.placeholder || 'Long-form answer'}</div>;
+        case 'select':
+        case 'radio':
+        case 'button_group':
+            return (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(field.options.length ? field.options : ['Option']).map((o, i) => (
+                        <span key={i} className="rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground">{o}</span>
+                    ))}
+                </div>
+            );
+        case 'checkbox':
+        case 'multiselect':
+        case 'button_group_multi':
+            return (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(field.options.length ? field.options : ['Option']).map((o, i) => (
+                        <span key={i} className="flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-sm border" />
+                            {o}
+                        </span>
+                    ))}
+                </div>
+            );
+        case 'date':
+            return <div className={base}>DD/MM/YYYY</div>;
+        case 'signature':
+            return <div className={`${base} flex h-16 items-center justify-center italic`}>Signature</div>;
+        case 'file':
+            return <div className={`${base} flex items-center gap-2`}><Upload className="h-3.5 w-3.5" /> Upload…</div>;
+        default:
+            return <div className={base}>{field.placeholder || 'Short answer'}</div>;
+    }
+}
+
+function fieldTypeLabel(type: string): string {
+    switch (type) {
+        case 'textarea': return 'Long text';
+        case 'select': return 'Dropdown';
+        case 'radio': return 'Choice';
+        case 'checkbox': return 'Multi-choice';
+        case 'multiselect': return 'Multi-select';
+        case 'button_group': return 'Buttons';
+        case 'button_group_multi': return 'Multi-buttons';
+        case 'date': return 'Date';
+        case 'number': return 'Number';
+        case 'email': return 'Email';
+        case 'phone': return 'Phone';
+        case 'signature': return 'Signature';
+        case 'file': return 'File';
+        default: return 'Text';
+    }
 }
 
 // ─── Fields panel ──────────────────────────────────────────────────────────
@@ -1119,22 +1287,8 @@ function FieldsPanel({
 }) {
     if (item?.kind === 'custom') {
         return (
-            <div className="flex h-full flex-col gap-3 p-4">
-                <div className="space-y-1">
-                    <Label htmlFor={`ct-${item.uid}`} className="text-xs">Document title</Label>
-                    <Input id={`ct-${item.uid}`} value={item.title} onChange={(e) => updateCustom(item.uid, { title: e.target.value })} placeholder="e.g. Welcome letter" />
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col gap-1">
-                    <Label className="text-xs">Content</Label>
-                    <div className="min-h-0 flex-1">
-                        <TiptapEditor
-                            content={item.json}
-                            onChange={(json, html) => updateCustom(item.uid, { json, html })}
-                            placeholders={availablePlaceholders.map((p) => ({ key: p.key, label: p.label }))}
-                            customGroupLabel="Recipient"
-                        />
-                    </div>
-                </div>
+            <div className="p-4 text-xs text-muted-foreground">
+                Editing this document in the main pane. Use the Write / Preview toggle above the page.
             </div>
         );
     }

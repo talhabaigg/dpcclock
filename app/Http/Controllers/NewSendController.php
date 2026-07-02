@@ -98,6 +98,7 @@ class NewSendController extends Controller
         $formTemplates = FormTemplate::active()
             ->forModel($signable::class)
             ->withCount('fields')
+            ->with(['fields' => fn ($q) => $q->orderBy('sort_order')])
             ->orderBy('name')
             ->get(['id', 'name', 'description'])
             ->map(fn ($ft) => [
@@ -105,6 +106,15 @@ class NewSendController extends Controller
                 'name' => $ft->name,
                 'description' => $ft->description,
                 'fields_count' => $ft->fields_count,
+                'fields' => $ft->fields->map(fn ($f) => [
+                    'id' => $f->id,
+                    'label' => $f->label,
+                    'type' => $f->type,
+                    'is_required' => (bool) $f->is_required,
+                    'options' => $f->options ?? [],
+                    'help_text' => $f->help_text,
+                    'placeholder' => $f->placeholder,
+                ])->values(),
             ])
             ->values();
 
