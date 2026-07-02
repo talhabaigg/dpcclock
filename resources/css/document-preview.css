@@ -1,0 +1,77 @@
+/*
+ * Live document-preview styling for the "New send" page.
+ * MIRRORS the PDF output CSS in App\Services\DocumentHtmlAssembler::wrapInDocument()
+ * so the on-screen preview matches the generated PDF (fonts, headings, navy
+ * tables, legal-clause numbering, signature block). Scoped under `.doc-preview`
+ * so it never leaks into the app chrome.
+ *
+ * If wrapInDocument() changes, update this file to match.
+ */
+
+.doc-preview {
+    font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #1a1a1a;
+}
+
+.doc-preview h1 { font-size: 20px; font-weight: 700; margin: 14px 0 6px; color: #111; }
+.doc-preview h2 { font-size: 16px; font-weight: 600; margin: 12px 0 4px; color: #111; }
+.doc-preview h3 { font-size: 13px; font-weight: 600; margin: 10px 0 3px; color: #222; }
+.doc-preview p { margin: 4px 0; }
+
+/* Tables */
+.doc-preview table { border-collapse: collapse; width: 100% !important; table-layout: fixed !important; max-width: 100% !important; }
+.doc-preview th,
+.doc-preview td { border: 1px solid #d1d5db; padding: 5px 8px; text-align: left; font-size: 11px; line-height: 1.4; word-wrap: break-word; overflow: hidden; }
+.doc-preview th { background-color: #1e3a5f; color: #fff; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.doc-preview tr:nth-child(even) td { background-color: #f8fafc; }
+.doc-preview col,
+.doc-preview colgroup { width: auto !important; }
+
+/* Signature */
+.doc-preview .signature-box { margin: 20px 0; padding: 16px; }
+.doc-preview .signature-box img { max-width: 300px; max-height: 100px; }
+.doc-preview .signature-meta { margin-top: 10px; font-size: 11px; color: #4b5563; }
+
+/* Lists */
+.doc-preview ul { padding-left: 16px; list-style-position: outside; list-style-type: disc; }
+.doc-preview ol { padding-left: 16px; list-style-position: outside; list-style-type: decimal; }
+.doc-preview ol[data-list-style="legal"],
+.doc-preview ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) { padding-left: 0 !important; list-style-type: none !important; counter-reset: legal; }
+.doc-preview ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) { margin: 2px 0; }
+.doc-preview ol[data-list-style="legal"] > li,
+.doc-preview ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) > li { counter-increment: legal; position: relative; padding-left: 30px; }
+.doc-preview ol[data-list-style="legal"] > li::before { content: counter(legal) "."; font-weight: 600; position: absolute; left: 0; }
+.doc-preview ol[data-list-style="legal"] ol:not([data-list-style="alpha"]) > li::before { content: counters(legal, ".") "."; font-weight: 600; position: absolute; left: 0; }
+.doc-preview ol[data-list-style="alpha"],
+.doc-preview ol[data-list-style="alpha"] ol:not([data-list-style="legal"]) { list-style-type: lower-alpha; }
+.doc-preview li { margin: 2px 0; }
+.doc-preview li > p { margin-left: 0 !important; }
+.doc-preview li > ul { list-style-type: circle; margin: 2px 0; }
+.doc-preview li > ul > li > ul { list-style-type: square; }
+.doc-preview li > ol { margin: 2px 0; }
+
+/* Unfilled placeholder chip (preview-only affordance, not in the PDF) */
+.doc-preview mark.ph-chip { background: #fef3c7; color: #92400e; border-radius: 0.25rem; padding: 0 0.25rem; font-size: 0.85em; white-space: nowrap; }
+.doc-preview .ph-sig { display: inline-block; min-width: 140px; border-bottom: 1px solid #9ca3af; color: #9ca3af; font-size: 0.75rem; }
+
+/* White "page" frame the document sits on */
+.doc-page {
+    background: #fff;
+    color: #1a1a1a;
+    max-width: 816px;
+    margin: 0 auto;
+    padding: 48px 56px;
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.doc-letterhead {
+    text-align: center;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #1e3a5f;
+}
+/* Tailwind preflight makes <img> display:block, so center via auto margins. */
+.doc-letterhead img { max-height: 48px; width: auto; margin: 0 auto; }

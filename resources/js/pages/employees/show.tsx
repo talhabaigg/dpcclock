@@ -934,10 +934,16 @@ export default function EmployeeShow() {
                                             <FileSignature className="h-4 w-4" />
                                             Signature Requests
                                         </CardTitle>
-                                        <Button size="sm" variant="outline" className="gap-1.5" onClick={openSendModal}>
-                                            <FilePlus2 className="h-3.5 w-3.5" />
-                                            Send for Signing
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="outline" className="gap-1.5" onClick={openSendModal}>
+                                                <FilePlus2 className="h-3.5 w-3.5" />
+                                                Send for Signing
+                                            </Button>
+                                            <Button size="sm" className="gap-1.5" onClick={() => router.visit(route('employees.send', emp.id))}>
+                                                <FilePlus2 className="h-3.5 w-3.5" />
+                                                Send Docs — New
+                                            </Button>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="pt-0">

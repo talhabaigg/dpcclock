@@ -622,7 +622,7 @@ class SigningRequestController extends Controller
             'attachments' => 'nullable|array',
             'attachments.*' => 'file|mimes:pdf|max:20480',
             'requires_signature' => 'nullable|boolean',
-            'delivery_method' => 'required|in:email,in_person',
+            'delivery_method' => 'required|in:email,in_person,sms',
             'recipient_name' => 'nullable|string|max:255',
             'recipient_email' => 'nullable|email|max:255',
             'employee_ids' => 'nullable|array',
@@ -636,10 +636,22 @@ class SigningRequestController extends Controller
             'signable_type' => 'nullable|string',
             'signable_id' => 'nullable|integer',
             'internal_signer_user_id' => 'nullable|exists:users,id',
+            'form_template_ids' => 'nullable|array',
+            'form_template_ids.*' => 'exists:form_templates,id',
         ]);
 
         $employeeCustomFields = $validated['employee_custom_fields'] ?? [];
         $templateIds = $validated['document_template_ids'] ?? [];
+        $formTemplateIds = $validated['form_template_ids'] ?? [];
+
+        // SMS is a link-based delivery over the SMS channel: the signing request
+        // itself behaves like an emailed link (delivery_method 'email'), but the
+        // link is texted to the recipient instead of emailed.
+        $channels = ['email'];
+        if ($validated['delivery_method'] === 'sms') {
+            $channels = ['sms'];
+            $validated['delivery_method'] = 'email';
+        }
 
         // Normalise written documents: prefer `custom_documents[]`, fall back to legacy single doc.
         $customDocuments = $validated['custom_documents'] ?? [];
@@ -665,7 +677,7 @@ class SigningRequestController extends Controller
             'has_written' => $hasWritten,
         ]);
 
-        if (empty($templateIds) && ! $hasWritten && empty($attachments)) {
+        if (empty($templateIds) && ! $hasWritten && empty($attachments) && empty($formTemplateIds)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'documents' => 'Please select a template, write a document, or upload an attachment.',
             ]);
@@ -673,6 +685,10 @@ class SigningRequestController extends Controller
 
         $templates = ! empty($templateIds)
             ? DocumentTemplate::whereIn('id', $templateIds)->get()
+            : collect();
+
+        $formTemplates = ! empty($formTemplateIds)
+            ? FormTemplate::whereIn('id', $formTemplateIds)->get()
             : collect();
 
         $senderSignature = $requiresSig ? $this->resolveSenderSignature($request) : null;
@@ -906,8 +922,23 @@ class SigningRequestController extends Controller
                 $created++;
             }
 
-            // ── Send ONE consolidated email per recipient ──
-            $this->dispatchBatchDelivery($batchCreated, $recipient, $validated['delivery_method'], $internalSigner, $request->user());
+            // ── Send ONE consolidated message per recipient (email or SMS) ──
+            $this->dispatchBatchDelivery($batchCreated, $recipient, $validated['delivery_method'], $internalSigner, $request->user(), $channels);
+
+            // 4. Forms — dispatched as their own recipient-fills requests (separate
+            //    channel from the signing batch). Additive: the legacy modal never
+            //    sends form_template_ids, so its behaviour is unchanged.
+            foreach ($formTemplates as $formTemplate) {
+                $this->formService->createAndSend(
+                    template: $formTemplate,
+                    deliveryMethod: $validated['delivery_method'],
+                    admin: $request->user(),
+                    recipientName: $recipient['name'],
+                    recipientEmail: $recipient['email'],
+                    formable: $recipient['signable'],
+                );
+                $created++;
+            }
         }
 
         // Cleanup S3 temp files

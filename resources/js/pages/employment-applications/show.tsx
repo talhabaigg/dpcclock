@@ -1844,6 +1844,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         Send Docs
                                                     </Button>
                                                 )}
+                                                {['approved', 'contract_sent', 'contract_signed'].includes(app.status) && (
+                                                    <Button size="sm" className="flex-1" onClick={() => router.visit(route('employment-applications.send', app.id))}>
+                                                        <Send className="mr-1.5 h-3.5 w-3.5" />
+                                                        Send Docs — New
+                                                    </Button>
+                                                )}
                                                 {['contract_signed', 'onboarded'].includes(app.status) && (
                                                     <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
                                                         <User className="mr-1.5 h-3.5 w-3.5" />

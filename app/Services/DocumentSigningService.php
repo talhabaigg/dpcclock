@@ -708,6 +708,30 @@ class DocumentSigningService
         ]);
     }
 
+    /**
+     * Resolve the auto-populated placeholder values (applicant/employee, sender,
+     * recipient, dates) for the live send preview. Reuses buildPlaceholderValues
+     * so the preview matches exactly what a sent document renders — with no
+     * user-entered custom fields (those are supplied live in the UI).
+     *
+     * @return array<string, string>
+     */
+    public function previewPlaceholderValues(
+        ?Model $signable,
+        User $sender,
+        string $recipientName,
+        ?string $recipientEmail,
+    ): array {
+        return $this->buildPlaceholderValues(
+            template: null,
+            customFields: [],
+            recipientName: $recipientName,
+            recipientEmail: $recipientEmail,
+            sender: $sender,
+            signable: $signable,
+        );
+    }
+
     // ─── Private helpers ────────────────────────────────────────
 
     /**

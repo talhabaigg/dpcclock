@@ -82,6 +82,7 @@ use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\EmploymentApplicationController;
+use App\Http\Controllers\NewSendController;
 use App\Http\Controllers\ScreeningInterviewController;
 use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
@@ -360,6 +361,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employment-applications/{employmentApplication}', [EmploymentApplicationController::class, 'show'])->name('employment-applications.show');
         Route::get('/employment-applications/{employmentApplication}/submission', [EmploymentApplicationController::class, 'submission'])->name('employment-applications.submission');
         Route::get('/employment-applications/{employmentApplication}/submission/pdf', [EmploymentApplicationController::class, 'submissionPdf'])->name('employment-applications.submission.pdf');
+        // New dedicated "send documents" page (parallel to the existing modal).
+        Route::get('/employment-applications/{employmentApplication}/send', [NewSendController::class, 'createForApplication'])->name('employment-applications.send');
     });
     // Declining and reopening are final-decision actions — scoped to the
     // approve permission, not screen. No dedicated decline permission exists;
@@ -502,6 +505,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/signing-requests/info-only', [SigningRequestController::class, 'storeInfoOnly'])->name('signing-requests.store-info-only');
     Route::post('/signing-requests/bulk-info-only', [SigningRequestController::class, 'storeBulkInfoOnly'])->name('signing-requests.store-bulk-info-only');
     Route::post('/signing-requests/combined', [SigningRequestController::class, 'storeCombined'])->name('signing-requests.store-combined');
+    // Full-send drafts for the new dedicated send page (isolated from signing_requests drafts).
+    Route::post('/send-drafts', [NewSendController::class, 'storeDraft'])->name('send-drafts.store');
+    Route::put('/send-drafts/{sendDraft}', [NewSendController::class, 'updateDraft'])->name('send-drafts.update');
+    Route::delete('/send-drafts/{sendDraft}', [NewSendController::class, 'destroyDraft'])->name('send-drafts.destroy');
+    Route::post('/send/preview-pdf', [NewSendController::class, 'previewDocumentPdf'])->name('send.preview-pdf');
     Route::post('/signing-requests/drafts', [SigningRequestController::class, 'storeDraft'])->name('signing-requests.drafts.store');
     Route::put('/signing-requests/{signingRequest}/draft', [SigningRequestController::class, 'updateDraft'])->name('signing-requests.drafts.update');
     Route::post('/signing-requests/{signingRequest}/finalize', [SigningRequestController::class, 'finalizeDraft'])->name('signing-requests.drafts.finalize');
@@ -552,6 +560,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
         Route::get('/employees/list', [EmployeeController::class, 'retrieveEmployees'])->name('employees.list');
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+        // New dedicated "send documents" page (parallel to the existing modal).
+        Route::get('/employees/{employee}/send', [NewSendController::class, 'createForEmployee'])->name('employees.send');
         Route::post('/employees/{employee}/forms', [EmployeeController::class, 'startForm'])->name('employees.forms.store');
     });
     Route::middleware('permission:employees.office.view')->group(function () {
