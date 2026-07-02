@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
@@ -1810,26 +1811,46 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 <span className="text-xs">(system)</span>
                                             </div>
                                         ) : (
-                                            <Select value={app.status} onValueChange={handleStatusChange}>
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Change status..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {SELECTABLE_STATUSES.filter((s) => {
-                                                        // Always include the current status so the trigger has a matching option.
-                                                        if (s === app.status) return true;
-                                                        if (s === 'whs_review') return canScreen || canWhsReview;
-                                                        if (s === 'final_review') return canWhs;
-                                                        if (s === 'approved') return canApprove;
-                                                        if (SCREEN_STATUSES.includes(s)) return canScreen;
-                                                        return false;
-                                                    }).map((s) => (
-                                                        <SelectItem key={s} value={s}>
-                                                            {statuses[s]}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <div className="flex items-center gap-1.5">
+                                                <Select value={app.status} onValueChange={handleStatusChange}>
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder="Change status..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {SELECTABLE_STATUSES.filter((s) => {
+                                                            // Always include the current status so the trigger has a matching option.
+                                                            if (s === app.status) return true;
+                                                            if (s === 'whs_review') return canScreen || canWhsReview;
+                                                            if (s === 'final_review') return canWhs;
+                                                            if (s === 'approved') return canApprove;
+                                                            if (SCREEN_STATUSES.includes(s)) return canScreen;
+                                                            return false;
+                                                        }).map((s) => (
+                                                            <SelectItem key={s} value={s}>
+                                                                {statuses[s]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {auth.isAdmin && (
+                                                    <TooltipProvider delay={100}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-9 w-9 shrink-0"
+                                                                    onClick={() => router.post(route('employment-applications.retrigger-stage-forms', app.id), {}, { preserveScroll: true })}
+                                                                    aria-label="Re-trigger stage forms"
+                                                                >
+                                                                    <RotateCcw className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Re-trigger stage forms</TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                            </div>
                                         )}
                                         {pageErrors.status && (
                                             <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{pageErrors.status}</p>

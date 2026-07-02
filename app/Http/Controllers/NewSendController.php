@@ -83,7 +83,67 @@ class NewSendController extends Controller
         );
     }
 
-    private function render(Model $signable, $templates, array $recipient, array $breadcrumb, string $returnUrl): Response
+    /**
+     * Build the page for a bulk send to many employees at once. Renders the same
+     * signing/new-send Inertia page but with a `bulkRecipients` payload — the
+     * page switches its Recipient card, Route timeline and CTA to batch mode.
+     */
+    public function createForBulk(Request $request): Response
+    {
+        $ids = collect(explode(',', (string) $request->query('e', '')))
+            ->filter()
+            ->map(fn ($s) => (int) $s)
+            ->unique()
+            ->values();
+
+        abort_if($ids->isEmpty(), 404, 'No employees selected.');
+        abort_if($ids->count() > 500, 422, 'Too many recipients (max 500).');
+
+        $employees = Employee::whereIn('id', $ids)->get();
+        abort_if($employees->isEmpty(), 404);
+        foreach ($employees as $emp) {
+            Gate::authorize('sendDocuments', $emp);
+        }
+
+        // If every recipient is the same employment type we can filter templates
+        // by that type; a mixed set falls back to the full active list.
+        $officeCount = $employees->filter(fn ($e) => $e->isOfficeStaff())->count();
+        $siteCount = $employees->count() - $officeCount;
+        $isMixed = $officeCount > 0 && $siteCount > 0;
+
+        $templates = DocumentTemplate::active()
+            ->when(! $isMixed, fn ($q) => $q->forEmployeeType($employees->first()->isOfficeStaff()))
+            ->orderBy('name')
+            ->get(['id', 'name', 'category', 'placeholders', 'body_html']);
+
+        $primary = $employees->first();
+        $indexHref = $primary->isOfficeStaff() && $officeCount === $employees->count() ? '/office-employees' : '/employees';
+
+        return $this->render(
+            signable: $primary,
+            templates: $templates,
+            recipient: [
+                'name' => $primary->display_name ?: $primary->name,
+                'email' => $primary->email ?? '',
+                'address' => '',
+                'phone' => (string) ($primary->mobile_number ?? $primary->phone ?? ''),
+                'position' => '',
+            ],
+            breadcrumb: [
+                ['title' => $officeCount === $employees->count() ? 'Office Employees' : 'Site Employees', 'href' => $indexHref],
+                ['title' => "Send to {$employees->count()} people", 'href' => $request->fullUrl()],
+            ],
+            returnUrl: $indexHref,
+            bulkRecipients: $employees->map(fn ($e) => [
+                'id' => $e->id,
+                'name' => $e->display_name ?: $e->name,
+                'email' => $e->email,
+                'phone' => (string) ($e->mobile_number ?? $e->phone ?? ''),
+            ])->values()->toArray(),
+        );
+    }
+
+    private function render(Model $signable, $templates, array $recipient, array $breadcrumb, string $returnUrl, ?array $bulkRecipients = null): Response
     {
         $signableType = $signable->getMorphClass();
         $user = Auth::user();
@@ -183,6 +243,7 @@ class NewSendController extends Controller
             'letterheadLogoUrl' => '/' . $logoFile,
             'draft' => $seed,
             'drafts' => $drafts,
+            'bulkRecipients' => $bulkRecipients,
         ]);
     }
 

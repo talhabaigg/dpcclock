@@ -399,6 +399,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             [EmploymentApplicationController::class, 'startReferenceForm'],
         )->name('employment-applications.references.start-form');
 
+        // Re-dispatch auto-mode forms for the current stage — used to recover
+        // from an accidentally cancelled trigger form.
+        Route::post(
+            '/employment-applications/{employmentApplication}/retrigger-stage-forms',
+            [EmploymentApplicationController::class, 'retriggerStageForms'],
+        )->name('employment-applications.retrigger-stage-forms');
+
         // Face-to-Face Screening Interview
         Route::get('/employment-applications/{employmentApplication}/screening-interview/create', [ScreeningInterviewController::class, 'create'])->name('screening-interviews.create');
         Route::post('/employment-applications/{employmentApplication}/screening-interview', [ScreeningInterviewController::class, 'store'])->name('screening-interviews.store');
@@ -562,6 +569,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
         // New dedicated "send documents" page (parallel to the existing modal).
         Route::get('/employees/{employee}/send', [NewSendController::class, 'createForEmployee'])->name('employees.send');
+        Route::get('/employees-send-bulk', [NewSendController::class, 'createForBulk'])->name('employees.send-bulk');
         Route::post('/employees/{employee}/forms', [EmployeeController::class, 'startForm'])->name('employees.forms.store');
     });
     Route::middleware('permission:employees.office.view')->group(function () {

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -120,6 +121,13 @@ interface DraftSeed {
     };
 }
 
+interface BulkRecipient {
+    id: number;
+    name: string;
+    email: string | null;
+    phone: string;
+}
+
 interface PageProps {
     signable: { type: string; id: number };
     recipient: { name: string; email: string; address: string; phone: string; position: string };
@@ -133,6 +141,7 @@ interface PageProps {
     letterheadLogoUrl: string;
     draft: DraftSeed | null;
     drafts: { id: number; updated_at: string | null; item_count: number }[];
+    bulkRecipients: BulkRecipient[] | null;
 }
 
 // Builder items — one ordered list is the single source of truth.
@@ -191,7 +200,8 @@ function renderPreviewHtml(html: string, valueMap: Record<string, string>, label
 
 export default function NewSend() {
     const props = usePage<SharedData & PageProps>().props;
-    const { signable, recipient, breadcrumb, returnUrl, documentTemplates, formTemplates, availablePlaceholders, appUsers, savedSenderSignatureUrl, letterheadLogoUrl, draft, drafts } = props;
+    const { signable, recipient, breadcrumb, returnUrl, documentTemplates, formTemplates, availablePlaceholders, appUsers, savedSenderSignatureUrl, letterheadLogoUrl, draft, drafts, bulkRecipients } = props;
+    const isBulk = !!(bulkRecipients && bulkRecipients.length > 0);
     const currentUser = props.auth.user;
     const currentUserPosition = appUsers?.find((u) => u.id === currentUser.id)?.position ?? '';
 
@@ -464,9 +474,20 @@ export default function NewSend() {
     // Recipient/delivery + signature — validated on the final "Review & send" step.
     const validateReview = (): boolean => {
         const e: Record<string, string> = {};
-        if (!name.trim()) e.name = 'Recipient name is required.';
-        if (deliveryMethod === 'email' && !email.trim()) e.email = 'Email is required for email delivery.';
-        if (deliveryMethod === 'sms' && !recipient.phone.trim()) e.phone = 'No mobile number on file for this recipient — pick another delivery method.';
+        if (isBulk) {
+            const reachable = deliveryMethod === 'email'
+                ? bulkRecipients!.filter((r) => r.email).length
+                : deliveryMethod === 'sms'
+                    ? bulkRecipients!.filter((r) => r.phone).length
+                    : 0;
+            if (reachable === 0) {
+                e.email = `No recipients have a ${deliveryMethod === 'sms' ? 'mobile number' : 'email'} on file for ${deliveryMethod} delivery.`;
+            }
+        } else {
+            if (!name.trim()) e.name = 'Recipient name is required.';
+            if (deliveryMethod === 'email' && !email.trim()) e.email = 'Email is required for email delivery.';
+            if (deliveryMethod === 'sms' && !recipient.phone.trim()) e.phone = 'No mobile number on file for this recipient — pick another delivery method.';
+        }
         if (requiresSenderSignature) {
             if (senderSigMode === 'request') {
                 if (!internalSignerUserId) e.internal_signer = 'Please select a user to sign.';
@@ -501,19 +522,26 @@ export default function NewSend() {
         const fd = new FormData();
         fd.append('delivery_method', deliveryMethod);
         fd.append('requires_signature', requiresSignature ? '1' : '0');
-        fd.append('signable_type', signable.type);
-        fd.append('signable_id', String(signable.id));
-        fd.append('recipient_name', name);
-        fd.append('recipient_email', deliveryMethod === 'email' ? email : '');
+        if (isBulk && bulkRecipients) {
+            bulkRecipients.forEach((r, i) => fd.append(`employee_ids[${i}]`, String(r.id)));
+        } else {
+            fd.append('signable_type', signable.type);
+            fd.append('signable_id', String(signable.id));
+            fd.append('recipient_name', name);
+            fd.append('recipient_email', deliveryMethod === 'email' ? email : '');
+        }
 
         templates.forEach((it, i) => fd.append(`document_template_ids[${i}]`, String(it.templateId)));
         forms.forEach((it, i) => fd.append(`form_template_ids[${i}]`, String(it.formId)));
 
         if (templates.length > 0) {
             for (const [k, v] of Object.entries(customFields)) fd.append(`custom_fields[${k}]`, v);
-            fd.append('custom_fields[recipient_address]', recipient.address);
-            fd.append('custom_fields[recipient_phone]', recipient.phone);
-            fd.append('custom_fields[recipient_position]', recipient.position);
+            if (!isBulk) {
+                // Per-recipient contact tokens: resolved server-side per employee in bulk mode.
+                fd.append('custom_fields[recipient_address]', recipient.address);
+                fd.append('custom_fields[recipient_phone]', recipient.phone);
+                fd.append('custom_fields[recipient_position]', recipient.position);
+            }
         }
 
         customs.forEach((it, i) => {
@@ -593,6 +621,10 @@ export default function NewSend() {
     ).length;
 
     const sendLabel = (() => {
+        if (isBulk) {
+            const n = bulkRecipients?.length ?? 0;
+            return `Send to ${n} ${n === 1 ? 'person' : 'people'}`;
+        }
         if (requiresSenderSignature && senderSigMode === 'request') return 'Request signature';
         if (deliveryMethod === 'in_person') return 'Open for signing';
         if (deliveryMethod === 'sms') return 'Send by SMS';
@@ -645,18 +677,63 @@ export default function NewSend() {
                 {/* ── Header ── */}
                 <header className="flex items-center gap-4 border-b px-4 py-3 sm:px-6">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                            {initialsOf(name || recipient.name)}
-                        </div>
-                        <div className="min-w-0">
-                            <h1 className="truncate text-base font-semibold leading-tight">Send to {name || recipient.name}</h1>
-                            <p className="truncate text-xs text-muted-foreground">
-                                {step === 'review' ? 'Review & send' : `${totalCount} item${totalCount === 1 ? '' : 's'} · confirm recipient on the next step`}
-                            </p>
-                        </div>
+                        {isBulk && bulkRecipients ? (
+                            <>
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-base font-semibold leading-tight">
+                                        Send to {bulkRecipients.length} {bulkRecipients.length === 1 ? 'person' : 'people'}
+                                    </h1>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        {step === 'review' ? 'Review & send' : `${totalCount} item${totalCount === 1 ? '' : 's'} · confirm on the next step`}
+                                    </p>
+                                </div>
+                                <TooltipProvider delay={100}>
+                                    <div className="flex -space-x-2">
+                                        {bulkRecipients.slice(0, 4).map((r) => (
+                                            <Tooltip key={r.id}>
+                                                <TooltipTrigger asChild>
+                                                    <span className="flex h-9 w-9 flex-shrink-0 cursor-default items-center justify-center rounded-full border-2 border-background bg-primary/10 text-[11px] font-semibold text-primary">
+                                                        {initialsOf(r.name)}
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{r.name}</TooltipContent>
+                                            </Tooltip>
+                                        ))}
+                                        {bulkRecipients.length > 4 && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="flex h-9 w-9 flex-shrink-0 cursor-default items-center justify-center rounded-full border-2 border-background bg-muted text-[11px] font-semibold text-muted-foreground">
+                                                        +{bulkRecipients.length - 4}
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <ul className="text-xs">
+                                                        {bulkRecipients.slice(4).map((r) => (
+                                                            <li key={r.id}>{r.name}</li>
+                                                        ))}
+                                                    </ul>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </div>
+                                </TooltipProvider>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                                    {initialsOf(name || recipient.name)}
+                                </div>
+                                <div className="min-w-0">
+                                    <h1 className="truncate text-base font-semibold leading-tight">Send to {name || recipient.name}</h1>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        {step === 'review' ? 'Review & send' : `${totalCount} item${totalCount === 1 ? '' : 's'} · confirm recipient on the next step`}
+                                    </p>
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
-                        {draftList.length > 0 && (
+                        {!isBulk && draftList.length > 0 && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="sm">
@@ -692,10 +769,12 @@ export default function NewSend() {
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
-                        <Button variant="ghost" size="sm" onClick={saveDraft} disabled={savingDraft || processing}>
-                            {savingDraft ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-                            {draftId ? 'Saved draft' : 'Save draft'}
-                        </Button>
+                        {!isBulk && (
+                            <Button variant="ghost" size="sm" onClick={saveDraft} disabled={savingDraft || processing}>
+                                {savingDraft ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+                                {draftId ? 'Saved draft' : 'Save draft'}
+                            </Button>
+                        )}
                         {step === 'compose' && (
                             <Button onClick={proceedFromCompose} disabled={processing || items.length === 0}>
                                 {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -718,6 +797,7 @@ export default function NewSend() {
                         setDeliveryMethod={setDeliveryMethod}
                         recipientPhone={recipient.phone}
                         returnUrl={returnUrl}
+                        bulkRecipients={isBulk ? bulkRecipients! : null}
                         requiresSenderSignature={requiresSenderSignature}
                         requiresRecipientSignature={requiresRecipientSignature}
                         sendLabel={sendLabel}
@@ -1411,6 +1491,36 @@ function FieldList({
 
 // ─── Review-step item row ──────────────────────────────────────────────────
 
+function BulkRecipientsSummary({ recipients, deliveryMethod }: { recipients: BulkRecipient[]; deliveryMethod: 'email' | 'sms' | 'in_person' }) {
+    const missing = recipients.filter((r) => (deliveryMethod === 'email' ? !r.email : deliveryMethod === 'sms' ? !r.phone : false));
+
+    return (
+        <div className="mt-2 space-y-2">
+            {missing.length > 0 && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
+                    <span className="font-medium">{missing.length}</span> {missing.length === 1 ? 'recipient has' : 'recipients have'} no {deliveryMethod === 'sms' ? 'mobile' : 'email'} on file and will be skipped.
+                </div>
+            )}
+            <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
+                {recipients.map((r) => {
+                    const skipped = deliveryMethod === 'email' ? !r.email : deliveryMethod === 'sms' ? !r.phone : false;
+                    return (
+                        <li key={r.id} className={`flex items-center gap-2 px-3 py-1.5 text-xs ${skipped ? 'opacity-50' : ''}`}>
+                            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                                {initialsOf(r.name)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                            <span className="flex-shrink-0 truncate font-mono text-[11px] text-muted-foreground">
+                                {deliveryMethod === 'sms' ? (r.phone || 'no mobile') : (r.email || 'no email')}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
+
 function ReviewItemRow({
     item, template, form,
 }: {
@@ -1449,6 +1559,7 @@ function ReviewItemRow({
 function ReviewStep({
     items, templateById, formById, senderName,
     totalCount, recipientName, recipientEmailValue, deliveryMethod, setDeliveryMethod, recipientPhone, returnUrl,
+    bulkRecipients,
     requiresSenderSignature, requiresRecipientSignature, sendLabel, onSend, processing,
     savedSenderSignatureUrl, appUsers,
     senderSigMode, setSenderSigMode, senderFullName, setSenderFullName, senderPosition, setSenderPosition,
@@ -1466,6 +1577,7 @@ function ReviewStep({
     setDeliveryMethod: (v: 'email' | 'sms' | 'in_person') => void;
     recipientPhone: string;
     returnUrl: string;
+    bulkRecipients: BulkRecipient[] | null;
     requiresSenderSignature: boolean;
     requiresRecipientSignature: boolean;
     sendLabel: string;
@@ -1523,24 +1635,30 @@ function ReviewStep({
                         </ol>
                     </section>
 
-                    {/* Recipient */}
+                    {/* Recipient(s) */}
                     <section>
-                        <SectionLabel>Recipient</SectionLabel>
-                        <div className="mt-2 flex items-center gap-3">
-                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                {initialsOf(recipientName || 'anonymous')}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-medium leading-tight">{recipientName || 'No name on file'}</div>
-                                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                                    {recipientEmailValue
-                                        ? <>{recipientEmailValue}{recipientPhone && ` · ${recipientPhone}`}</>
-                                        : recipientPhone
-                                            ? recipientPhone
-                                            : <span className="italic">No email or mobile on file</span>}
+                        <SectionLabel aside={bulkRecipients ? `${bulkRecipients.length} people` : undefined}>
+                            {bulkRecipients ? 'Recipients' : 'Recipient'}
+                        </SectionLabel>
+                        {bulkRecipients ? (
+                            <BulkRecipientsSummary recipients={bulkRecipients} deliveryMethod={deliveryMethod} />
+                        ) : (
+                            <div className="mt-2 flex items-center gap-3">
+                                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                                    {initialsOf(recipientName || 'anonymous')}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium leading-tight">{recipientName || 'No name on file'}</div>
+                                    <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                                        {recipientEmailValue
+                                            ? <>{recipientEmailValue}{recipientPhone && ` · ${recipientPhone}`}</>
+                                            : recipientPhone
+                                                ? recipientPhone
+                                                : <span className="italic">No email or mobile on file</span>}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                         {(errors.name || errors.email || errors.phone) && (
                             <p className="mt-2 text-xs text-destructive">
                                 {errors.name || errors.email || errors.phone}
@@ -1554,32 +1672,38 @@ function ReviewStep({
                         <RadioGroup
                             value={deliveryMethod}
                             onValueChange={(v) => setDeliveryMethod(v as 'email' | 'sms' | 'in_person')}
-                            className="mt-2 grid gap-2 sm:grid-cols-3"
+                            className={`mt-2 grid gap-2 ${bulkRecipients ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
                         >
                             <DeliveryOption
                                 value="email"
                                 selected={deliveryMethod === 'email'}
                                 icon={<Mail className="h-4 w-4" />}
                                 title="Email"
-                                desc={recipientEmailValue ? `Link to ${recipientEmailValue}` : 'Link to their inbox'}
-                                mono
+                                desc={bulkRecipients
+                                    ? `Link to ${bulkRecipients.filter(r => r.email).length} of ${bulkRecipients.length} recipients`
+                                    : (recipientEmailValue ? `Link to ${recipientEmailValue}` : 'Link to their inbox')}
+                                mono={!bulkRecipients}
                             />
                             <DeliveryOption
                                 value="sms"
                                 selected={deliveryMethod === 'sms'}
                                 icon={<MessageSquare className="h-4 w-4" />}
                                 title="SMS"
-                                desc={recipientPhone ? `Text to ${recipientPhone}` : 'No mobile on file'}
-                                disabled={!recipientPhone}
-                                mono
+                                desc={bulkRecipients
+                                    ? `Text to ${bulkRecipients.filter(r => r.phone).length} of ${bulkRecipients.length} recipients`
+                                    : (recipientPhone ? `Text to ${recipientPhone}` : 'No mobile on file')}
+                                disabled={bulkRecipients ? bulkRecipients.every(r => !r.phone) : !recipientPhone}
+                                mono={!bulkRecipients}
                             />
-                            <DeliveryOption
-                                value="in_person"
-                                selected={deliveryMethod === 'in_person'}
-                                icon={<Tablet className="h-4 w-4" />}
-                                title="In-Person"
-                                desc="Open now on this device"
-                            />
+                            {!bulkRecipients && (
+                                <DeliveryOption
+                                    value="in_person"
+                                    selected={deliveryMethod === 'in_person'}
+                                    icon={<Tablet className="h-4 w-4" />}
+                                    title="In-Person"
+                                    desc="Open now on this device"
+                                />
+                            )}
                         </RadioGroup>
                     </section>
 
@@ -1670,6 +1794,14 @@ function ReviewStep({
                         sendLabel={sendLabel}
                         onSend={onSend}
                         processing={processing}
+                        bulkCount={bulkRecipients?.length ?? null}
+                        bulkReachable={
+                            bulkRecipients
+                                ? (deliveryMethod === 'email'
+                                    ? bulkRecipients.filter((r) => r.email).length
+                                    : bulkRecipients.filter((r) => r.phone).length)
+                                : null
+                        }
                     />
                 </aside>
             </div>
@@ -1729,6 +1861,7 @@ function TheRoute({
     recipientName, recipientEmail, recipientPhone, deliveryMethod,
     requiresSenderSignature, requiresRecipientSignature, senderSigMode, internalSignerName,
     sendLabel, onSend, processing,
+    bulkCount, bulkReachable,
 }: {
     hasForms: boolean;
     senderName: string;
@@ -1745,7 +1878,12 @@ function TheRoute({
     sendLabel: string;
     onSend: () => void;
     processing: boolean;
+    bulkCount: number | null;
+    bulkReachable: number | null;
 }) {
+    const isBulk = bulkCount !== null;
+    const bulkNoun = bulkCount === 1 ? 'person' : 'people';
+    const audienceLabel = isBulk ? `${bulkReachable ?? 0} ${bulkNoun}` : recipientName;
     const steps: RouteStep[] = [];
 
     // 1. Sender signature (if needed)
@@ -1788,16 +1926,20 @@ function TheRoute({
 
     if (deliveryMethod === 'email') {
         steps.push({
-            title: needsAction ? `Secure link emailed to ${recipientName}` : `Emailed to ${recipientName}`,
-            detail: recipientEmail || 'No email set',
-            mono: !!recipientEmail,
+            title: needsAction ? `Secure link emailed to ${audienceLabel}` : `Emailed to ${audienceLabel}`,
+            detail: isBulk
+                ? (bulkCount === bulkReachable ? 'All have an email on file.' : `${(bulkCount ?? 0) - (bulkReachable ?? 0)} skipped (no email on file).`)
+                : (recipientEmail || 'No email set'),
+            mono: !isBulk && !!recipientEmail,
             content: previewContent,
         });
     } else if (deliveryMethod === 'sms') {
         steps.push({
-            title: needsAction ? `Secure link texted to ${recipientName}` : `Texted to ${recipientName}`,
-            detail: recipientPhone || 'No mobile on file',
-            mono: !!recipientPhone,
+            title: needsAction ? `Secure link texted to ${audienceLabel}` : `Texted to ${audienceLabel}`,
+            detail: isBulk
+                ? (bulkCount === bulkReachable ? 'All have a mobile on file.' : `${(bulkCount ?? 0) - (bulkReachable ?? 0)} skipped (no mobile on file).`)
+                : (recipientPhone || 'No mobile on file'),
+            mono: !isBulk && !!recipientPhone,
             content: previewContent,
         });
     } else {
@@ -1808,19 +1950,20 @@ function TheRoute({
     }
 
     // 3. Recipient action
+    const actor = isBulk ? 'Each recipient' : recipientName;
     if (requiresRecipientSignature && hasForms) {
         steps.push({
-            title: `${recipientName} completes and signs`,
+            title: `${actor} completes and signs`,
             detail: 'They fill out the form and sign the documents.',
         });
     } else if (requiresRecipientSignature) {
         steps.push({
-            title: `${recipientName} reviews and signs`,
+            title: `${actor} reviews and signs`,
             detail: 'You can track progress from the register.',
         });
     } else if (hasForms) {
         steps.push({
-            title: `${recipientName} completes the form`,
+            title: `${actor} completes the form`,
             detail: 'You can track progress from the register.',
         });
     }
@@ -1828,8 +1971,14 @@ function TheRoute({
     // 4. Confirmation
     steps.push(
         needsAction
-            ? { title: 'Completed copy filed', detail: "You're notified, and the record is kept on file." }
-            : { title: 'Copy filed', detail: 'The record is kept on file.' },
+            ? {
+                title: isBulk ? 'Completed copies filed' : 'Completed copy filed',
+                detail: isBulk ? "You're notified as each is completed; every record is kept on file." : "You're notified, and the record is kept on file.",
+              }
+            : {
+                title: isBulk ? 'Copies filed' : 'Copy filed',
+                detail: isBulk ? 'Every record is kept on file.' : 'The record is kept on file.',
+              },
     );
 
     return (

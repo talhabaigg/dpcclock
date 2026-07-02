@@ -633,6 +633,34 @@ class EmploymentApplicationController extends Controller
      * referee on the application show page. Idempotent — clicking again on a
      * reference that already has a non-cancelled form returns the existing one.
      */
+    /**
+     * Re-dispatch every auto-mode form mapping for the application's current
+     * status. Idempotent — mappings that already have a live (non-cancelled)
+     * FormRequest are skipped. Used to recover from an accidental cancel.
+     */
+    public function retriggerStageForms(
+        Request $request,
+        EmploymentApplication $employmentApplication,
+        ModelTriggerFormService $triggerFormService,
+    ): RedirectResponse {
+        if (! $request->user()->isAdmin()) {
+            return back()->withErrors(['retrigger' => 'Only admins can re-trigger stage forms.']);
+        }
+
+        $created = $triggerFormService->dispatchFormsFor(
+            $employmentApplication,
+            $employmentApplication->status,
+            $request->user(),
+        );
+
+        $count = $created->count();
+        if ($count === 0) {
+            return back()->with('info', 'No missing forms for this stage — all mappings already have a live form.');
+        }
+
+        return back()->with('success', "Re-triggered {$count} form" . ($count === 1 ? '' : 's') . ' for this stage.');
+    }
+
     public function startReferenceForm(
         Request $request,
         EmploymentApplication $employmentApplication,

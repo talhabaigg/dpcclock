@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { UserInfo } from '@/components/user-info';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, type RowSelectionState, type SortingState, useReactTable } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown, FilePlus2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -158,7 +158,7 @@ export default function OfficeEmployeesList() {
                 {selectedIds.length > 0 && canSendDocuments && (
                     <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
                         <span className="text-sm font-medium">{selectedIds.length} selected</span>
-                        <Button size="sm" className="gap-1.5" onClick={() => setShowBulkModal(true)}>
+                        <Button size="sm" className="gap-1.5" onClick={() => router.get(route('employees.send-bulk', { e: selectedIds.join(',') }))}>
                             <FilePlus2 className="h-3.5 w-3.5" />
                             Send for Signing
                         </Button>

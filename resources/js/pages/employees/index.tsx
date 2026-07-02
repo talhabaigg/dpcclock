@@ -669,7 +669,7 @@ export default function EmployeesList() {
                 {selectedIds.length > 0 && canSendDocuments && (
                     <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
                         <span className="text-sm font-medium">{selectedIds.length} selected</span>
-                        <Button size="sm" className="gap-1.5" onClick={() => setShowBulkModal(true)}>
+                        <Button size="sm" className="gap-1.5" onClick={() => router.get(route('employees.send-bulk', { e: selectedIds.join(',') }))}>
                             <FilePlus2 className="h-3.5 w-3.5" />
                             Send for Signing
                         </Button>
