@@ -37,8 +37,10 @@ import {
     FileText,
     GripVertical,
     Loader2,
+    ArrowLeft,
     Mail,
     MessageSquare,
+    PenLine,
     Plus,
     RotateCcw,
     Save,
@@ -104,7 +106,6 @@ interface DraftSeed {
     payload: {
         items?: SerializedItem[];
         customFields?: Record<string, string>;
-        requiresSignature?: boolean;
     };
 }
 
@@ -188,7 +189,10 @@ export default function NewSend() {
     const [selectedUid, setSelectedUid] = useState<string | null>(null);
 
     // ── Send config ──
-    const [requiresSignature, setRequiresSignature] = useState(true);
+    // requiresSignature is derived from the documents themselves — a send is a
+    // signing request iff any included template/custom doc contains a signature
+    // slot ({{signature_box}} for the recipient or {{sender_signature}} for the
+    // sender). Forms and attachments never force a signature on their own.
     const [deliveryMethod, setDeliveryMethod] = useState<'email' | 'sms' | 'in_person'>('email');
     const [name, setName] = useState(recipient.name);
     const [email, setEmail] = useState(recipient.email);
@@ -251,7 +255,6 @@ export default function NewSend() {
             .filter((x): x is Item => x !== null);
         setItems(seeded);
         setCustomFields(draft.payload.customFields ?? {});
-        setRequiresSignature(draft.payload.requiresSignature ?? true);
         setName(draft.recipient_name ?? recipient.name);
         setEmail(draft.recipient_email ?? recipient.email);
         setDeliveryMethod(draft.delivery_method === 'in_person' || draft.delivery_method === 'sms' ? draft.delivery_method : 'email');
@@ -327,9 +330,14 @@ export default function NewSend() {
     );
 
     const requiresSenderSignature =
-        requiresSignature &&
-        (selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}')) ||
-            items.some((it) => it.kind === 'custom' && it.html.includes('{{sender_signature}}')));
+        selectedTemplates.some((t) => t.body_html?.includes('{{sender_signature}}')) ||
+        items.some((it) => it.kind === 'custom' && it.html.includes('{{sender_signature}}'));
+
+    const requiresRecipientSignature =
+        selectedTemplates.some((t) => t.body_html?.includes('{{signature_box}}')) ||
+        items.some((it) => it.kind === 'custom' && it.html.includes('{{signature_box}}'));
+
+    const requiresSignature = requiresSenderSignature || requiresRecipientSignature;
 
     // ── Item mutators ──
     const toggleTemplate = (templateId: number) => {
@@ -537,7 +545,7 @@ export default function NewSend() {
             recipient_name: name || null,
             recipient_email: email || null,
             delivery_method: deliveryMethod,
-            payload: { items: serializable, customFields, requiresSignature },
+            payload: { items: serializable, customFields },
         };
         // Background save — no navigation, so the builder stays exactly as-is.
         try {
@@ -650,7 +658,7 @@ export default function NewSend() {
                                     {draftList.map((d) => (
                                         <DropdownMenuItem
                                             key={d.id}
-                                            onSelect={(e) => { e.preventDefault(); resumeDraft(d.id); }}
+                                            onClick={() => resumeDraft(d.id)}
                                             className="flex items-center justify-between gap-2"
                                         >
                                             <span className="min-w-0">
@@ -676,15 +684,10 @@ export default function NewSend() {
                             {savingDraft ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                             {draftId ? 'Saved draft' : 'Save draft'}
                         </Button>
-                        {step === 'compose' ? (
+                        {step === 'compose' && (
                             <Button onClick={proceedFromCompose} disabled={processing || items.length === 0}>
                                 {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Continue
-                            </Button>
-                        ) : (
-                            <Button onClick={finalSend} disabled={processing}>
-                                {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {sendLabel}
                             </Button>
                         )}
                     </div>
@@ -692,15 +695,22 @@ export default function NewSend() {
 
                 {step === 'review' ? (
                     <ReviewStep
+                        items={items}
+                        templateById={templateById}
+                        formById={formById}
+                        senderName={currentUser.name ?? 'The sender'}
                         totalCount={totalCount}
-                        name={name}
-                        setName={setName}
-                        email={email}
-                        setEmail={setEmail}
+                        recipientName={name}
+                        recipientEmailValue={email}
                         deliveryMethod={deliveryMethod}
                         setDeliveryMethod={setDeliveryMethod}
                         recipientPhone={recipient.phone}
+                        returnUrl={returnUrl}
                         requiresSenderSignature={requiresSenderSignature}
+                        requiresRecipientSignature={requiresRecipientSignature}
+                        sendLabel={sendLabel}
+                        onSend={finalSend}
+                        processing={processing}
                         savedSenderSignatureUrl={savedSenderSignatureUrl}
                         appUsers={appUsers}
                         senderSigMode={senderSigMode}
@@ -773,10 +783,27 @@ export default function NewSend() {
                                 />
                             </div>
 
-                            <label className="flex cursor-pointer items-center gap-2 border-t px-4 py-2.5 text-xs">
-                                <Checkbox checked={requiresSignature} onCheckedChange={(v) => setRequiresSignature(!!v)} />
-                                <span>Requires signature</span>
-                            </label>
+                            {items.length > 0 && (
+                                <div className="flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
+                                    {requiresSignature ? (
+                                        <>
+                                            <PenLine className="h-3.5 w-3.5" />
+                                            <span>
+                                                {requiresRecipientSignature && requiresSenderSignature
+                                                    ? 'Both parties sign'
+                                                    : requiresRecipientSignature
+                                                        ? 'Recipient signs'
+                                                        : 'You sign, then sent'}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileText className="h-3.5 w-3.5" />
+                                            <span>Info-only — no signature</span>
+                                        </>
+                                    )}
+                                </div>
+                            )}
 
                             {errors.documents && <p className="border-t bg-destructive/10 px-4 py-2 text-xs text-destructive">{errors.documents}</p>}
                         </aside>
@@ -1228,24 +1255,68 @@ function FieldList({
     );
 }
 
+// ─── Review-step item row ──────────────────────────────────────────────────
+
+function ReviewItemRow({
+    item, template, form,
+}: {
+    item: Item;
+    template?: DocumentTemplate;
+    form?: FormTemplateOption;
+}) {
+    const title =
+        item.kind === 'template' ? template?.name ?? 'Template'
+        : item.kind === 'form' ? form?.name ?? 'Form'
+        : item.kind === 'attachment' ? item.file.name
+        : item.title.trim() || 'Untitled document';
+
+    const meta =
+        item.kind === 'form' && form ? `${form.fields_count} field${form.fields_count === 1 ? '' : 's'}`
+        : item.kind === 'attachment' ? formatBytes(item.file.size)
+        : item.kind === 'custom' ? 'Custom'
+        : null;
+
+    const Icon =
+        item.kind === 'form' ? ClipboardList
+        : item.kind === 'attachment' ? Upload
+        : FileText;
+
+    return (
+        <li className="flex items-center gap-2 py-1 text-sm">
+            <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate leading-tight">{title}</span>
+            {meta && <span className="flex-shrink-0 text-[11px] text-muted-foreground">{meta}</span>}
+        </li>
+    );
+}
+
 // ─── Sign step ─────────────────────────────────────────────────────────────
 
 function ReviewStep({
-    totalCount, name, setName, email, setEmail, deliveryMethod, setDeliveryMethod, recipientPhone, requiresSenderSignature,
+    items, templateById, formById, senderName,
+    totalCount, recipientName, recipientEmailValue, deliveryMethod, setDeliveryMethod, recipientPhone, returnUrl,
+    requiresSenderSignature, requiresRecipientSignature, sendLabel, onSend, processing,
     savedSenderSignatureUrl, appUsers,
     senderSigMode, setSenderSigMode, senderFullName, setSenderFullName, senderPosition, setSenderPosition,
     saveSenderSignature, setSaveSenderSignature, internalSignerUserId, setInternalSignerUserId,
     attachSenderCanvas, clearSenderSignature, undoSenderSignature, errors, onBack,
 }: {
+    items: Item[];
+    templateById: Map<number, DocumentTemplate>;
+    formById: Map<number, FormTemplateOption>;
+    senderName: string;
     totalCount: number;
-    name: string;
-    setName: (v: string) => void;
-    email: string;
-    setEmail: (v: string) => void;
+    recipientName: string;
+    recipientEmailValue: string;
     deliveryMethod: 'email' | 'sms' | 'in_person';
     setDeliveryMethod: (v: 'email' | 'sms' | 'in_person') => void;
     recipientPhone: string;
+    returnUrl: string;
     requiresSenderSignature: boolean;
+    requiresRecipientSignature: boolean;
+    sendLabel: string;
+    onSend: () => void;
+    processing: boolean;
     savedSenderSignatureUrl: string | null;
     appUsers: { id: number; name: string; position: string | null }[];
     senderSigMode: 'saved' | 'draw' | 'request';
@@ -1272,144 +1343,488 @@ function ReviewStep({
 
     return (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-            <div className="mx-auto w-full max-w-xl space-y-5">
-                <div className="flex items-center justify-between">
-                    <div>
+            <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+                {/* LEFT: details */}
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between">
                         <h2 className="text-base font-semibold">Review &amp; send</h2>
-                        <p className="text-xs text-muted-foreground">Confirm who this goes to and how — then send.</p>
+                        <Button variant="outline" size="sm" onClick={onBack}>
+                            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+                            Back to edit
+                        </Button>
                     </div>
-                    <Button variant="outline" size="sm" onClick={onBack}>Back to edit</Button>
-                </div>
 
-                {/* Recipient + delivery */}
-                <div className="space-y-3 rounded-lg border p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                            <Label htmlFor="rv-name" className="text-xs">Recipient name</Label>
-                            <Input id="rv-name" value={name} onChange={(e) => setName(e.target.value)} />
-                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                    {/* What's being sent */}
+                    <section>
+                        <SectionLabel aside={`${totalCount} item${totalCount === 1 ? '' : 's'}`}>What's being sent</SectionLabel>
+                        <ol className="mt-1.5 divide-y">
+                            {items.map((it) => (
+                                <ReviewItemRow
+                                    key={it.uid}
+                                    item={it}
+                                    template={it.kind === 'template' ? templateById.get(it.templateId) : undefined}
+                                    form={it.kind === 'form' ? formById.get(it.formId) : undefined}
+                                />
+                            ))}
+                        </ol>
+                    </section>
+
+                    {/* Recipient */}
+                    <section>
+                        <SectionLabel>Recipient</SectionLabel>
+                        <div className="mt-2 flex items-center gap-3">
+                            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                                {initialsOf(recipientName || 'anonymous')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium leading-tight">{recipientName || 'No name on file'}</div>
+                                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                                    {recipientEmailValue
+                                        ? <>{recipientEmailValue}{recipientPhone && ` · ${recipientPhone}`}</>
+                                        : recipientPhone
+                                            ? recipientPhone
+                                            : <span className="italic">No email or mobile on file</span>}
+                                </div>
+                            </div>
                         </div>
-                        {deliveryMethod === 'sms' ? (
-                            <div className="space-y-1">
-                                <Label htmlFor="rv-phone" className="text-xs">Mobile</Label>
-                                <Input id="rv-phone" value={recipientPhone} readOnly className="bg-muted/40" />
-                                {errors.phone
-                                    ? <p className="text-xs text-destructive">{errors.phone}</p>
-                                    : <p className="text-[11px] text-muted-foreground">The signing link is texted to this number.</p>}
+                        {(errors.name || errors.email || errors.phone) && (
+                            <p className="mt-2 text-xs text-destructive">
+                                {errors.name || errors.email || errors.phone}
+                            </p>
+                        )}
+                    </section>
+
+                    {/* Delivery */}
+                    <section>
+                        <SectionLabel>Delivery</SectionLabel>
+                        <RadioGroup
+                            value={deliveryMethod}
+                            onValueChange={(v) => setDeliveryMethod(v as 'email' | 'sms' | 'in_person')}
+                            className="mt-2 grid gap-2 sm:grid-cols-3"
+                        >
+                            <DeliveryOption
+                                value="email"
+                                selected={deliveryMethod === 'email'}
+                                icon={<Mail className="h-4 w-4" />}
+                                title="Email"
+                                desc={recipientEmailValue ? `Link to ${recipientEmailValue}` : 'Link to their inbox'}
+                                mono
+                            />
+                            <DeliveryOption
+                                value="sms"
+                                selected={deliveryMethod === 'sms'}
+                                icon={<MessageSquare className="h-4 w-4" />}
+                                title="SMS"
+                                desc={recipientPhone ? `Text to ${recipientPhone}` : 'No mobile on file'}
+                                disabled={!recipientPhone}
+                                mono
+                            />
+                            <DeliveryOption
+                                value="in_person"
+                                selected={deliveryMethod === 'in_person'}
+                                icon={<Tablet className="h-4 w-4" />}
+                                title="In-Person"
+                                desc="Open now on this device"
+                            />
+                        </RadioGroup>
+                    </section>
+
+                    {/* Sender signature — only when a document requires it */}
+                    {requiresSenderSignature && (
+                    <section>
+                        <SectionLabel>Sign to send</SectionLabel>
+                        <p className="mt-2 text-xs text-muted-foreground">Your signature is applied to every document in this send that requires it.</p>
+                        <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw' | 'request')} className={`mt-3 grid gap-2 ${cols}`}>
+                            {opts.map((opt) => (
+                                <label key={opt.value} className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md border p-2 text-xs ${senderSigMode === opt.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}>
+                                    <RadioGroupItem value={opt.value} /> {opt.label}
+                                </label>
+                            ))}
+                        </RadioGroup>
+
+                        {senderSigMode === 'request' ? (
+                            <div className="mt-3 space-y-2">
+                                <Label className="text-xs">Select user to sign</Label>
+                                <SearchSelect
+                                    options={appUsers.map((u) => ({ value: String(u.id), label: u.name + (u.position ? ` — ${u.position}` : '') }))}
+                                    optionName="user"
+                                    selectedOption={internalSignerUserId}
+                                    onValueChange={setInternalSignerUserId}
+                                />
+                                {errors.internal_signer && <p className="text-xs text-destructive">{errors.internal_signer}</p>}
+                                <p className="text-[11px] text-muted-foreground">They'll receive an email to sign. The document goes to the recipient after they sign.</p>
+                            </div>
+                        ) : senderSigMode === 'saved' && savedSenderSignatureUrl ? (
+                            <div className="mt-3 space-y-2">
+                                <div className="rounded-md border p-2">
+                                    <img src={savedSenderSignatureUrl} alt="Saved signature" className="mx-auto max-h-24" />
+                                </div>
+                                <SignerIdentity senderFullName={senderFullName} senderPosition={senderPosition} errors={errors} />
                             </div>
                         ) : (
-                            <div className="space-y-1">
-                                <Label htmlFor="rv-email" className="text-xs">Email</Label>
-                                <Input id="rv-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={deliveryMethod !== 'email'} />
-                                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+                            <div className="mt-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs">Draw your signature</Label>
+                                    <div className="flex gap-1">
+                                        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={undoSenderSignature}><RotateCcw className="mr-1 h-3 w-3" /> Undo</Button>
+                                        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearSenderSignature}><Trash2 className="mr-1 h-3 w-3" /> Clear</Button>
+                                    </div>
+                                </div>
+                                <canvas ref={attachSenderCanvas} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
+                                {errors.sender_signature && <p className="text-xs text-destructive">{errors.sender_signature}</p>}
+                                <SignerIdentity senderFullName={senderFullName} senderPosition={senderPosition} errors={errors} />
+                                <label className="flex cursor-pointer items-center gap-2 text-xs">
+                                    <Checkbox checked={saveSenderSignature} onCheckedChange={(v) => setSaveSenderSignature(!!v)} />
+                                    {savedSenderSignatureUrl ? 'Replace my saved signature with this one' : 'Save this signature for next time'}
+                                </label>
                             </div>
                         )}
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs">Delivery</Label>
-                        <RadioGroup value={deliveryMethod} onValueChange={(v) => setDeliveryMethod(v as 'email' | 'sms' | 'in_person')} className="grid grid-cols-3 gap-2">
-                            <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${deliveryMethod === 'email' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                <RadioGroupItem value="email" /> <Mail className="h-3.5 w-3.5" /> Email
-                            </label>
-                            <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${deliveryMethod === 'sms' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                <RadioGroupItem value="sms" /> <MessageSquare className="h-3.5 w-3.5" /> SMS
-                            </label>
-                            <label className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${deliveryMethod === 'in_person' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}>
-                                <RadioGroupItem value="in_person" /> <Tablet className="h-3.5 w-3.5" /> In-Person
-                            </label>
-                        </RadioGroup>
-                    </div>
-                    <div className="border-t pt-2 text-xs">
-                        <SummaryRow label="Sending" value={`${totalCount} item${totalCount === 1 ? '' : 's'}`} />
-                    </div>
+                    </section>
+                    )}
                 </div>
 
-                {/* Sender signature — only when a document requires it */}
-                {requiresSenderSignature && (
-                <div className="space-y-3 rounded-lg border p-4">
-                    <div>
-                        <h3 className="text-sm font-semibold">Sign to send</h3>
-                        <p className="text-xs text-muted-foreground">Your signature is applied to every document in this send that requires it.</p>
-                    </div>
-                <RadioGroup value={senderSigMode} onValueChange={(v) => setSenderSigMode(v as 'saved' | 'draw' | 'request')} className={`grid gap-2 ${cols}`}>
-                    {opts.map((opt) => (
-                        <label key={opt.value} className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-md border p-2 text-xs ${senderSigMode === opt.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}>
-                            <RadioGroupItem value={opt.value} /> {opt.label}
-                        </label>
-                    ))}
-                </RadioGroup>
-
-                {senderSigMode === 'request' ? (
-                    <div className="space-y-2">
-                        <Label className="text-xs">Select user to sign</Label>
-                        <SearchSelect
-                            options={appUsers.map((u) => ({ value: String(u.id), label: u.name + (u.position ? ` — ${u.position}` : '') }))}
-                            optionName="user"
-                            selectedOption={internalSignerUserId}
-                            onValueChange={setInternalSignerUserId}
-                        />
-                        {errors.internal_signer && <p className="text-xs text-destructive">{errors.internal_signer}</p>}
-                        <p className="text-[11px] text-muted-foreground">They'll receive an email to sign. The document goes to the recipient after they sign.</p>
-                    </div>
-                ) : senderSigMode === 'saved' && savedSenderSignatureUrl ? (
-                    <div className="space-y-2">
-                        <div className="rounded-md border bg-white p-3"><img src={savedSenderSignatureUrl} alt="Saved signature" className="mx-auto max-h-24" /></div>
-                        <SignerNameFields senderFullName={senderFullName} setSenderFullName={setSenderFullName} senderPosition={senderPosition} setSenderPosition={setSenderPosition} errors={errors} />
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-xs">Draw your signature</Label>
-                            <div className="flex gap-1">
-                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={undoSenderSignature}><RotateCcw className="mr-1 h-3 w-3" /> Undo</Button>
-                                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={clearSenderSignature}><Trash2 className="mr-1 h-3 w-3" /> Clear</Button>
-                            </div>
-                        </div>
-                        <canvas ref={attachSenderCanvas} className="h-32 w-full rounded-md border bg-white" style={{ touchAction: 'none' }} />
-                        {errors.sender_signature && <p className="text-xs text-destructive">{errors.sender_signature}</p>}
-                        <SignerNameFields senderFullName={senderFullName} setSenderFullName={setSenderFullName} senderPosition={senderPosition} setSenderPosition={setSenderPosition} errors={errors} />
-                        <label className="flex cursor-pointer items-center gap-2 text-xs">
-                            <Checkbox checked={saveSenderSignature} onCheckedChange={(v) => setSaveSenderSignature(!!v)} />
-                            {savedSenderSignatureUrl ? 'Replace my saved signature with this one' : 'Save this signature for next time'}
-                        </label>
-                    </div>
-                )}
-                </div>
-                )}
+                {/* RIGHT: sticky route */}
+                <aside className="lg:sticky lg:top-4 lg:self-start">
+                    <TheRoute
+                        hasForms={items.some((it) => it.kind === 'form')}
+                        senderName={senderName}
+                        signingDocLabels={
+                            (requiresSenderSignature || requiresRecipientSignature)
+                                ? items.flatMap((it) => {
+                                    if (it.kind === 'template') return [templateById.get(it.templateId)?.name ?? 'Document'];
+                                    if (it.kind === 'custom') return [it.title.trim() || 'Untitled document'];
+                                    return [];
+                                })
+                                : []
+                        }
+                        infoDocLabels={items.flatMap((it) => {
+                            if (it.kind === 'attachment') return [it.file.name];
+                            if (!requiresSenderSignature && !requiresRecipientSignature) {
+                                if (it.kind === 'template') return [templateById.get(it.templateId)?.name ?? 'Document'];
+                                if (it.kind === 'custom') return [it.title.trim() || 'Untitled document'];
+                            }
+                            return [];
+                        })}
+                        recipientName={recipientName || 'the recipient'}
+                        recipientEmail={recipientEmailValue}
+                        recipientPhone={recipientPhone}
+                        deliveryMethod={deliveryMethod}
+                        requiresSenderSignature={requiresSenderSignature}
+                        requiresRecipientSignature={requiresRecipientSignature}
+                        senderSigMode={senderSigMode}
+                        internalSignerName={appUsers.find((u) => String(u.id) === internalSignerUserId)?.name ?? null}
+                        sendLabel={sendLabel}
+                        onSend={onSend}
+                        processing={processing}
+                    />
+                </aside>
             </div>
         </div>
     );
 }
 
-function SignerNameFields({
-    senderFullName, setSenderFullName, senderPosition, setSenderPosition, errors,
+function DeliveryOption({
+    value, selected, icon, title, desc, disabled, mono,
+}: {
+    value: 'email' | 'sms' | 'in_person';
+    selected: boolean;
+    icon: React.ReactNode;
+    title: string;
+    desc: string;
+    disabled?: boolean;
+    mono?: boolean;
+}) {
+    return (
+        <label
+            className={
+                'flex flex-col gap-2 rounded-md border p-3 text-left transition ' +
+                (disabled
+                    ? 'cursor-not-allowed border-dashed opacity-50'
+                    : selected
+                        ? 'cursor-pointer border-primary bg-primary/5'
+                        : 'cursor-pointer hover:bg-muted/40')
+            }
+        >
+            <div className="flex items-center justify-between">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-full ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                    {icon}
+                </div>
+                <RadioGroupItem value={value} disabled={disabled} className="h-3.5 w-3.5" />
+            </div>
+            <div>
+                <div className="text-sm font-medium">{title}</div>
+                <div className={`mt-0.5 line-clamp-2 text-[11px] text-muted-foreground ${mono ? 'font-mono break-all' : ''}`}>
+                    {desc}
+                </div>
+            </div>
+        </label>
+    );
+}
+
+type RouteStep = {
+    title: string;
+    detail: string;
+    mono?: boolean;
+    you?: boolean;
+    done?: boolean;
+    content?: React.ReactNode;
+};
+
+function TheRoute({
+    hasForms, senderName, signingDocLabels, infoDocLabels,
+    recipientName, recipientEmail, recipientPhone, deliveryMethod,
+    requiresSenderSignature, requiresRecipientSignature, senderSigMode, internalSignerName,
+    sendLabel, onSend, processing,
+}: {
+    hasForms: boolean;
+    senderName: string;
+    signingDocLabels: string[];
+    infoDocLabels: string[];
+    recipientName: string;
+    recipientEmail: string;
+    recipientPhone: string;
+    deliveryMethod: 'email' | 'sms' | 'in_person';
+    requiresSenderSignature: boolean;
+    requiresRecipientSignature: boolean;
+    senderSigMode: 'saved' | 'draw' | 'request';
+    internalSignerName: string | null;
+    sendLabel: string;
+    onSend: () => void;
+    processing: boolean;
+}) {
+    const steps: RouteStep[] = [];
+
+    // 1. Sender signature (if needed)
+    if (requiresSenderSignature) {
+        if (senderSigMode === 'request') {
+            steps.push({
+                title: `${internalSignerName ?? 'Selected user'} signs first`,
+                detail: 'They get an email with the document to sign.',
+                you: true,
+            });
+        } else if (senderSigMode === 'saved') {
+            steps.push({
+                title: 'Your saved signature is applied',
+                detail: 'Applied automatically — nothing for you to do.',
+                you: true,
+                done: true,
+            });
+        } else {
+            steps.push({
+                title: 'You draw and apply your signature',
+                detail: 'Applied now, before anything is sent.',
+                you: true,
+            });
+        }
+    }
+
+    // 2. Delivery to recipient
+    const needsAction = requiresRecipientSignature || hasForms;
+    const hasDocsForPreview = signingDocLabels.length > 0 || infoDocLabels.length > 0;
+    const previewContent = hasDocsForPreview ? (
+        <DeliveryPreview
+            deliveryMethod={deliveryMethod}
+            senderName={senderName}
+            recipientName={recipientName}
+            recipientEmail={recipientEmail}
+            signingDocLabels={signingDocLabels}
+            infoDocLabels={infoDocLabels}
+        />
+    ) : null;
+
+    if (deliveryMethod === 'email') {
+        steps.push({
+            title: needsAction ? `Secure link emailed to ${recipientName}` : `Emailed to ${recipientName}`,
+            detail: recipientEmail || 'No email set',
+            mono: !!recipientEmail,
+            content: previewContent,
+        });
+    } else if (deliveryMethod === 'sms') {
+        steps.push({
+            title: needsAction ? `Secure link texted to ${recipientName}` : `Texted to ${recipientName}`,
+            detail: recipientPhone || 'No mobile on file',
+            mono: !!recipientPhone,
+            content: previewContent,
+        });
+    } else {
+        steps.push({
+            title: `${recipientName} signs in person`,
+            detail: "Hand them this device when you're together.",
+        });
+    }
+
+    // 3. Recipient action
+    if (requiresRecipientSignature && hasForms) {
+        steps.push({
+            title: `${recipientName} completes and signs`,
+            detail: 'They fill out the form and sign the documents.',
+        });
+    } else if (requiresRecipientSignature) {
+        steps.push({
+            title: `${recipientName} reviews and signs`,
+            detail: 'You can track progress from the register.',
+        });
+    } else if (hasForms) {
+        steps.push({
+            title: `${recipientName} completes the form`,
+            detail: 'You can track progress from the register.',
+        });
+    }
+
+    // 4. Confirmation
+    steps.push(
+        needsAction
+            ? { title: 'Completed copy filed', detail: "You're notified, and the record is kept on file." }
+            : { title: 'Copy filed', detail: 'The record is kept on file.' },
+    );
+
+    return (
+        <div className="rounded-lg border bg-background p-5">
+            <h3 className="text-sm font-semibold">The route</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Exactly what happens when you send.</p>
+
+            <ol className="relative mt-4">
+                {steps.map((s, i) => {
+                    const isLast = i === steps.length - 1;
+                    return (
+                        <li key={i} className="relative pb-4 pl-7 last:pb-0">
+                            {!isLast && <span aria-hidden className="absolute left-2.5 top-5 h-full w-px bg-border" />}
+                            <span
+                                aria-hidden
+                                className={
+                                    'absolute left-0 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-medium tabular-nums ' +
+                                    (s.done
+                                        ? 'border-foreground bg-foreground text-background'
+                                        : s.you
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-foreground bg-background text-foreground')
+                                }
+                            >
+                                {i + 1}
+                            </span>
+                            <span className="block text-sm font-medium leading-snug">{s.title}</span>
+                            <span className={`mt-0.5 block break-words text-[11px] text-muted-foreground ${s.mono ? 'font-mono' : ''}`}>{s.detail}</span>
+                            {s.content && <div className="mt-2">{s.content}</div>}
+                        </li>
+                    );
+                })}
+            </ol>
+
+            <div className="mt-5 border-t pt-4">
+                <Button className="w-full" onClick={onSend} disabled={processing}>
+                    {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {sendLabel}
+                </Button>
+                <p className="mt-2 text-center font-mono text-[11px] uppercase tracking-wider text-muted-foreground">A full record is kept on file</p>
+            </div>
+        </div>
+    );
+}
+
+function DeliveryPreview({
+    deliveryMethod, senderName, recipientName, recipientEmail, signingDocLabels, infoDocLabels,
+}: {
+    deliveryMethod: 'email' | 'sms' | 'in_person';
+    senderName: string;
+    recipientName: string;
+    recipientEmail: string;
+    signingDocLabels: string[];
+    infoDocLabels: string[];
+}) {
+    const signingCount = signingDocLabels.length;
+    const infoCount = infoDocLabels.length;
+
+    if (deliveryMethod === 'sms') {
+        const noun = signingCount + infoCount === 1 ? 'a document' : `${signingCount + infoCount} documents`;
+        const action = signingCount > 0 ? ' to sign' : '';
+        const text = `${senderName} has sent you ${noun}${action}: swp.link/… (expires in 7 days)`;
+        return (
+            <div className="rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-[12px] leading-relaxed text-foreground">
+                {text}
+            </div>
+        );
+    }
+
+    // Email preview — mimic BatchSigningNotification subject + body
+    const subject = (() => {
+        if (signingCount === 1 && infoCount === 0) return `${senderName} has sent you "${signingDocLabels[0]}" to sign`;
+        if (signingCount === 0 && infoCount === 1) return `${senderName} has sent you: ${infoDocLabels[0]}`;
+        if (signingCount > 0 && infoCount === 0) return `${senderName} has sent you ${signingCount} documents to sign`;
+        if (signingCount === 0 && infoCount > 0) return `${senderName} has sent you ${infoCount} documents`;
+        return `${senderName} has sent you ${signingCount + infoCount} documents (${signingCount} to sign)`;
+    })();
+
+    return (
+        <div className="overflow-hidden rounded-md border bg-background text-xs">
+            <dl className="divide-y bg-muted/30">
+                <PreviewHeaderRow label="From">{senderName}</PreviewHeaderRow>
+                <PreviewHeaderRow label="To" mono>{recipientEmail || '—'}</PreviewHeaderRow>
+                <PreviewHeaderRow label="Subject"><span className="font-medium">{subject}</span></PreviewHeaderRow>
+            </dl>
+            <div className="space-y-2 border-t px-3 py-3 leading-relaxed">
+                <p>Hi {recipientName},</p>
+                {signingCount > 0 && (
+                    <>
+                        <p>{senderName} has sent you the following document{signingCount === 1 ? '' : 's'} to sign:</p>
+                        <ul className="ml-4 list-disc space-y-0.5">
+                            {signingDocLabels.map((l, i) => (
+                                <li key={i}><span className="font-medium">{l}</span> — <span className="text-primary underline">Click here to sign</span></li>
+                            ))}
+                        </ul>
+                    </>
+                )}
+                {infoCount > 0 && (
+                    <>
+                        <p>{signingCount > 0 ? 'Also attached for your records:' : `${senderName} has shared the following document${infoCount === 1 ? '' : 's'} with you for your records:`}</p>
+                        <ul className="ml-4 list-disc space-y-0.5">
+                            {infoDocLabels.map((l, i) => (
+                                <li key={i}>{l}</li>
+                            ))}
+                        </ul>
+                    </>
+                )}
+                {signingCount > 0 && <p className="text-muted-foreground">Each link will expire in 7 days.</p>}
+            </div>
+        </div>
+    );
+}
+
+function PreviewHeaderRow({ label, children, mono }: { label: string; children: React.ReactNode; mono?: boolean }) {
+    return (
+        <div className="flex gap-3 px-3 py-1.5">
+            <dt className="w-14 flex-shrink-0 text-muted-foreground">{label}</dt>
+            <dd className={`min-w-0 flex-1 truncate ${mono ? 'font-mono' : ''}`}>{children}</dd>
+        </div>
+    );
+}
+
+function SignerIdentity({
+    senderFullName, senderPosition, errors,
 }: {
     senderFullName: string;
-    setSenderFullName: (v: string) => void;
     senderPosition: string;
-    setSenderPosition: (v: string) => void;
     errors: Record<string, string>;
 }) {
     return (
-        <div className="grid gap-2 sm:grid-cols-2">
-            <div className="space-y-1">
-                <Label className="text-xs">Full name</Label>
-                <Input value={senderFullName} onChange={(e) => setSenderFullName(e.target.value)} placeholder="Full legal name" />
-                {errors.sender_full_name && <p className="text-xs text-destructive">{errors.sender_full_name}</p>}
+        <div>
+            <div className="text-sm font-medium leading-tight">
+                {senderFullName || <span className="italic text-muted-foreground">No name on your profile</span>}
             </div>
-            <div className="space-y-1">
-                <Label className="text-xs">Position <span className="text-muted-foreground">(optional)</span></Label>
-                <Input value={senderPosition} onChange={(e) => setSenderPosition(e.target.value)} placeholder="e.g. Director" />
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {senderPosition || <span className="italic">No position set</span>}
             </div>
+            {errors.sender_full_name && <p className="mt-1 text-xs text-destructive">{errors.sender_full_name}</p>}
         </div>
     );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SectionLabel({ children, aside }: { children: React.ReactNode; aside?: React.ReactNode }) {
     return (
-        <div className="flex items-center justify-between py-0.5">
-            <span className="text-muted-foreground">{label}</span>
-            <span className="font-medium">{value}</span>
+        <div className="flex items-center gap-2">
+            <h3 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{children}</h3>
+            <span aria-hidden className="h-px flex-1 bg-border" />
+            {aside && <span className="text-[11px] text-muted-foreground">{aside}</span>}
         </div>
     );
 }
+

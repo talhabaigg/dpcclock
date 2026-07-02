@@ -436,7 +436,7 @@ class EmploymentApplicationController extends Controller
                 'signed_at' => $sr->signed_at?->toISOString(),
                 'opened_at' => $sr->opened_at?->toISOString(),
                 'viewed_at' => $sr->viewed_at?->toISOString(),
-                'expires_at' => $sr->expires_at->toISOString(),
+                'expires_at' => $sr->expires_at?->toISOString(),
                 'signer_full_name' => $sr->signer_full_name,
                 'document_template' => $sr->documentTemplate ? [
                     'id' => $sr->documentTemplate->id,
