@@ -13,6 +13,7 @@ const CATALOG_ICONS: Record<string, string> = {
     chin_strap: 'mdi:hard-hat',
     vadar_mask: 'mdi:domino-mask',
     face_shield: 'healthicons:ppe-face-shield-alt',
+    other: 'mdi:dots-horizontal-circle-outline',
 };
 
 const REASON_PARENT_ICONS: Record<string, string> = {
@@ -339,13 +340,15 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                                                 {(cat.requires_make_model || cat.optional_make_model) && (
                                                     <div className="flex flex-1 flex-col gap-1 sm:min-w-[240px]">
                                                         <label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
-                                                            Make &amp; model{cat.optional_make_model && !cat.requires_make_model ? ' (optional)' : ''}
+                                                            {cat.key === 'other'
+                                                                ? 'Please specify item'
+                                                                : `Make & model${cat.optional_make_model && !cat.requires_make_model ? ' (optional)' : ''}`}
                                                         </label>
                                                         <input
                                                             type="text"
                                                             value={selected.make_model ?? ''}
                                                             onChange={(e) => updateItem(cat.key, { make_model: e.target.value })}
-                                                            placeholder="e.g. 3M 6200"
+                                                            placeholder={cat.key === 'other' ? 'Describe the item' : 'e.g. 3M 6200'}
                                                             className="bg-card text-foreground border-border focus:border-ring h-9 rounded-md border px-3 text-sm outline-none"
                                                         />
                                                     </div>

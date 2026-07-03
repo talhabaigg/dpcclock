@@ -46,6 +46,7 @@ class PpeIssuance extends Model
         ['key' => 'chin_strap', 'label' => 'Chin Strap'],
         ['key' => 'vadar_mask', 'label' => 'Vadar Mask'],
         ['key' => 'face_shield', 'label' => 'Face Shield'],
+        ['key' => 'other', 'label' => 'Other', 'requires_make_model' => true],
     ];
 
     protected $fillable = [
