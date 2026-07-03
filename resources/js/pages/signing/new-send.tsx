@@ -222,8 +222,9 @@ export default function NewSend() {
     const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
     // ── Sender signature ──
-    const [senderFullName, setSenderFullName] = useState(currentUser.name ?? '');
-    const [senderPosition, setSenderPosition] = useState(currentUserPosition);
+    // Read-only — sourced from the current user's profile; edit there if wrong.
+    const senderFullName = currentUser.name ?? '';
+    const senderPosition = currentUserPosition;
     const [senderSigMode, setSenderSigMode] = useState<'saved' | 'draw' | 'request'>(savedSenderSignatureUrl ? 'saved' : 'draw');
     const [saveSenderSignature, setSaveSenderSignature] = useState(false);
     const [internalSignerUserId, setInternalSignerUserId] = useState('');
@@ -281,7 +282,7 @@ export default function NewSend() {
         setEmail(draft.recipient_email ?? recipient.email);
         setDeliveryMethod(draft.delivery_method === 'in_person' || draft.delivery_method === 'sms' ? draft.delivery_method : 'email');
         setSelectedUid(seeded[0]?.uid ?? null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
     const attachSenderCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
@@ -613,7 +614,6 @@ export default function NewSend() {
         }
     };
 
-    const hasAttachments = items.some((it) => it.kind === 'attachment');
     const totalCount = items.length;
     const needsAttention = items.filter((it) =>
         (it.kind === 'template' && remainingFor(templateById.get(it.templateId)!) > 0) ||
@@ -796,7 +796,6 @@ export default function NewSend() {
                         deliveryMethod={deliveryMethod}
                         setDeliveryMethod={setDeliveryMethod}
                         recipientPhone={recipient.phone}
-                        returnUrl={returnUrl}
                         bulkRecipients={isBulk ? bulkRecipients! : null}
                         requiresSenderSignature={requiresSenderSignature}
                         requiresRecipientSignature={requiresRecipientSignature}
@@ -808,9 +807,7 @@ export default function NewSend() {
                         senderSigMode={senderSigMode}
                         setSenderSigMode={setSenderSigMode}
                         senderFullName={senderFullName}
-                        setSenderFullName={setSenderFullName}
                         senderPosition={senderPosition}
-                        setSenderPosition={setSenderPosition}
                         saveSenderSignature={saveSenderSignature}
                         setSaveSenderSignature={setSaveSenderSignature}
                         internalSignerUserId={internalSignerUserId}
@@ -928,8 +925,6 @@ export default function NewSend() {
                                 keyFrequency={keyFrequency}
                                 customFields={customFields}
                                 setCustomFields={setCustomFields}
-                                availablePlaceholders={availablePlaceholders}
-                                updateCustom={updateCustom}
                                 errors={errors}
                             />
                         </aside>
@@ -1354,15 +1349,13 @@ function fieldTypeLabel(type: string): string {
 // ─── Fields panel ──────────────────────────────────────────────────────────
 
 function FieldsPanel({
-    item, template, keyFrequency, customFields, setCustomFields, availablePlaceholders, updateCustom, errors,
+    item, template, keyFrequency, customFields, setCustomFields, errors,
 }: {
     item: Item | null;
     template?: DocumentTemplate;
     keyFrequency: Record<string, number>;
     customFields: Record<string, string>;
     setCustomFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-    availablePlaceholders: AvailablePlaceholder[];
-    updateCustom: (uid: string, patch: Partial<Extract<Item, { kind: 'custom' }>>) => void;
     errors: Record<string, string>;
 }) {
     if (item?.kind === 'custom') {
@@ -1558,11 +1551,11 @@ function ReviewItemRow({
 
 function ReviewStep({
     items, templateById, formById, senderName,
-    totalCount, recipientName, recipientEmailValue, deliveryMethod, setDeliveryMethod, recipientPhone, returnUrl,
+    totalCount, recipientName, recipientEmailValue, deliveryMethod, setDeliveryMethod, recipientPhone,
     bulkRecipients,
     requiresSenderSignature, requiresRecipientSignature, sendLabel, onSend, processing,
     savedSenderSignatureUrl, appUsers,
-    senderSigMode, setSenderSigMode, senderFullName, setSenderFullName, senderPosition, setSenderPosition,
+    senderSigMode, setSenderSigMode, senderFullName, senderPosition,
     saveSenderSignature, setSaveSenderSignature, internalSignerUserId, setInternalSignerUserId,
     attachSenderCanvas, clearSenderSignature, undoSenderSignature, errors, onBack,
 }: {
@@ -1576,7 +1569,6 @@ function ReviewStep({
     deliveryMethod: 'email' | 'sms' | 'in_person';
     setDeliveryMethod: (v: 'email' | 'sms' | 'in_person') => void;
     recipientPhone: string;
-    returnUrl: string;
     bulkRecipients: BulkRecipient[] | null;
     requiresSenderSignature: boolean;
     requiresRecipientSignature: boolean;
@@ -1588,9 +1580,7 @@ function ReviewStep({
     senderSigMode: 'saved' | 'draw' | 'request';
     setSenderSigMode: (v: 'saved' | 'draw' | 'request') => void;
     senderFullName: string;
-    setSenderFullName: (v: string) => void;
     senderPosition: string;
-    setSenderPosition: (v: string) => void;
     saveSenderSignature: boolean;
     setSaveSenderSignature: (v: boolean) => void;
     internalSignerUserId: string;
