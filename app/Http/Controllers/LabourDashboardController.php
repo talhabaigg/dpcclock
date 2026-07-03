@@ -27,6 +27,10 @@ class LabourDashboardController extends Controller
     // Daily hours threshold before overtime kicks in
     const DAILY_HOURS_THRESHOLD = 8;
 
+    // Job external_id prefix whose weekends are treated as ordinary time
+    // (quick fix — replace with a per-location flag when weekend rules generalise).
+    const WEEKEND_ORDINARY_EXTERNAL_ID_PREFIX = 'QTMP';
+
 
     public function index(Request $request)
     {
@@ -167,14 +171,24 @@ class LabourDashboardController extends Controller
                 return $clock->eh_employee_id . '|' . Carbon::parse($clock->clock_in)->toDateString();
             });
 
+            $isWeekendOrdinary = str_starts_with(
+                (string) ($parentLocation['external_id'] ?? ''),
+                self::WEEKEND_ORDINARY_EXTERNAL_ID_PREFIX,
+            );
+
             $normalTime = 0;
             $overtime = 0;
-            foreach ($employeeDayGroups as $group) {
+            foreach ($employeeDayGroups as $key => $group) {
                 $dayTotal = $group->sum('hours_worked');
-                $nt = min($dayTotal, self::DAILY_HOURS_THRESHOLD);
-                $ot = max(0, $dayTotal - self::DAILY_HOURS_THRESHOLD);
-                $normalTime += $nt;
-                $overtime += $ot;
+                [, $dateStr] = explode('|', $key, 2);
+                $isWeekend = Carbon::parse($dateStr)->isWeekend();
+
+                if ($isWeekend && !$isWeekendOrdinary) {
+                    $overtime += $dayTotal;
+                } else {
+                    $normalTime += min($dayTotal, self::DAILY_HOURS_THRESHOLD);
+                    $overtime += max(0, $dayTotal - self::DAILY_HOURS_THRESHOLD);
+                }
             }
 
             // --- Total hours worked (normal work types only) ---
@@ -333,10 +347,21 @@ class LabourDashboardController extends Controller
             $parentLocationMap[] = [
                 'id' => $location->id,
                 'name' => $location->name,
+                'external_id' => $location->external_id,
                 'eh_location_ids' => array_merge([$location->eh_location_id], $subEhIds),
             ];
         }
         $allEhLocationIds = collect($parentLocationMap)->pluck('eh_location_ids')->flatten()->unique()->toArray();
+
+        // eh_location_ids belonging to jobs that treat weekends as ordinary time.
+        $weekendOrdinaryEhIds = [];
+        foreach ($parentLocationMap as $p) {
+            if (str_starts_with((string) ($p['external_id'] ?? ''), self::WEEKEND_ORDINARY_EXTERNAL_ID_PREFIX)) {
+                foreach ($p['eh_location_ids'] as $ehId) {
+                    $weekendOrdinaryEhIds[$ehId] = true;
+                }
+            }
+        }
 
         // Worktype buckets — same definitions as getData()
         $normalIds = Worktype::whereIn('eh_external_id', self::NORMAL_WORK_CODES)->pluck('eh_worktype_id')->toArray();
@@ -403,12 +428,18 @@ class LabourDashboardController extends Controller
 
         $clocks = $query->orderBy('clock_in')->limit(10000)->get();
 
-        // For OT category, keep only days where the employee's daily normal-work total exceeded the threshold.
-        // Skip when a worktype filter is in play — the caller wants raw hours, not the daily-threshold split.
+        // For OT category, keep days where either:
+        //   (a) the employee's daily normal-work total exceeded the 8h threshold, or
+        //   (b) the day is a weekend on a job that does NOT treat weekends as ordinary time.
+        // Skip when a worktype filter is in play — the caller wants raw hours, not the OT split.
         if ($category === 'ot' && !$useWorktypeFilter) {
             $grouped = $clocks->groupBy(fn ($c) => $c->eh_employee_id . '|' . Carbon::parse($c->clock_in)->toDateString());
-            $clocks = $grouped->filter(fn ($g) => $g->sum('hours_worked') > self::DAILY_HOURS_THRESHOLD)
-                ->flatten(1)->values();
+            $clocks = $grouped->filter(function ($g) use ($weekendOrdinaryEhIds) {
+                $first = $g->first();
+                $isWeekend = Carbon::parse($first->clock_in)->isWeekend();
+                $weekendCountsAsOt = $isWeekend && !isset($weekendOrdinaryEhIds[$first->eh_location_id]);
+                return $weekendCountsAsOt || $g->sum('hours_worked') > self::DAILY_HOURS_THRESHOLD;
+            })->flatten(1)->values();
         }
 
         // Hydrate names. Include soft-deleted employees so archived staff still resolve to a name.
@@ -429,7 +460,7 @@ class LabourDashboardController extends Controller
                 ->map(fn ($g) => $g->sum('hours_worked'));
         }
 
-        $rows = $clocks->map(function ($c) use ($empLookup, $locLookup, $wtLookup, $dailyTotals, $category) {
+        $rows = $clocks->map(function ($c) use ($empLookup, $locLookup, $wtLookup, $dailyTotals, $category, $weekendOrdinaryEhIds) {
             $emp = $empLookup->get($c->eh_employee_id);
             $loc = $locLookup->get($c->eh_location_id);
             $wt = $wtLookup->get($c->eh_worktype_id);
@@ -457,9 +488,13 @@ class LabourDashboardController extends Controller
             if ($dailyTotals !== null) {
                 $key = $c->eh_employee_id . '|' . $dt->toDateString();
                 $dayTotal = (float) ($dailyTotals[$key] ?? 0);
-                $ntPortion = min($dayTotal, self::DAILY_HOURS_THRESHOLD);
-                $otPortion = max(0, $dayTotal - self::DAILY_HOURS_THRESHOLD);
-                if ($dayTotal > 0) {
+                $weekendCountsAsOt = $dt->isWeekend() && !isset($weekendOrdinaryEhIds[$c->eh_location_id]);
+                if ($weekendCountsAsOt) {
+                    $row['nt_hours'] = 0.0;
+                    $row['ot_hours'] = round($row['hours'], 2);
+                } elseif ($dayTotal > 0) {
+                    $ntPortion = min($dayTotal, self::DAILY_HOURS_THRESHOLD);
+                    $otPortion = max(0, $dayTotal - self::DAILY_HOURS_THRESHOLD);
                     $row['nt_hours'] = round($row['hours'] * ($ntPortion / $dayTotal), 2);
                     $row['ot_hours'] = round($row['hours'] * ($otPortion / $dayTotal), 2);
                 } else {
