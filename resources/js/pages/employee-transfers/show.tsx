@@ -1,9 +1,7 @@
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
-import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -12,17 +10,14 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Input } from '@/components/ui/input';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
-    AlertTriangle,
     ArrowRight,
     CheckCircle2,
     FileWarning,
     Loader2,
     Shield,
     Trash,
-    User,
-    Wrench,
     XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -156,7 +151,6 @@ interface PageProps {
     transfer: Transfer;
     injuries: InjuryRecord[];
     employeeFiles: EmployeeFileRecord[];
-    isReceivingForeman: boolean;
     isCurrentForeman: boolean;
     sickLeaveSummary: SickLeaveSummary | null;
     authUser: { id: number; name: string };
@@ -282,199 +276,6 @@ function RecommendationBadge({ recommendation }: { recommendation: string | null
     );
 }
 
-// ── Receiving Foreman Form (Parts H & I) ──
-function ReceivingForemanForm({ transfer }: { transfer: Transfer }) {
-    const { data, setData, post, processing, errors } = useForm({
-        position_applying_for: transfer.position_applying_for ?? '',
-        position_other: transfer.position_other ?? '',
-        suitable_for_tasks: transfer.suitable_for_tasks ?? '',
-        primary_skillset: transfer.primary_skillset ?? '',
-        primary_skillset_other: transfer.primary_skillset_other ?? '',
-        has_required_tools: transfer.has_required_tools ?? false,
-        tools_tagged: transfer.tools_tagged ?? false,
-        would_have_worker_again: transfer.would_have_worker_again ?? '',
-        rehire_conditions: transfer.rehire_conditions ?? '',
-        main_strengths: transfer.main_strengths ?? '',
-        areas_for_improvement: transfer.areas_for_improvement ?? '',
-    });
-
-    function handleSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        post(route('employee-transfers.receiving-review', transfer.id));
-    }
-
-    const POSITION_OPTIONS = [
-        { value: 'plasterer', label: 'Plasterer' },
-        { value: 'carpenter', label: 'Carpenter' },
-        { value: 'labourer', label: 'Labourer' },
-        { value: 'apprentice', label: 'Apprentice' },
-        { value: 'other', label: 'Other' },
-    ];
-
-    const SKILLSET_OPTIONS = [
-        { value: 'framing', label: 'Framing' },
-        { value: 'sheeting', label: 'Sheeting' },
-        { value: 'setting', label: 'Setting' },
-        { value: 'carpentry', label: 'Carpentry' },
-        { value: 'other', label: 'Other' },
-    ];
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Part H */}
-            <Card className="border-amber-200 p-5 dark:border-amber-800">
-                <SectionHeader title="Skills & Role Suitability" icon={Wrench} description="To be completed by receiving foreman" />
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Position Applying For</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {POSITION_OPTIONS.map((opt) => (
-                                <Label
-                                    key={opt.value}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                                        data.position_applying_for === opt.value
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-border bg-background hover:bg-muted',
-                                    )}
-                                >
-                                    <input type="radio" className="sr-only" checked={data.position_applying_for === opt.value} onChange={() => setData('position_applying_for', opt.value)} />
-                                    {opt.label}
-                                </Label>
-                            ))}
-                        </div>
-                        <InputError message={errors.position_applying_for} />
-                        {data.position_applying_for === 'other' && (
-                            <input
-                                className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                placeholder="Specify position..."
-                                value={data.position_other}
-                                onChange={(e) => setData('position_other', e.target.value)}
-                            />
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Is the Applicant Suitable for Required Tasks?</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'with_support', label: 'With Support' }].map((opt) => (
-                                <Label
-                                    key={opt.value}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                                        data.suitable_for_tasks === opt.value
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-border bg-background hover:bg-muted',
-                                    )}
-                                >
-                                    <input type="radio" className="sr-only" checked={data.suitable_for_tasks === opt.value} onChange={() => setData('suitable_for_tasks', opt.value)} />
-                                    {opt.label}
-                                </Label>
-                            ))}
-                        </div>
-                        <InputError message={errors.suitable_for_tasks} />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Primary Skillset</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {SKILLSET_OPTIONS.map((opt) => (
-                                <Label
-                                    key={opt.value}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                                        data.primary_skillset === opt.value
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-border bg-background hover:bg-muted',
-                                    )}
-                                >
-                                    <input type="radio" className="sr-only" checked={data.primary_skillset === opt.value} onChange={() => setData('primary_skillset', opt.value)} />
-                                    {opt.label}
-                                </Label>
-                            ))}
-                        </div>
-                        <InputError message={errors.primary_skillset} />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="flex items-center gap-3">
-                            <Checkbox id="has_required_tools" checked={data.has_required_tools} onCheckedChange={(c) => setData('has_required_tools', !!c)} />
-                            <Label htmlFor="has_required_tools" className="cursor-pointer">Has Required Tools</Label>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <Checkbox id="tools_tagged" checked={data.tools_tagged} onCheckedChange={(c) => setData('tools_tagged', !!c)} />
-                            <Label htmlFor="tools_tagged" className="cursor-pointer">Tools Tagged</Label>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Part I */}
-            <Card className="border-amber-200 p-5 dark:border-amber-800">
-                <SectionHeader title="Internal Reference Check" icon={User} description="Receiving foreman to current foreman" />
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Would you have this worker on your project again?</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'with_conditions', label: 'With Conditions' }].map((opt) => (
-                                <Label
-                                    key={opt.value}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors',
-                                        data.would_have_worker_again === opt.value
-                                            ? 'border-primary bg-primary/5 text-primary'
-                                            : 'border-border bg-background hover:bg-muted',
-                                    )}
-                                >
-                                    <input type="radio" className="sr-only" checked={data.would_have_worker_again === opt.value} onChange={() => setData('would_have_worker_again', opt.value)} />
-                                    {opt.label}
-                                </Label>
-                            ))}
-                        </div>
-                        <InputError message={errors.would_have_worker_again} />
-                        {data.would_have_worker_again === 'with_conditions' && (
-                            <Textarea
-                                value={data.rehire_conditions}
-                                onChange={(e) => setData('rehire_conditions', e.target.value)}
-                                placeholder="Specify conditions..."
-                                rows={2}
-                                className="mt-2"
-                            />
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Main Strengths</Label>
-                        <Textarea
-                            value={data.main_strengths}
-                            onChange={(e) => setData('main_strengths', e.target.value)}
-                            placeholder="What are the applicant's main strengths?"
-                            rows={2}
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Areas for Improvement</Label>
-                        <Textarea
-                            value={data.areas_for_improvement}
-                            onChange={(e) => setData('areas_for_improvement', e.target.value)}
-                            placeholder="What areas for improvement are recommended?"
-                            rows={2}
-                        />
-                    </div>
-                </div>
-            </Card>
-
-            <div className="flex justify-end">
-                <Button type="submit" disabled={processing}>
-                    {processing && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    Submit Review
-                </Button>
-            </div>
-        </form>
-    );
-}
-
 // ── Recommendation Dialog ──
 function RecommendationDialog({ transfer, role, label, open, onOpenChange }: {
     transfer: Transfer;
@@ -550,7 +351,7 @@ function RecommendationDialog({ transfer, role, label, open, onOpenChange }: {
     );
 }
 
-export default function Show({ transfer, injuries, isReceivingForeman, isCurrentForeman, sickLeaveSummary }: PageProps) {
+export default function Show({ transfer, injuries, isCurrentForeman, sickLeaveSummary }: PageProps) {
     const [recDialog, setRecDialog] = useState<{ role: string; label: string } | null>(null);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [deleteProcessing, setDeleteProcessing] = useState(false);
@@ -574,14 +375,12 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
         { title: transfer.employee_name, href: `/employee-transfers/${transfer.id}` },
     ];
 
-    const showReceivingForm = isReceivingForeman && (transfer.status === 'submitted' || transfer.status === 'receiving_foreman_review') && !transfer.position_applying_for;
     const isTerminal = ['approved', 'approved_with_conditions', 'declined'].includes(transfer.status);
 
     // Determine if there are pending recommendations the current user could action
     const hasPendingRecommendations = !isTerminal && (
         !transfer.current_foreman_recommendation ||
         !transfer.safety_manager_recommendation ||
-        (!transfer.receiving_foreman_recommendation && transfer.position_applying_for) ||
         !transfer.construction_manager_decision
     );
 
@@ -635,19 +434,8 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                     </div>
                 )}
 
-                {/* ── ACTION ZONE: Receiving Foreman Form (Parts H & I) ── */}
-                {showReceivingForm && (
-                    <div className="mb-6">
-                        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                            <AlertTriangle className="size-4 shrink-0" />
-                            <span><strong>Action required:</strong> Complete the skills assessment and internal reference check below.</span>
-                        </div>
-                        <ReceivingForemanForm transfer={transfer} />
-                    </div>
-                )}
-
                 {/* ── ACTION ZONE: Part J Recommendations ── */}
-                {hasPendingRecommendations && !showReceivingForm && (
+                {hasPendingRecommendations && (
                     <Card className="mb-6 p-5">
                         <SectionHeader title="Final Recommendations" description="Submit your recommendation below" />
 
@@ -680,23 +468,6 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                                     <RecommendationBadge recommendation={transfer.safety_manager_recommendation} />
                                     {!transfer.safety_manager_recommendation && canSafetyReview && (
                                         <Button size="sm" variant="outline" onClick={() => setRecDialog({ role: 'safety_manager', label: 'Safety Manager' })}>
-                                            Submit
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Receiving Foreman */}
-                            <div className="flex items-center justify-between rounded-md border border-border p-3">
-                                <div>
-                                    <p className="text-sm font-medium">Receiving Foreman</p>
-                                    <p className="text-xs text-muted-foreground">{transfer.receiving_foreman?.name ?? '—'}</p>
-                                    {transfer.receiving_foreman_comments && <p className="mt-1 text-xs text-muted-foreground">{transfer.receiving_foreman_comments}</p>}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <RecommendationBadge recommendation={transfer.receiving_foreman_recommendation} />
-                                    {!transfer.receiving_foreman_recommendation && transfer.position_applying_for && isReceivingForeman && (
-                                        <Button size="sm" variant="outline" onClick={() => setRecDialog({ role: 'receiving_foreman', label: 'Receiving Foreman' })}>
                                             Submit
                                         </Button>
                                     )}
@@ -856,7 +627,11 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                     ) : (
                         <div className="space-y-3">
                             {injuries.map((injury) => (
-                                <div key={injury.id} className="rounded-md border border-border p-3">
+                                <Link
+                                    key={injury.id}
+                                    href={route('injury-register.show', injury.id)}
+                                    className="block rounded-md border border-border p-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                                >
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
                                             <p className="text-sm font-medium">{injury.id_formal}</p>
@@ -879,7 +654,7 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                                     {injury.description && (
                                         <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{injury.description}</p>
                                     )}
-                                </div>
+                                </Link>
                             ))}
                         </div>
                     )}
@@ -896,47 +671,6 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                 <div className="mb-6">
                     <EmployeeFilesCard employeeId={transfer.employee_id} />
                 </div>
-
-                {/* Receiving Foreman Data (read-only, when already submitted) */}
-                {!showReceivingForm && (transfer.position_applying_for || transfer.would_have_worker_again) && (
-                    <div className="mb-6 grid gap-6 lg:grid-cols-2">
-                        <Card className="p-5">
-                            <SectionHeader title="Skills & Role Suitability" icon={Wrench} description="Receiving foreman assessment" />
-                            <div className="divide-y divide-border">
-                                <DataRow label="Position" value={transfer.position_applying_for === 'other' ? transfer.position_other : transfer.position_applying_for} />
-                                <DataRow label="Suitable for Tasks" value={transfer.suitable_for_tasks === 'yes' ? 'Yes' : transfer.suitable_for_tasks === 'no' ? 'No' : 'With Support'} variant={transfer.suitable_for_tasks === 'yes' ? 'success' : transfer.suitable_for_tasks === 'no' ? 'danger' : 'warning'} />
-                                <DataRow label="Primary Skillset" value={transfer.primary_skillset === 'other' ? transfer.primary_skillset_other : transfer.primary_skillset} />
-                                <DataRow label="Has Required Tools" value={transfer.has_required_tools ? 'Yes' : 'No'} variant={transfer.has_required_tools ? 'success' : 'danger'} />
-                                <DataRow label="Tools Tagged" value={transfer.tools_tagged ? 'Yes' : 'No'} variant={transfer.tools_tagged ? 'success' : 'danger'} />
-                            </div>
-                        </Card>
-
-                        <Card className="p-5">
-                            <SectionHeader title="Internal Reference Check" icon={User} />
-                            <div className="divide-y divide-border">
-                                <DataRow label="Have Worker Again" value={transfer.would_have_worker_again === 'yes' ? 'Yes' : transfer.would_have_worker_again === 'no' ? 'No' : 'With Conditions'} variant={transfer.would_have_worker_again === 'yes' ? 'success' : transfer.would_have_worker_again === 'no' ? 'danger' : 'warning'} />
-                            </div>
-                            {transfer.rehire_conditions && (
-                                <div className="mt-3">
-                                    <p className="text-xs font-medium text-muted-foreground">Conditions</p>
-                                    <p className="mt-1 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">{transfer.rehire_conditions}</p>
-                                </div>
-                            )}
-                            {transfer.main_strengths && (
-                                <div className="mt-3">
-                                    <p className="text-xs font-medium text-muted-foreground">Strengths</p>
-                                    <p className="mt-1 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">{transfer.main_strengths}</p>
-                                </div>
-                            )}
-                            {transfer.areas_for_improvement && (
-                                <div className="mt-3">
-                                    <p className="text-xs font-medium text-muted-foreground">Areas for Improvement</p>
-                                    <p className="mt-1 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">{transfer.areas_for_improvement}</p>
-                                </div>
-                            )}
-                        </Card>
-                    </div>
-                )}
 
                 {/* Part J: completed recommendations summary (only shown when terminal) */}
                 {isTerminal && (
@@ -958,14 +692,6 @@ export default function Show({ transfer, injuries, isReceivingForeman, isCurrent
                                     {transfer.safety_manager_comments && <p className="mt-1 text-xs text-muted-foreground">{transfer.safety_manager_comments}</p>}
                                 </div>
                                 <RecommendationBadge recommendation={transfer.safety_manager_recommendation} />
-                            </div>
-                            <div className="flex items-center justify-between rounded-md border border-border p-3">
-                                <div>
-                                    <p className="text-sm font-medium">Receiving Foreman</p>
-                                    <p className="text-xs text-muted-foreground">{transfer.receiving_foreman?.name ?? '—'}</p>
-                                    {transfer.receiving_foreman_comments && <p className="mt-1 text-xs text-muted-foreground">{transfer.receiving_foreman_comments}</p>}
-                                </div>
-                                <RecommendationBadge recommendation={transfer.receiving_foreman_recommendation} />
                             </div>
                             <div className="flex items-center justify-between rounded-md border border-border p-4 bg-muted/30">
                                 <div>

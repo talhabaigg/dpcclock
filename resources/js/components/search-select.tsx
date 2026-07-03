@@ -27,9 +27,11 @@ interface SearchSelectProps {
     disabled?: boolean;
     className?: string;
     placeholder?: string;
+    renderItem?: (option: Option) => React.ReactNode;
+    renderSelected?: (option: Option) => React.ReactNode;
 }
 
-export function SearchSelect({ options, optionName, selectedOption, onValueChange, disabled, className, placeholder }: SearchSelectProps) {
+export function SearchSelect({ options, optionName, selectedOption, onValueChange, disabled, className, placeholder, renderItem, renderSelected }: SearchSelectProps) {
     const [open, setOpen] = React.useState(false);
     const [inputValue, setInputValue] = React.useState('');
 
@@ -63,9 +65,13 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                 render={<Button variant="outline" disabled={disabled} className={`w-full justify-between overflow-hidden ${className ?? ''}`} />}
                 aria-label={`Select ${optionName}`}
             >
-                <span className="truncate">
-                    <ComboboxValue placeholder={placeholder ?? `Select ${optionName}`} />
-                </span>
+                {renderSelected && selectedItem ? (
+                    <span className="flex min-w-0 flex-1 items-center gap-2">{renderSelected(selectedItem)}</span>
+                ) : (
+                    <span className="truncate">
+                        <ComboboxValue placeholder={placeholder ?? `Select ${optionName}`} />
+                    </span>
+                )}
             </ComboboxTrigger>
 
             <ComboboxContent className="w-(--anchor-width) min-w-(--anchor-width) max-w-(--anchor-width) p-0">
@@ -74,7 +80,7 @@ export function SearchSelect({ options, optionName, selectedOption, onValueChang
                 <ComboboxList>
                     {(option: Option) => (
                         <ComboboxItem key={option.value} value={option}>
-                            <span className="truncate">{option.label}</span>
+                            {renderItem ? renderItem(option) : <span className="truncate">{option.label}</span>}
                         </ComboboxItem>
                     )}
                 </ComboboxList>

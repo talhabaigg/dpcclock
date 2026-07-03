@@ -241,7 +241,6 @@ class EmployeeTransferController extends Controller
         $user = $request->user();
         $userId = $user->id;
         $isAdmin = $user->isAdmin();
-        $isReceivingForeman = $isAdmin || $userId === $employeeTransfer->receiving_foreman_id;
         $isCurrentForeman = $isAdmin || $userId === $employeeTransfer->current_foreman_id;
         $isApprover = $user->can('employee-transfers.approve');
 
@@ -253,7 +252,6 @@ class EmployeeTransferController extends Controller
             'transfer' => $employeeTransfer,
             'injuries' => $injuries,
             'employeeFiles' => $employeeFiles,
-            'isReceivingForeman' => $isReceivingForeman,
             'isCurrentForeman' => $isCurrentForeman,
             'sickLeaveSummary' => $sickLeaveSummary,
             'authUser' => [
@@ -321,36 +319,6 @@ class EmployeeTransferController extends Controller
             'days' => $uniqueDays,
             'hours' => round($totalHours, 2),
         ];
-    }
-
-    /**
-     * Receiving foreman submits Part H + Part I.
-     */
-    public function submitReceivingReview(EmployeeTransfer $employeeTransfer, Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            // Part H
-            'position_applying_for' => 'required|string',
-            'position_other' => 'nullable|string|required_if:position_applying_for,other',
-            'suitable_for_tasks' => 'required|string',
-            'primary_skillset' => 'required|string',
-            'primary_skillset_other' => 'nullable|string',
-            'has_required_tools' => 'required|boolean',
-            'tools_tagged' => 'required|boolean',
-
-            // Part I
-            'would_have_worker_again' => 'required|string',
-            'rehire_conditions' => 'nullable|string',
-            'main_strengths' => 'nullable|string',
-            'areas_for_improvement' => 'nullable|string',
-        ]);
-
-        $employeeTransfer->update(array_merge($validated, [
-            'status' => 'final_review',
-        ]));
-
-        return redirect()->route('employee-transfers.show', $employeeTransfer)
-            ->with('success', 'Receiving foreman review submitted.');
     }
 
     /**

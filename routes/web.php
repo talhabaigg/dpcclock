@@ -423,7 +423,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employee-transfers/employee/{employee}/injuries', [EmployeeTransferController::class, 'employeeInjuries'])->name('employee-transfers.employee-injuries');
         Route::post('/employee-transfers', [EmployeeTransferController::class, 'store'])->name('employee-transfers.store');
         Route::get('/employee-transfers/{employeeTransfer}', [EmployeeTransferController::class, 'show'])->name('employee-transfers.show');
-        Route::post('/employee-transfers/{employeeTransfer}/receiving-review', [EmployeeTransferController::class, 'submitReceivingReview'])->name('employee-transfers.receiving-review');
         Route::post('/employee-transfers/{employeeTransfer}/recommendation', [EmployeeTransferController::class, 'submitRecommendation'])->name('employee-transfers.recommendation');
     });
 

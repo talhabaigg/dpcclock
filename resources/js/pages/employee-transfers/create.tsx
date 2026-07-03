@@ -1,13 +1,14 @@
 import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { SearchSelect } from '@/components/search-select';
+import { useInitials } from '@/hooks/use-initials';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -71,7 +72,7 @@ const TRANSFER_REASONS = [
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
     return (
-        <div className="mb-5 border-b border-border pb-3">
+        <div className="mb-5">
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
         </div>
@@ -179,11 +180,37 @@ const ATTITUDE_OPTIONS = [
 ];
 
 export default function Create({ kiosks, authUser }: Props) {
+    const getInitials = useInitials();
+
+    const renderPersonItem = (option: { value: string; label: string }) => (
+        <div className="flex min-w-0 items-center gap-2">
+            <Avatar size="sm" className="shrink-0">
+                <AvatarFallback className="bg-primary/10 text-[10px] font-medium text-primary">
+                    {getInitials(option.label)}
+                </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{option.label}</span>
+        </div>
+    );
+
+    const renderPersonSelected = (option: { value: string; label: string }) => (
+        <>
+            <Avatar size="sm" className="shrink-0">
+                <AvatarFallback className="bg-primary/10 text-[10px] font-medium text-primary">
+                    {getInitials(option.label)}
+                </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{option.label}</span>
+        </>
+    );
+
     const [employees, setEmployees] = useState<EmployeeOption[]>([]);
     const [proposedManagers, setProposedManagers] = useState<ManagerOption[]>([]);
+    const [currentManagers, setCurrentManagers] = useState<ManagerOption[]>([]);
     const [injuries, setInjuries] = useState<InjuryRecord[]>([]);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
     const [loadingManagers, setLoadingManagers] = useState(false);
+    const [loadingCurrentManagers, setLoadingCurrentManagers] = useState(false);
     const [loadingInjuries, setLoadingInjuries] = useState(false);
     const [selectedKioskId, setSelectedKioskId] = useState<string>('');
     const [proposedKioskId, setProposedKioskId] = useState<string>('');
@@ -254,9 +281,20 @@ export default function Create({ kiosks, authUser }: Props) {
             .finally(() => setLoadingManagers(false));
     }, []);
 
+    // Load managers for the current (source) kiosk so user can override foreman
+    const loadCurrentManagers = useCallback((kioskId: string) => {
+        if (!kioskId) return;
+        setLoadingCurrentManagers(true);
+        fetch(route('employee-transfers.kiosk-managers', { kiosk: kioskId }))
+            .then((r) => r.json())
+            .then((data) => setCurrentManagers(data))
+            .finally(() => setLoadingCurrentManagers(false));
+    }, []);
+
     useEffect(() => {
         if (selectedKioskId) {
             loadEmployees(selectedKioskId);
+            loadCurrentManagers(selectedKioskId);
             setData((prev) => ({ ...prev, current_kiosk_id: selectedKioskId, employee_id: '', employee_name: '', employee_position: '' }));
         }
     }, [selectedKioskId]);
@@ -472,140 +510,147 @@ export default function Create({ kiosks, authUser }: Props) {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Step 1 — Employee & Project Details */}
-                    {step === 1 && <Card className="p-4 sm:p-5">
-                        <SectionHeader title="Employee & Project Information" />
+                    {step === 1 && (
+                        <div className="grid gap-4 lg:grid-cols-2 lg:grid-rows-[auto_auto_auto_auto]">
+                            {/* Current Project Card */}
+                            <Card className="p-4 sm:p-5 lg:row-span-4 lg:grid lg:grid-rows-subgrid lg:gap-2">
+                                <SectionHeader title="Current Project" />
 
-                        <div className="space-y-4">
-                            {/* Current Project (Kiosk) */}
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <RequiredLabel>Current Project</RequiredLabel>
-                                    <SearchSelect
-                                        options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
-                                        optionName="project"
-                                        placeholder="Select current project"
-                                        selectedOption={selectedKioskId}
-                                        onValueChange={setSelectedKioskId}
-                                        className="h-11 text-base"
-                                    />
-                                    <InputError message={err('current_kiosk_id')} />
-                                </div>
-
-                                {/* Employee */}
-                                <div className="space-y-2">
-                                    <RequiredLabel>Employee</RequiredLabel>
-                                    {loadingEmployees ? (
-                                        <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
-                                            <Loader2 className="size-4 animate-spin" /> Loading...
-                                        </div>
-                                    ) : (
-                                        <SearchSelect
-                                            options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
-                                            optionName="employee"
-                                            placeholder={selectedKioskId ? 'Select employee' : 'Select project first'}
-                                            selectedOption={data.employee_id}
-                                            onValueChange={selectEmployee}
-                                            disabled={!selectedKioskId}
-                                            className="h-11 text-base"
-                                        />
-                                    )}
-                                    <InputError message={err('employee_id')} />
-                                </div>
-                            </div>
-
-                            {/* Employee info display */}
-                            {data.employee_name && (
-                                <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-2 lg:contents">
                                     <div className="space-y-2">
-                                        <Label>Name</Label>
-                                        <Input className="h-11 text-base" value={data.employee_name} disabled />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Position / Type</Label>
-                                        <Input
-                                            className="h-11 text-base"
-                                            value={data.employee_position}
-                                            onChange={(e) => setData('employee_position', e.target.value)}
-                                            placeholder="e.g. Plasterer, Carpenter"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Current Foreman */}
-                            <div className="space-y-2">
-                                <Label>Current Foreman</Label>
-                                <Input className="h-11 text-base" value={authUser.name} disabled />
-                                <p className="text-xs text-muted-foreground">Prepopulated with your account</p>
-                            </div>
-
-                            {/* Proposed Project & Receiving Foreman */}
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <RequiredLabel>Proposed Project</RequiredLabel>
-                                    <SearchSelect
-                                        options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
-                                        optionName="project"
-                                        placeholder="Select proposed project"
-                                        selectedOption={proposedKioskId}
-                                        onValueChange={setProposedKioskId}
-                                        className="h-11 text-base"
-                                    />
-                                    <InputError message={err('proposed_kiosk_id')} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <RequiredLabel>Receiving Foreman</RequiredLabel>
-                                    {loadingManagers ? (
-                                        <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
-                                            <Loader2 className="size-4 animate-spin" /> Loading...
-                                        </div>
-                                    ) : (
+                                        <RequiredLabel>Current Project</RequiredLabel>
                                         <SearchSelect
-                                            options={proposedManagers.map((m) => ({ value: String(m.id), label: m.name }))}
-                                            optionName="foreman"
-                                            placeholder={proposedKioskId ? 'Select foreman' : 'Select project first'}
-                                            selectedOption={data.receiving_foreman_id}
-                                            onValueChange={(v) => setData('receiving_foreman_id', v)}
-                                            disabled={!proposedKioskId}
+                                            options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
+                                            optionName="project"
+                                            placeholder="Select current project"
+                                            selectedOption={selectedKioskId}
+                                            onValueChange={setSelectedKioskId}
                                             className="h-11 text-base"
                                         />
-                                    )}
-                                    <InputError message={err('receiving_foreman_id')} />
-                                </div>
-                            </div>
+                                        <InputError message={err('current_kiosk_id')} />
+                                    </div>
 
-                            {/* Start Date */}
-                            <div className="space-y-2">
-                                <RequiredLabel>Proposed Start Date</RequiredLabel>
-                                <Popover open={dateOpen} onOpenChange={setDateOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            className={cn(
-                                                'h-12 w-full justify-start text-left text-base font-normal sm:w-[280px]',
-                                                !data.proposed_start_date && 'text-muted-foreground',
-                                            )}
-                                        >
-                                            <CalendarIcon className="mr-2 size-4" />
-                                            {data.proposed_start_date ? format(new Date(data.proposed_start_date), 'dd/MM/yyyy') : 'Select date'}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar
-                                            mode="single"
-                                            selected={data.proposed_start_date ? new Date(data.proposed_start_date) : undefined}
-                                            onSelect={(date) => {
-                                                setData('proposed_start_date', date ? format(date, 'yyyy-MM-dd') : '');
-                                                setDateOpen(false);
-                                            }}
+                                    <div className="space-y-2">
+                                        <RequiredLabel>Employee</RequiredLabel>
+                                        {loadingEmployees ? (
+                                            <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+                                                <Loader2 className="size-4 animate-spin" /> Loading...
+                                            </div>
+                                        ) : (
+                                            <SearchSelect
+                                                options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                                                optionName="employee"
+                                                placeholder={selectedKioskId ? 'Select employee' : 'Select project first'}
+                                                selectedOption={data.employee_id}
+                                                onValueChange={selectEmployee}
+                                                disabled={!selectedKioskId}
+                                                className="h-11 text-base"
+                                                renderItem={renderPersonItem}
+                                                renderSelected={renderPersonSelected}
+                                            />
+                                        )}
+                                        <InputError message={err('employee_id')} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <RequiredLabel>Current Foreman</RequiredLabel>
+                                        {loadingCurrentManagers ? (
+                                            <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+                                                <Loader2 className="size-4 animate-spin" /> Loading...
+                                            </div>
+                                        ) : (
+                                            <SearchSelect
+                                                options={(currentManagers.some((m) => m.id === authUser.id)
+                                                    ? currentManagers
+                                                    : [{ id: authUser.id, name: authUser.name }, ...currentManagers]
+                                                ).map((m) => ({ value: String(m.id), label: m.name }))}
+                                                optionName="foreman"
+                                                placeholder={selectedKioskId ? 'Select current foreman' : 'Select current project first'}
+                                                selectedOption={data.current_foreman_id}
+                                                onValueChange={(v) => setData('current_foreman_id', v)}
+                                                disabled={!selectedKioskId}
+                                                className="h-11 text-base"
+                                                renderItem={renderPersonItem}
+                                                renderSelected={renderPersonSelected}
+                                            />
+                                        )}
+                                        <InputError message={err('current_foreman_id')} />
+                                    </div>
+                                </div>
+                            </Card>
+
+                            {/* Proposed Project Card */}
+                            <Card className="p-4 sm:p-5 lg:row-span-4 lg:grid lg:grid-rows-subgrid lg:gap-2">
+                                <SectionHeader title="Proposed Project" />
+
+                                <div className="space-y-2 lg:contents">
+                                    <div className="space-y-2">
+                                        <RequiredLabel>Proposed Project</RequiredLabel>
+                                        <SearchSelect
+                                            options={kiosks.map((k) => ({ value: String(k.id), label: k.name }))}
+                                            optionName="project"
+                                            placeholder="Select proposed project"
+                                            selectedOption={proposedKioskId}
+                                            onValueChange={setProposedKioskId}
+                                            className="h-11 text-base"
                                         />
-                                    </PopoverContent>
-                                </Popover>
-                                <InputError message={err('proposed_start_date')} />
-                            </div>
+                                        <InputError message={err('proposed_kiosk_id')} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <RequiredLabel>Proposed Start Date</RequiredLabel>
+                                        <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    className={cn(
+                                                        'h-11 w-full justify-start text-left text-base font-normal',
+                                                        !data.proposed_start_date && 'text-muted-foreground',
+                                                    )}
+                                                >
+                                                    <CalendarIcon className="mr-2 size-4" />
+                                                    {data.proposed_start_date ? format(new Date(data.proposed_start_date), 'dd/MM/yyyy') : 'Select date'}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    mode="single"
+                                                    selected={data.proposed_start_date ? new Date(data.proposed_start_date) : undefined}
+                                                    onSelect={(date) => {
+                                                        setData('proposed_start_date', date ? format(date, 'yyyy-MM-dd') : '');
+                                                        setDateOpen(false);
+                                                    }}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <InputError message={err('proposed_start_date')} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <RequiredLabel>Receiving Foreman</RequiredLabel>
+                                        {loadingManagers ? (
+                                            <div className="flex h-11 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+                                                <Loader2 className="size-4 animate-spin" /> Loading...
+                                            </div>
+                                        ) : (
+                                            <SearchSelect
+                                                options={proposedManagers.map((m) => ({ value: String(m.id), label: m.name }))}
+                                                optionName="foreman"
+                                                placeholder={proposedKioskId ? 'Select foreman' : 'Select project first'}
+                                                selectedOption={data.receiving_foreman_id}
+                                                onValueChange={(v) => setData('receiving_foreman_id', v)}
+                                                disabled={!proposedKioskId}
+                                                className="h-11 text-base"
+                                                renderItem={renderPersonItem}
+                                                renderSelected={renderPersonSelected}
+                                            />
+                                        )}
+                                        <InputError message={err('receiving_foreman_id')} />
+                                    </div>
+                                </div>
+                            </Card>
                         </div>
-                    </Card>}
+                    )}
 
                     {/* Step 2 — Reason for Transfer */}
                     {step === 2 && <Card className="p-4 sm:p-5">
@@ -865,6 +910,7 @@ export default function Create({ kiosks, authUser }: Props) {
                                     <div><dt className="text-muted-foreground">Employee</dt><dd className="font-medium">{data.employee_name || '—'}</dd></div>
                                     <div><dt className="text-muted-foreground">Position</dt><dd className="font-medium">{data.employee_position || '—'}</dd></div>
                                     <div><dt className="text-muted-foreground">Current Project</dt><dd className="font-medium">{kiosks.find((k) => String(k.id) === data.current_kiosk_id)?.name || '—'}</dd></div>
+                                    <div><dt className="text-muted-foreground">Current Foreman</dt><dd className="font-medium">{(currentManagers.find((m) => String(m.id) === data.current_foreman_id)?.name) || (String(authUser.id) === data.current_foreman_id ? authUser.name : '—')}</dd></div>
                                     <div><dt className="text-muted-foreground">Proposed Project</dt><dd className="font-medium">{kiosks.find((k) => String(k.id) === data.proposed_kiosk_id)?.name || '—'}</dd></div>
                                     <div><dt className="text-muted-foreground">Receiving Foreman</dt><dd className="font-medium">{proposedManagers.find((m) => String(m.id) === data.receiving_foreman_id)?.name || '—'}</dd></div>
                                     <div><dt className="text-muted-foreground">Start Date</dt><dd className="font-medium">{data.proposed_start_date ? format(new Date(data.proposed_start_date), 'dd/MM/yyyy') : '—'}</dd></div>
@@ -892,11 +938,11 @@ export default function Create({ kiosks, authUser }: Props) {
                                 </Button>
                             )}
                             {step < STEPS.length ? (
-                                <Button type="button" size="lg" className="h-12 px-6 text-base" onClick={goNext}>
+                                <Button key="next" type="button" size="lg" className="h-12 px-6 text-base" onClick={goNext}>
                                     Next <ChevronRight className="ml-1 size-5" />
                                 </Button>
                             ) : (
-                                <Button type="submit" size="lg" className="h-12 px-6 text-base" disabled={processing}>
+                                <Button key="submit" type="submit" size="lg" className="h-12 px-6 text-base" disabled={processing}>
                                     {processing && <Loader2 className="mr-2 size-4 animate-spin" />}
                                     Submit
                                 </Button>
