@@ -280,9 +280,30 @@ class EmploymentApplicationController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        // Load comments with user and media
+        // Load comments with user, media and mention targets.
+        $mentionedUserLoad = fn ($q) => $q
+            ->select('users.id', 'users.name', 'users.email', 'users.phone', 'users.position', 'users.disabled_at');
+
+        $mapMentioned = fn ($c) => $c->mentionedUsers->map(fn ($u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'phone' => $u->phone,
+            'position' => $u->position,
+            'is_active' => $u->disabled_at === null,
+        ])->values();
+
         $rawComments = $employmentApplication->comments()
-            ->with(['user:id,name', 'media', 'replies' => fn ($q) => $q->with(['user:id,name', 'media'])->oldest()])
+            ->with([
+                'user:id,name',
+                'media',
+                'mentionedUsers' => $mentionedUserLoad,
+                'replies' => fn ($q) => $q->with([
+                    'user:id,name',
+                    'media',
+                    'mentionedUsers' => $mentionedUserLoad,
+                ])->oldest(),
+            ])
             ->whereNull('parent_id')
             ->oldest()
             ->get();
@@ -291,13 +312,15 @@ class EmploymentApplicationController extends Controller
         // media IDs can be resolved to fresh URLs without N+1 queries.
         $signatureUrlMap = $this->buildSignatureUrlMap($rawComments);
 
-        $comments = $rawComments->map(function ($comment) use ($signatureUrlMap) {
+        $comments = $rawComments->map(function ($comment) use ($signatureUrlMap, $mapMentioned) {
             return [
                 'id' => $comment->id,
                 'body' => $comment->body,
+                'body_json' => $comment->body_json,
                 'metadata' => $this->resolveSignatureUrls($comment->metadata, $signatureUrlMap),
                 'user' => $comment->user ? ['id' => $comment->user->id, 'name' => $comment->user->name] : null,
                 'created_at' => $comment->created_at->toISOString(),
+                'mentioned_users' => $mapMentioned($comment),
                 'attachments' => $comment->getMedia('attachments')->map(fn ($m) => [
                     'id' => $m->id,
                     'name' => $m->file_name,
@@ -305,13 +328,15 @@ class EmploymentApplicationController extends Controller
                     'size' => $m->size,
                     'mime_type' => $m->mime_type,
                 ]),
-                'replies' => $comment->replies->map(function ($reply) use ($signatureUrlMap) {
+                'replies' => $comment->replies->map(function ($reply) use ($signatureUrlMap, $mapMentioned) {
                     return [
                         'id' => $reply->id,
                         'body' => $reply->body,
+                        'body_json' => $reply->body_json,
                         'metadata' => $this->resolveSignatureUrls($reply->metadata, $signatureUrlMap),
                         'user' => $reply->user ? ['id' => $reply->user->id, 'name' => $reply->user->name] : null,
                         'created_at' => $reply->created_at->toISOString(),
+                        'mentioned_users' => $mapMentioned($reply),
                         'attachments' => $reply->getMedia('attachments')->map(fn ($m) => [
                             'id' => $m->id,
                             'name' => $m->file_name,

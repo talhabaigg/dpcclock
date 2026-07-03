@@ -77,7 +77,7 @@ function renderMention(node: JSONContent, users: Map<number, MentionedUser>): Re
     const user = users.get(id);
 
     const pill = (
-        <span className="bg-primary/10 text-primary hover:bg-primary/15 mx-0.5 cursor-default rounded px-1 py-0.5 text-xs font-medium transition-colors">
+        <span className="bg-primary/10 text-primary hover:bg-primary/20 mx-0.5 cursor-pointer rounded px-1 py-0.5 text-xs font-medium transition-colors">
             @{label}
         </span>
     );
@@ -85,10 +85,8 @@ function renderMention(node: JSONContent, users: Map<number, MentionedUser>): Re
     if (!user) return pill;
 
     return (
-        <HoverCard>
-            <HoverCardTrigger asChild delay={150} closeDelay={100}>
-                {pill}
-            </HoverCardTrigger>
+        <HoverCard openDelay={150} closeDelay={100}>
+            <HoverCardTrigger asChild>{pill}</HoverCardTrigger>
             <HoverCardContent className="w-60 p-0" sideOffset={6}>
                 <MentionUserCard user={user} />
             </HoverCardContent>

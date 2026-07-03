@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
+import { CommentBody, type MentionedUser } from '@/components/comments/comment-body';
 import type { JSONContent } from '@tiptap/react';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -101,9 +102,11 @@ interface Attachment {
 interface CommentData {
     id: number;
     body: string;
+    body_json?: import('@tiptap/react').JSONContent | null;
     metadata: Record<string, unknown> | null;
     user: UserModel | null;
     created_at: string;
+    mentioned_users?: MentionedUser[];
     attachments: Attachment[];
     replies?: CommentData[];
 }
@@ -484,7 +487,8 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                                 <PopoverContent className="flex w-auto gap-1 p-1.5" side="top" align="end">
                                     <Button
                                         size="sm"
-                                        className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+                                        variant="secondary"
+                                        className="h-8 gap-1.5"
                                         onClick={() => onEdit?.(comment)}
                                     >
                                         <Pencil className="h-3.5 w-3.5" />
@@ -492,8 +496,8 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                                     </Button>
                                     <Button
                                         size="sm"
-                                        variant="destructive"
-                                        className="h-8 gap-1.5"
+                                        variant="ghost"
+                                        className="h-8 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                         onClick={() => onDelete?.(comment.id)}
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
@@ -503,7 +507,14 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                             </Popover>
                         )}
                     </div>
-                    {comment.body && <p className={cn('mt-0.5 whitespace-pre-wrap', isReply ? 'text-xs' : 'text-sm')}>{comment.body}</p>}
+                    {(comment.body_json || comment.body) && (
+                        <CommentBody
+                            doc={comment.body_json}
+                            fallback={comment.body}
+                            mentionedUsers={comment.mentioned_users}
+                            className={cn('mt-0.5 whitespace-pre-wrap', isReply ? 'text-xs' : 'text-sm')}
+                        />
+                    )}
                     {comment.attachments.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
                             {comment.attachments.map((att) =>
@@ -1330,7 +1341,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     // Comment edit/delete state
     const [editingComment, setEditingComment] = useState<CommentData | null>(null);
-    const [editBody, setEditBody] = useState('');
+    const [editDoc, setEditDoc] = useState<JSONContent | null>(null);
     const [editSaving, setEditSaving] = useState(false);
     const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
     const [deleteProcessing, setDeleteProcessing] = useState(false);
@@ -1414,17 +1425,21 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
     function handleEditComment(comment: CommentData) {
         setEditingComment(comment);
-        setEditBody(comment.body);
+        setEditDoc(comment.body_json ?? null);
     }
 
     function handleSaveEdit() {
-        if (!editingComment || !editBody.trim()) return;
+        if (!editingComment || !docHasContent(editDoc)) return;
         setEditSaving(true);
-        router.patch(route('comments.update', editingComment.id), { body: editBody }, {
-            preserveScroll: true,
-            onSuccess: () => setEditingComment(null),
-            onFinish: () => setEditSaving(false),
-        });
+        router.patch(
+            route('comments.update', editingComment.id),
+            { body_json: JSON.stringify(editDoc) },
+            {
+                preserveScroll: true,
+                onSuccess: () => setEditingComment(null),
+                onFinish: () => setEditSaving(false),
+            },
+        );
     }
 
     function handleDeleteComment(commentId: number) {
@@ -1719,7 +1734,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
 
                             {/* Comment Input — AiRichTextEditor (mentions + attachments built in) */}
                             {canView && (
-                                <div className="mt-auto border-t p-3">
+                                <div className="mt-auto p-3">
                                     {replyingTo && (
                                         <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 text-xs">
                                             <Reply className="h-3 w-3 text-muted-foreground" />
@@ -2227,25 +2242,38 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                 )}
 
                                 {auth.isAdmin && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowResetDialog(true)}
-                                        className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
-                                    >
-                                        <RotateCcw className="h-3.5 w-3.5" />
-                                        Reset to New (Admin)
-                                    </button>
-                                )}
-
-                                {auth.isAdmin && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { setDeleteAppConfirmText(''); setShowDeleteAppDialog(true); }}
-                                        className="mt-1 flex items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-destructive"
-                                    >
-                                        <Trash className="h-3.5 w-3.5" />
-                                        Delete Application (Admin)
-                                    </button>
+                                    <div className="mt-2 flex items-center gap-1">
+                                        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Admin</span>
+                                        <span aria-hidden className="h-px flex-1 bg-border" />
+                                        <TooltipProvider delay={100}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowResetDialog(true)}
+                                                        aria-label="Reset to New"
+                                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                                                    >
+                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Reset to New</TooltipContent>
+                                            </Tooltip>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setDeleteAppConfirmText(''); setShowDeleteAppDialog(true); }}
+                                                        aria-label="Delete application"
+                                                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                                                    >
+                                                        <Trash className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Hard delete application</TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                 )}
 
                                 {/* Mini map */}
@@ -2457,15 +2485,24 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                         <DialogTitle>Edit Comment</DialogTitle>
                         <DialogDescription>Update your comment below.</DialogDescription>
                     </DialogHeader>
-                    <Textarea
-                        value={editBody}
-                        onChange={(e) => setEditBody(e.target.value)}
-                        rows={4}
-                        className="resize-none"
-                    />
+                    {editingComment && (
+                        <div className="rounded-md border">
+                            <AiRichTextEditor
+                                key={editingComment.id}
+                                outputFormat="json"
+                                content={editDoc}
+                                onChange={setEditDoc}
+                                placeholder="Edit your comment…"
+                                enableMentions
+                                collapseToolbar
+                                inlineActions
+                                editorClassName="min-h-24 p-3"
+                            />
+                        </div>
+                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setEditingComment(null)}>Cancel</Button>
-                        <Button onClick={handleSaveEdit} disabled={editSaving || !editBody.trim()}>
+                        <Button onClick={handleSaveEdit} disabled={editSaving || !docHasContent(editDoc)}>
                             {editSaving ? 'Saving...' : 'Save'}
                         </Button>
                     </DialogFooter>
