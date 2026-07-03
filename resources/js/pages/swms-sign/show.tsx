@@ -274,7 +274,7 @@ function PinPad({
 
 const DECLARATION_LINES = [
     'I have personally attended the face-to-face induction.',
-    'I acknowledge that I have either read this Safe Work Method Statement (SWMS) or, where required, had it explained to me in a manner that I understand.',
+    'I acknowledge that I have either read the Safe Work Method Statement(s) (SWMS) or, where required, had them explained to me in a manner that I understand.',
     'I have been given the opportunity to ask questions, have had those questions answered to my satisfaction, and confirm that I understand the hazards, risks, control measures, PPE requirements and safe work procedures applicable to the work I am undertaking.',
     'I agree to follow the control measures and work methods described in this SWMS at all times.',
     'I understand that if the scope of work changes, new hazards are identified, or the SWMS is amended, I must review and comply with the updated SWMS before continuing work.',
