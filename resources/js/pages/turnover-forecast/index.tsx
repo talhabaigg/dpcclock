@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-import { BarChart3, Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calendar, Check, ChevronDown, FileText, Filter, HelpCircle, Info, Layers, Printer, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgGridReact } from 'ag-grid-react';
 import { TurnoverPrintReport } from './TurnoverPrintReport';
@@ -30,9 +30,10 @@ type TurnoverForecastProps = {
     lastActualMonth: string | null;
     fyLabel: string;
     monthlyTargets: Record<string, number>;
+    settings: { monthly_overhead: number };
 };
 
-export default function TurnoverForecastIndex({ data, months, lastActualMonth, fyLabel, monthlyTargets }: TurnoverForecastProps) {
+export default function TurnoverForecastIndex({ data, months, lastActualMonth, fyLabel, monthlyTargets, settings }: TurnoverForecastProps) {
     // Load excluded jobs from local storage
     const [excludedJobIds, setExcludedJobIds] = useState<Set<string>>(() => {
         try {
@@ -463,13 +464,6 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
-                            <Button asChild variant="outline" size="sm">
-                                <Link href="/turnover-forecast/timeline">
-                                    <BarChart3 className="mr-2 h-4 w-4" />
-                                    <span className="hidden sm:inline">Timeline</span>
-                                    <span className="sm:hidden">Timeline</span>
-                                </Link>
-                            </Button>
                             <Button onClick={() => setPrintReportOpen(true)} variant="default" size="sm">
                                 <Printer className="mr-2 h-4 w-4" />
                                 <span className="hidden sm:inline">Print Report</span>
@@ -761,6 +755,7 @@ export default function TurnoverForecastIndex({ data, months, lastActualMonth, f
                 monthlyTargets={monthlyTargets}
                 allMonths={months}
                 selectedFYs={selectedFYs}
+                initialMonthlyOverhead={settings.monthly_overhead}
             />
         </AppLayout>
     );

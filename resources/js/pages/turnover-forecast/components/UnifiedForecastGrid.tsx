@@ -797,7 +797,7 @@ export function UnifiedForecastGrid({
                 horizontal scrollbar), since autoHeight leaves extra space under the rows
                 when alignedGrids forces a horizontal scrollbar to match the P&L grid. */}
             <div
-                className="bg-card overflow-hidden rounded-xl border shadow-sm"
+                className="bg-card overflow-hidden rounded-xl border shadow-sm [&_.ag-group-contracted]:ml-2 [&_.ag-group-expanded]:ml-2"
                 style={{
                     height:
                         viewMode === 'targets'

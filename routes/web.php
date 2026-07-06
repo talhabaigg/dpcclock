@@ -1090,6 +1090,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:turnover-forecast.view');
     Route::get('/turnover-forecast/timeline', [TurnoverForecastController::class, 'timeline'])->name('turnoverForecast.timeline')
         ->middleware('permission:turnover-forecast.view');
+    Route::post('/turnover-forecast/settings', [TurnoverForecastController::class, 'updateSettings'])->name('turnoverForecast.updateSettings')
+        ->middleware('permission:turnover-forecast.view');
     Route::get('/cash-forecast', CashForecastController::class)->name('cashForecast.show')
         ->middleware('permission:cash-forecast.view');
     Route::get('/cash-forecast/unmapped', [CashForecastController::class, 'unmappedTransactions'])->name('cashForecast.unmapped')

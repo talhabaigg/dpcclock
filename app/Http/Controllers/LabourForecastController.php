@@ -25,7 +25,7 @@ use Inertia\Inertia;
 
 class LabourForecastController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
         $locationsQuery = Location::open()->where(function ($query) {
@@ -39,40 +39,67 @@ class LabourForecastController extends Controller
             $locationsQuery->whereIn('eh_location_id', $accessibleLocationIds);
         }
 
-        // Get current month for forecast status
         $currentMonth = now()->startOfMonth();
 
-        // Calculate current week ending (next Friday)
-        $currentWeekEnding = now()->copy();
-        if ($currentWeekEnding->dayOfWeek !== Carbon::FRIDAY) { // 5 = Friday
-            $currentWeekEnding = $currentWeekEnding->next('Friday');
+        // Selected month (defaults to current month). Never allow future months.
+        $selectedMonth = $request->query('month')
+            ? Carbon::parse($request->query('month'))->startOfMonth()
+            : $currentMonth->copy();
+        if ($selectedMonth->greaterThan($currentMonth)) {
+            $selectedMonth = $currentMonth->copy();
+        }
+        $isCurrentMonth = $selectedMonth->equalTo($currentMonth);
+
+        // Status filter (applied server-side so it persists across month navigation).
+        $allowedStatuses = ['all', 'not_started', 'draft', 'submitted', 'approved', 'rejected'];
+        $selectedStatus = $request->query('status', 'all');
+        if (! in_array($selectedStatus, $allowedStatuses, true)) {
+            $selectedStatus = 'all';
         }
 
-        // Get all forecasts for current month for these locations
+        // Reference week ending:
+        //  - current month  → next Friday (the week the user is planning for)
+        //  - past month     → last Friday of that month (last week's snapshot)
+        if ($isCurrentMonth) {
+            $referenceWeekEnding = now()->copy();
+            if ($referenceWeekEnding->dayOfWeek !== Carbon::FRIDAY) {
+                $referenceWeekEnding = $referenceWeekEnding->next('Friday');
+            }
+        } else {
+            $referenceWeekEnding = $selectedMonth->copy()->endOfMonth();
+            if ($referenceWeekEnding->dayOfWeek !== Carbon::FRIDAY) {
+                $referenceWeekEnding = $referenceWeekEnding->previous('Friday');
+            }
+        }
+
+        // Get all forecasts for selected month for these locations
         $locationIds = $locationsQuery->pluck('id');
-        $currentForecasts = LabourForecast::whereIn('location_id', $locationIds)
-            ->where('forecast_month', $currentMonth)
+        $forecastsForMonth = LabourForecast::whereIn('location_id', $locationIds)
+            ->where('forecast_month', $selectedMonth)
             ->with('entries')
             ->get()
             ->keyBy('location_id');
 
         $locations = $locationsQuery
             ->get()
-            ->map(function ($location) use ($currentForecasts, $currentWeekEnding) {
-                $forecast = $currentForecasts->get($location->id);
+            ->map(function ($location) use ($forecastsForMonth, $referenceWeekEnding, $isCurrentMonth) {
+                $forecast = $forecastsForMonth->get($location->id);
 
-                // Calculate stats for current week - sum ALL entries for this week (across all templates)
-                $currentWeekHeadcount = 0;
-                $currentWeekCost = 0;
+                $headcount = 0;
+                $cost = 0;
                 if ($forecast) {
-                    $currentWeekEntries = $forecast->entries->filter(function ($entry) use ($currentWeekEnding) {
-                        return $entry->week_ending->format('Y-m-d') === $currentWeekEnding->format('Y-m-d');
-                    });
-                    foreach ($currentWeekEntries as $entry) {
-                        $currentWeekHeadcount += $entry->headcount;
-                        // Use weekly_cost directly - it's already calculated for the full headcount
-                        // with all components (ordinary, OT, leave, RDO, PH) from cost_breakdown_snapshot
-                        $currentWeekCost += ($entry->weekly_cost ?? 0);
+                    if ($isCurrentMonth) {
+                        // Current-week snapshot for the current month
+                        $entries = $forecast->entries->filter(function ($entry) use ($referenceWeekEnding) {
+                            return $entry->week_ending->format('Y-m-d') === $referenceWeekEnding->format('Y-m-d');
+                        });
+                    } else {
+                        // For past months, sum across every week of the month
+                        $entries = $forecast->entries;
+                    }
+                    foreach ($entries as $entry) {
+                        $headcount += $entry->headcount;
+                        $cost += ($entry->weekly_cost ?? 0);
                     }
                 }
 
@@ -86,16 +113,50 @@ class LabourForecastController extends Controller
                     'forecast_status' => $forecast?->status,
                     'forecast_submitted_at' => $forecast?->submitted_at?->format('d M Y'),
                     'forecast_approved_at' => $forecast?->approved_at?->format('d M Y'),
-                    'current_week_headcount' => $currentWeekHeadcount,
-                    'current_week_cost' => $currentWeekCost,
+                    'current_week_headcount' => $headcount,
+                    'current_week_cost' => $cost,
                 ];
             });
+
+        // Apply server-side status filter so it survives month navigation.
+        if ($selectedStatus !== 'all') {
+            $locations = $locations->filter(function ($row) use ($selectedStatus) {
+                if ($selectedStatus === 'not_started') {
+                    return $row['forecast_status'] === null;
+                }
+                return $row['forecast_status'] === $selectedStatus;
+            })->values();
+        }
+
+        // Build the list of months to offer in the picker: earliest existing
+        // forecast month across visible locations → current month.
+        $earliestForecast = LabourForecast::whereIn('location_id', $locationIds)
+            ->orderBy('forecast_month', 'asc')
+            ->first();
+        $availableMonths = [];
+        $cursor = $earliestForecast
+            ? $earliestForecast->forecast_month->copy()->startOfMonth()
+            : $currentMonth->copy();
+        while ($cursor->lessThanOrEqualTo($currentMonth)) {
+            $availableMonths[] = [
+                'value' => $cursor->format('Y-m'),
+                'label' => $cursor->format('F Y'),
+            ];
+            $cursor->addMonth();
+        }
+        // Newest first
+        $availableMonths = array_reverse($availableMonths);
 
         return Inertia::render('labour-forecast/index', [
             'locations' => $locations,
             'currentMonth' => $currentMonth->format('F Y'),
-            'currentWeekEnding' => $currentWeekEnding->format('d M Y'),
-            'forecastMonth' => $currentMonth->format('Y-m'),
+            'currentWeekEnding' => $referenceWeekEnding->format('d M Y'),
+            'forecastMonth' => $selectedMonth->format('Y-m'),
+            'selectedMonth' => $selectedMonth->format('Y-m'),
+            'selectedMonthLabel' => $selectedMonth->format('F Y'),
+            'isCurrentMonth' => $isCurrentMonth,
+            'availableMonths' => $availableMonths,
+            'selectedStatus' => $selectedStatus,
         ]);
     }
 

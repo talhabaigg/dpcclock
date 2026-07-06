@@ -586,10 +586,10 @@ export function TurnoverReportDialog({ open, onOpenChange, data, months, lastAct
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[95vh] max-w-[95vw] min-w-full overflow-y-auto">
+            <DialogContent className="max-h-[95vh] w-full max-w-none overflow-y-auto sm:min-w-[90vw]">
                 <DialogHeader>
-                    <div className="flex items-center justify-between">
-                        <DialogTitle>Cumulative Turnover Forecast Report</DialogTitle>
+                    <DialogTitle className="sr-only">Cumulative Turnover Forecast Report</DialogTitle>
+                    <div className="flex items-center justify-end gap-2 pr-10">
                         <Button onClick={handlePrint} variant="default" size="sm">
                             <Printer className="mr-2 h-4 w-4" />
                             Print Report
@@ -597,7 +597,7 @@ export function TurnoverReportDialog({ open, onOpenChange, data, months, lastAct
                     </div>
                 </DialogHeader>
 
-                <div ref={reportRef} className="space-y-6">
+                <div ref={reportRef} className="space-y-6 rounded-md bg-white p-6 text-slate-900 shadow-sm">
                     {/* Header - matches print report layout */}
                     <div className="flex items-center justify-between border-b-2 border-slate-700 pb-3">
                         <img src="/logo.png" alt="Company Logo" className="h-10" />

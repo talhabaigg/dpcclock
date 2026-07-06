@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronUp, Printer } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { router } from '@inertiajs/react';
+import { ChevronDown, ChevronUp, Printer, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { TurnoverRow } from './lib/data-transformer';
 
@@ -21,6 +23,7 @@ interface TurnoverPrintReportProps {
     monthlyTargets: Record<string, number>;
     allMonths: string[];
     selectedFYs: string[];
+    initialMonthlyOverhead: number;
 }
 
 const formatCurrency = (value: number | null | undefined): string => {
@@ -95,10 +98,31 @@ export function TurnoverPrintReport({
     monthlyTargets,
     allMonths,
     selectedFYs,
+    initialMonthlyOverhead,
 }: TurnoverPrintReportProps) {
-    // State for configurable overhead
-    const [overheadAmount, setOverheadAmount] = useState(200000);
+    // State for configurable overhead — seeded from the backend-persisted value
+    const [overheadAmount, setOverheadAmount] = useState(initialMonthlyOverhead);
+    const [overheadDraft, setOverheadDraft] = useState(initialMonthlyOverhead);
+    const [overheadPopoverOpen, setOverheadPopoverOpen] = useState(false);
+    const [savingOverhead, setSavingOverhead] = useState(false);
     const [showProfitBreakdown, setShowProfitBreakdown] = useState(false);
+
+    const saveOverhead = () => {
+        setSavingOverhead(true);
+        router.post(
+            '/turnover-forecast/settings',
+            { monthly_overhead: overheadDraft },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    setOverheadAmount(overheadDraft);
+                    setOverheadPopoverOpen(false);
+                },
+                onFinish: () => setSavingOverhead(false),
+            },
+        );
+    };
 
     // Transform data for report
     const reportData = useMemo(() => {
@@ -809,37 +833,70 @@ export function TurnoverPrintReport({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="h-[95vh] min-w-[95vw] overflow-y-auto">
+            <DialogContent className="h-[95vh] w-full max-w-none overflow-y-auto sm:min-w-[90vw]">
                 <DialogHeader>
-                    <div className="flex items-center justify-between">
-                        <DialogTitle>Turnover Forecast - {fyLabel}</DialogTitle>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                                <Label htmlFor="overhead" className="text-sm font-medium whitespace-nowrap">
-                                    Monthly Overhead:
-                                </Label>
-                                <div className="relative">
-                                    <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
-                                    <Input
-                                        id="overhead"
-                                        type="number"
-                                        value={overheadAmount}
-                                        onChange={(e) => setOverheadAmount(Number(e.target.value) || 0)}
-                                        className="h-9 w-32 pl-7"
-                                        min={0}
-                                        step={10000}
-                                    />
-                                </div>
-                            </div>
+                    <DialogTitle className="sr-only">Turnover Forecast - {fyLabel}</DialogTitle>
+                    <div className="flex items-center justify-end gap-2 pr-10">
+                            <Popover
+                                open={overheadPopoverOpen}
+                                onOpenChange={(next) => {
+                                    setOverheadPopoverOpen(next);
+                                    if (next) setOverheadDraft(overheadAmount);
+                                }}
+                            >
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        Settings
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="end" className="w-72">
+                                    <div className="space-y-3">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-semibold">Report settings</p>
+                                            <p className="text-muted-foreground text-xs">Saved for everyone.</p>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="overhead" className="text-xs font-medium">
+                                                Monthly Overhead
+                                            </Label>
+                                            <div className="relative">
+                                                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 text-sm">$</span>
+                                                <Input
+                                                    id="overhead"
+                                                    type="number"
+                                                    value={overheadDraft}
+                                                    onChange={(e) => setOverheadDraft(Number(e.target.value) || 0)}
+                                                    className="h-9 w-full pl-7"
+                                                    min={0}
+                                                    step={10000}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setOverheadPopoverOpen(false)}
+                                                disabled={savingOverhead}
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button size="sm" onClick={saveOverhead} disabled={savingOverhead}>
+                                                {savingOverhead ? 'Saving…' : 'Save'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                             <Button onClick={handlePrint} variant="default" size="sm">
                                 <Printer className="mr-2 h-4 w-4" />
                                 Print Report
                             </Button>
-                        </div>
                     </div>
                 </DialogHeader>
 
-                <div className="space-y-6">
+                <div className="space-y-6 rounded-md bg-white p-6 text-slate-900 shadow-sm">
                     {/* Header */}
                     <div className="flex items-center justify-between border-b-2 border-slate-700 pb-3">
                         <img src="/logo.png" alt="Superior Wall & Ceiling Professionals" className="h-10" />

@@ -12,6 +12,8 @@ use App\Models\JobReportByCostItemAndCostType;
 use App\Models\JobSummary;
 use App\Models\LabourForecast;
 use App\Models\Location;
+use App\Models\TurnoverForecastSetting;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -44,6 +46,17 @@ class TurnoverForecastController extends Controller
     public function timeline()
     {
         return Inertia::render('turnover-forecast/timeline', $this->buildTurnoverProps());
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'monthly_overhead' => 'required|numeric|min:0',
+        ]);
+
+        TurnoverForecastSetting::current()->update($validated);
+
+        return back();
     }
 
     protected function buildTurnoverProps(): array
@@ -537,6 +550,9 @@ class TurnoverForecastController extends Controller
             'fyEndDate' => $fyEndDate,
             'fyLabel' => "FY{$fyStartYear}-".substr($fyEndYear, 2, 2),
             'monthlyTargets' => $monthlyTargets,
+            'settings' => [
+                'monthly_overhead' => (float) TurnoverForecastSetting::current()->monthly_overhead,
+            ],
         ];
     }
 }
