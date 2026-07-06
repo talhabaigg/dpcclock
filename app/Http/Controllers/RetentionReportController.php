@@ -166,14 +166,22 @@ class RetentionReportController extends Controller
             $retention5pct = round($revisedContractValue * 0.05, 2);
             $retention2_5pct = round($revisedContractValue * 0.025, 2);
 
-            // Release amounts are 50/50 of actual cash holding.
+            // System default: 50/50 split of actual cash holding.
             // Compute in cents so the two halves always add up to exactly the displayed value
             // (no off-by-a-cent drift from independent rounding).
             $cashHoldingCents = (int) round($currentCashHolding * 100);
             $firstReleaseCents = intdiv($cashHoldingCents, 2);
             $secondReleaseCents = $cashHoldingCents - $firstReleaseCents;
-            $firstReleaseAmount = $firstReleaseCents / 100;
-            $secondReleaseAmount = $secondReleaseCents / 100;
+            $derivedFirstReleaseAmount = $firstReleaseCents / 100;
+            $derivedSecondReleaseAmount = $secondReleaseCents / 100;
+
+            // Manual per-half overrides win over the derived 50/50 split — same pattern as release dates.
+            $firstReleaseAmount = $setting?->manual_first_release_amount !== null
+                ? (float) $setting->manual_first_release_amount
+                : $derivedFirstReleaseAmount;
+            $secondReleaseAmount = $setting?->manual_second_release_amount !== null
+                ? (float) $setting->manual_second_release_amount
+                : $derivedSecondReleaseAmount;
 
             $retentionData[] = [
                 'id' => $location->id,
@@ -198,6 +206,9 @@ class RetentionReportController extends Controller
                 'manual_estimated_end_date' => $setting?->manual_estimated_end_date?->format('Y-m-d'),
                 'manual_first_release_date' => $setting?->manual_first_release_date?->format('Y-m-d'),
                 'manual_second_release_date' => $setting?->manual_second_release_date?->format('Y-m-d'),
+                // Preserve explicit 0 for release-amount overrides (same reason as manual_contract_value above).
+                'manual_first_release_amount' => $setting?->manual_first_release_amount !== null ? (float) $setting->manual_first_release_amount : null,
+                'manual_second_release_amount' => $setting?->manual_second_release_amount !== null ? (float) $setting->manual_second_release_amount : null,
                 'first_release_date' => $firstReleaseDate,
                 'first_release_amount' => $firstReleaseAmount,
                 'second_release_date' => $secondReleaseDate,
@@ -310,6 +321,8 @@ class RetentionReportController extends Controller
             'manual_estimated_end_date' => 'nullable|date',
             'manual_first_release_date' => 'nullable|date',
             'manual_second_release_date' => 'nullable|date',
+            'manual_first_release_amount' => 'nullable|numeric',
+            'manual_second_release_amount' => 'nullable|numeric',
         ]);
 
         $setting = JobRetentionSetting::firstOrCreate(
@@ -321,7 +334,8 @@ class RetentionReportController extends Controller
         // explicit `null` from the client — "clear this override" — beats the existing value.
         $updates = [];
         foreach (['manual_retention_held', 'manual_customer_name', 'manual_contract_value',
-                  'manual_estimated_end_date', 'manual_first_release_date', 'manual_second_release_date'] as $field) {
+                  'manual_estimated_end_date', 'manual_first_release_date', 'manual_second_release_date',
+                  'manual_first_release_amount', 'manual_second_release_amount'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $updates[$field] = $validated[$field];
             }
@@ -350,6 +364,8 @@ class RetentionReportController extends Controller
                 'manual_estimated_end_date' => null,
                 'manual_first_release_date' => null,
                 'manual_second_release_date' => null,
+                'manual_first_release_amount' => null,
+                'manual_second_release_amount' => null,
             ]);
         }
 

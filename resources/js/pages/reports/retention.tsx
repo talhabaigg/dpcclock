@@ -36,6 +36,8 @@ interface RetentionRow {
     manual_estimated_end_date: string | null;
     manual_first_release_date: string | null;
     manual_second_release_date: string | null;
+    manual_first_release_amount: number | null;
+    manual_second_release_amount: number | null;
     first_release_date: string | null;
     first_release_amount: number;
     second_release_date: string | null;
@@ -119,6 +121,93 @@ const ERP_HEAD = 'h-7 px-2 py-1 text-right text-[11px] font-semibold text-muted-
 const ERP_HEAD_LEFT = 'h-7 px-2 py-1 text-left text-[11px] font-semibold text-muted-foreground border-b border-border';
 const ERP_CELL = 'py-0.5 px-2 text-xs';
 
+interface ReleaseAmountCellProps {
+    row: RetentionRow;
+    field: ReleaseField;
+    canEdit: boolean;
+    open: boolean;
+    editValue: string;
+    onEditValueChange: (val: string) => void;
+    onOpenChange: (open: boolean) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    onRevert: () => void;
+    lastCol?: boolean;
+}
+
+function ReleaseAmountCell({ row, field, canEdit, open, editValue, onEditValueChange, onOpenChange, onSave, onCancel, onRevert, lastCol }: ReleaseAmountCellProps) {
+    const amount = field === 'first' ? row.first_release_amount : row.second_release_amount;
+    const overrideAmount = field === 'first' ? row.manual_first_release_amount : row.manual_second_release_amount;
+    const hasOverride = overrideAmount !== null;
+
+    if (!canEdit) {
+        return (
+            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', lastCol && 'pr-3', hasOverride && 'italic')}>
+                {formatCurrency(amount)}
+            </TableCell>
+        );
+    }
+
+    return (
+        <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', lastCol && 'pr-3')}>
+            <Popover open={open} onOpenChange={onOpenChange}>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className={cn(
+                            'tabular-nums cursor-pointer rounded px-1 -mx-1 hover:bg-muted hover:text-foreground transition-colors',
+                            hasOverride && 'italic',
+                        )}
+                        title={hasOverride ? 'Manually set — click to change' : 'Click to override the 50/50 split'}
+                    >
+                        {formatCurrency(amount)}
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-0" align="end">
+                    <div className="p-3">
+                        <Label className="text-xs">
+                            {field === 'first' ? '1st' : '2nd'} release amount
+                        </Label>
+                        <Input
+                            type="number"
+                            step="0.01"
+                            value={editValue}
+                            onChange={(e) => onEditValueChange(e.target.value)}
+                            className="mt-1.5 h-7 px-2 text-right text-xs md:text-xs"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') onSave();
+                                if (e.key === 'Escape') onCancel();
+                            }}
+                            autoFocus
+                        />
+                        <div className="mt-2 flex justify-end gap-1">
+                            <Button variant="outline" size="sm" className="h-7 text-xs px-2.5" onClick={onCancel}>
+                                Cancel
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs px-2.5" onClick={onSave}>
+                                Save
+                            </Button>
+                        </div>
+                    </div>
+                    {hasOverride && (
+                        <div className="border-t border-border p-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full h-7 text-xs justify-start text-muted-foreground hover:text-foreground"
+                                onClick={onRevert}
+                            >
+                                <RotateCcw className="mr-1.5 h-3 w-3" />
+                                Revert to system value
+                            </Button>
+                        </div>
+                    )}
+                </PopoverContent>
+            </Popover>
+        </TableCell>
+    );
+}
+
 interface ReleaseDateCellProps {
     row: RetentionRow;
     field: ReleaseField;
@@ -199,6 +288,11 @@ export default function RetentionReport({ retentionData, filters, companies, ava
 
     // Open state for the per-cell date override popover (one open at a time).
     const [openDatePopover, setOpenDatePopover] = useState<{ jobNumber: string; field: ReleaseField } | null>(null);
+
+    // Per-cell release-amount override popover (one open at a time). editValue is a string so
+    // the input can hold intermediate states like empty / '-' during typing.
+    const [openAmountPopover, setOpenAmountPopover] = useState<{ jobNumber: string; field: ReleaseField } | null>(null);
+    const [amountEditValue, setAmountEditValue] = useState('');
 
     // Manual entry dialog (add + edit)
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -369,6 +463,45 @@ export default function RetentionReport({ retentionData, filters, companies, ava
             onSuccess: () => setOpenDatePopover(null),
         });
     }, []);
+
+    const openAmountEditor = useCallback((row: RetentionRow, field: ReleaseField) => {
+        const current = field === 'first' ? row.first_release_amount : row.second_release_amount;
+        setAmountEditValue(String(current));
+        setOpenAmountPopover({ jobNumber: row.job_number, field });
+    }, []);
+
+    const closeAmountEditor = useCallback(() => {
+        setOpenAmountPopover(null);
+        setAmountEditValue('');
+    }, []);
+
+    const saveReleaseAmount = useCallback((row: RetentionRow, field: ReleaseField) => {
+        const parsed = parseFloat(amountEditValue);
+        if (isNaN(parsed)) {
+            closeAmountEditor();
+            return;
+        }
+        const payloadKey = field === 'first' ? 'manual_first_release_amount' : 'manual_second_release_amount';
+        router.post('/retention-report/manual', {
+            job_number: row.job_number,
+            [payloadKey]: parsed,
+        }, {
+            preserveScroll: true,
+            onSuccess: closeAmountEditor,
+        });
+    }, [amountEditValue, closeAmountEditor]);
+
+    // Clear an override and fall back to the system 50/50 split of cash holding.
+    const revertReleaseAmount = useCallback((row: RetentionRow, field: ReleaseField) => {
+        const payloadKey = field === 'first' ? 'manual_first_release_amount' : 'manual_second_release_amount';
+        router.post('/retention-report/manual', {
+            job_number: row.job_number,
+            [payloadKey]: null,
+        }, {
+            preserveScroll: true,
+            onSuccess: closeAmountEditor,
+        });
+    }, [closeAmountEditor]);
 
     const exportToExcel = useCallback(async () => {
         const wb = new ExcelJS.Workbook();
@@ -622,9 +755,21 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                 onSave={(date) => saveReleaseDate(row, 'first', date)}
                                                 onRevert={() => revertReleaseDate(row, 'first')}
                                             />
-                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums')}>
-                                                {formatCurrency(row.first_release_amount)}
-                                            </TableCell>
+                                            <ReleaseAmountCell
+                                                row={row}
+                                                field="first"
+                                                canEdit={canEdit}
+                                                open={openAmountPopover?.jobNumber === row.job_number && openAmountPopover.field === 'first'}
+                                                editValue={amountEditValue}
+                                                onEditValueChange={setAmountEditValue}
+                                                onOpenChange={(open) => {
+                                                    if (open) openAmountEditor(row, 'first');
+                                                    else closeAmountEditor();
+                                                }}
+                                                onSave={() => saveReleaseAmount(row, 'first')}
+                                                onCancel={closeAmountEditor}
+                                                onRevert={() => revertReleaseAmount(row, 'first')}
+                                            />
                                             <ReleaseDateCell
                                                 row={row}
                                                 field="second"
@@ -634,9 +779,22 @@ export default function RetentionReport({ retentionData, filters, companies, ava
                                                 onSave={(date) => saveReleaseDate(row, 'second', date)}
                                                 onRevert={() => revertReleaseDate(row, 'second')}
                                             />
-                                            <TableCell className={cn(ERP_CELL, 'text-right tabular-nums', !canEdit && 'pr-3')}>
-                                                {formatCurrency(row.second_release_amount)}
-                                            </TableCell>
+                                            <ReleaseAmountCell
+                                                row={row}
+                                                field="second"
+                                                canEdit={canEdit}
+                                                open={openAmountPopover?.jobNumber === row.job_number && openAmountPopover.field === 'second'}
+                                                editValue={amountEditValue}
+                                                onEditValueChange={setAmountEditValue}
+                                                onOpenChange={(open) => {
+                                                    if (open) openAmountEditor(row, 'second');
+                                                    else closeAmountEditor();
+                                                }}
+                                                onSave={() => saveReleaseAmount(row, 'second')}
+                                                onCancel={closeAmountEditor}
+                                                onRevert={() => revertReleaseAmount(row, 'second')}
+                                                lastCol={!canEdit}
+                                            />
                                             {canEdit && (
                                                 <TableCell className={cn(ERP_CELL, 'pr-3 text-center')}>
                                                     {row.is_manual_entry && (

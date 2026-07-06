@@ -25,6 +25,8 @@ class JobRetentionSetting extends Model
         'manual_estimated_end_date',
         'manual_first_release_date',
         'manual_second_release_date',
+        'manual_first_release_amount',
+        'manual_second_release_amount',
     ];
 
     protected $casts = [
@@ -37,6 +39,8 @@ class JobRetentionSetting extends Model
         'manual_estimated_end_date' => 'date',
         'manual_first_release_date' => 'date',
         'manual_second_release_date' => 'date',
+        'manual_first_release_amount' => 'decimal:2',
+        'manual_second_release_amount' => 'decimal:2',
     ];
 
     public function getActivitylogOptions(): LogOptions
