@@ -30,6 +30,14 @@ interface FileType {
     is_other?: boolean;
 }
 
+interface Requirement {
+    file_type_id: number;
+    file_type_name: string;
+    category: string[];
+    level: 'mandatory' | 'preferred' | 'optional' | 'none';
+    status: 'valid' | 'expired' | 'expiring_soon' | 'missing';
+}
+
 interface EmployeeFileRecord {
     id: number;
     document_number: string | null;
@@ -381,6 +389,57 @@ function FileRow({
     );
 }
 
+/* ── Missing requirement row (no file uploaded yet) ── */
+function MissingRow({
+    requirement,
+    onUpload,
+}: {
+    requirement: Requirement;
+    onUpload: (fileTypeId: number) => void;
+}) {
+    const isMandatory = requirement.level === 'mandatory';
+
+    return (
+        <div className={`group flex items-center gap-3 rounded-lg border border-dashed px-3 py-2.5 transition-colors ${
+            isMandatory
+                ? 'border-red-300 bg-red-50/30 hover:bg-red-50 dark:border-red-900 dark:bg-red-950/20 dark:hover:bg-red-950/30'
+                : 'border-amber-300 bg-amber-50/30 hover:bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
+        }`}>
+            <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed ${
+                isMandatory
+                    ? 'border-red-400 text-red-500 dark:border-red-800 dark:text-red-400'
+                    : 'border-amber-400 text-amber-500 dark:border-amber-800 dark:text-amber-400'
+            }`}>
+                <Plus className="h-5 w-5" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium leading-tight">{requirement.file_type_name}</span>
+                    {isMandatory ? (
+                        <Badge variant="destructive" className="shrink-0 px-1.5 py-0 text-[10px] leading-4">Required</Badge>
+                    ) : (
+                        <Badge className="shrink-0 border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] leading-4 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                            Preferred
+                        </Badge>
+                    )}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">Not uploaded yet</p>
+            </div>
+
+            <Button
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0 gap-1"
+                onClick={() => onUpload(requirement.file_type_id)}
+            >
+                <Plus className="h-3 w-3" />
+                Upload
+            </Button>
+        </div>
+    );
+}
+
 /* ── Preview dialog ── */
 function PreviewDialog({
     file,
@@ -434,9 +493,11 @@ function DeleteDialog({ open, onOpenChange, onConfirm }: { open: boolean; onOpen
 export default function EmployeeFilesCard({ employeeId }: { employeeId: number }) {
     const [files, setFiles] = useState<EmployeeFileRecord[]>([]);
     const [fileTypes, setFileTypes] = useState<FileType[]>([]);
+    const [requirements, setRequirements] = useState<Requirement[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
+    const [uploadPreselectId, setUploadPreselectId] = useState<number | null>(null);
     const [previewFile, setPreviewFile] = useState<{ url: string; mimeType: string | null; filename: string | null } | null>(null);
     const [deleteFileId, setDeleteFileId] = useState<number | null>(null);
 
@@ -449,6 +510,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
             if (!res.ok) throw new Error();
             const data = await res.json();
             setFiles(data.files ?? []);
+            setRequirements(data.requirements ?? []);
 
             const typeMap = new Map<number, FileType>();
             (data.files ?? []).forEach((f: EmployeeFileRecord) => typeMap.set(f.file_type.id, f.file_type));
@@ -490,15 +552,55 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
         return grouped;
     }, [files]);
 
+    // Missing = applicable to this employee (mandatory/preferred) but not yet uploaded.
+    // Mandatory first, then preferred; alphabetical within each level.
+    const missingByCategory = useMemo(() => {
+        const grouped: Record<string, Requirement[]> = {};
+        for (const r of requirements) {
+            if (r.status !== 'missing') continue;
+            const cat = r.category && r.category.length > 0 ? r.category[0] : 'Other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(r);
+        }
+        for (const cat of Object.keys(grouped)) {
+            grouped[cat].sort((a, b) => {
+                if (a.level !== b.level) return a.level === 'mandatory' ? -1 : 1;
+                return a.file_type_name.localeCompare(b.file_type_name);
+            });
+        }
+        return grouped;
+    }, [requirements]);
+
+    const missingRequiredCount = useMemo(
+        () => requirements.filter((r) => r.status === 'missing' && r.level === 'mandatory').length,
+        [requirements],
+    );
+    const missingPreferredCount = useMemo(
+        () => requirements.filter((r) => r.status === 'missing' && r.level === 'preferred').length,
+        [requirements],
+    );
+
     const categories = useMemo(() => {
-        return Object.keys(filesByCategory).sort((a, b) => {
-            const aHasExpired = filesByCategory[a].some((f) => f.status === 'expired');
-            const bHasExpired = filesByCategory[b].some((f) => f.status === 'expired');
+        const set = new Set<string>([...Object.keys(filesByCategory), ...Object.keys(missingByCategory)]);
+        return Array.from(set).sort((a, b) => {
+            const aHasMandatoryGap = (missingByCategory[a] ?? []).some((r) => r.level === 'mandatory');
+            const bHasMandatoryGap = (missingByCategory[b] ?? []).some((r) => r.level === 'mandatory');
+            if (aHasMandatoryGap && !bHasMandatoryGap) return -1;
+            if (!aHasMandatoryGap && bHasMandatoryGap) return 1;
+            const aHasExpired = (filesByCategory[a] ?? []).some((f) => f.status === 'expired');
+            const bHasExpired = (filesByCategory[b] ?? []).some((f) => f.status === 'expired');
             if (aHasExpired && !bHasExpired) return -1;
             if (!aHasExpired && bHasExpired) return 1;
             return a.localeCompare(b);
         });
-    }, [filesByCategory]);
+    }, [filesByCategory, missingByCategory]);
+
+    const openUploadFor = useCallback((fileTypeId: number | null) => {
+        setUploadPreselectId(fileTypeId);
+        setShowUpload(true);
+    }, []);
+
+    const hasAnyContent = files.length > 0 || Object.keys(missingByCategory).length > 0;
 
     return (
         <>
@@ -513,6 +615,18 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                             )}
                         </CardTitle>
                         <div className="flex items-center gap-1.5">
+                            {!loading && missingRequiredCount > 0 && (
+                                <Badge variant="destructive" className="gap-1 text-xs" title={`${missingRequiredCount} required document(s) missing`}>
+                                    <AlertTriangle className="h-3 w-3" />
+                                    {missingRequiredCount} missing
+                                </Badge>
+                            )}
+                            {!loading && missingPreferredCount > 0 && missingRequiredCount === 0 && (
+                                <Badge className="gap-1 border-amber-200 bg-amber-50 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300" title={`${missingPreferredCount} preferred document(s) missing`}>
+                                    <AlertTriangle className="h-3 w-3" />
+                                    {missingPreferredCount} preferred
+                                </Badge>
+                            )}
                             {!loading && expiredCount > 0 && (
                                 <Badge variant="destructive" className="gap-1 text-xs">
                                     <XCircle className="h-3 w-3" />
@@ -525,7 +639,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                     {expiringCount}
                                 </Badge>
                             )}
-                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowUpload(true)}>
+                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openUploadFor(null)}>
                                 <Plus className="h-3.5 w-3.5" />
                                 Upload
                             </Button>
@@ -548,7 +662,7 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                 Retry
                             </Button>
                         </div>
-                    ) : files.length === 0 ? (
+                    ) : !hasAnyContent ? (
                         <div className="py-8 text-center">
                             <p className="text-sm text-muted-foreground">No files uploaded yet.</p>
                         </div>
@@ -560,12 +674,19 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                                         {cat}
                                     </p>
                                     <div className="flex flex-col gap-2">
-                                        {filesByCategory[cat].map((f) => (
+                                        {(filesByCategory[cat] ?? []).map((f) => (
                                             <FileRow
                                                 key={f.id}
                                                 file={f}
                                                 onDelete={(id) => setDeleteFileId(id)}
                                                 onPreview={(url, mimeType, filename) => setPreviewFile({ url, mimeType, filename })}
+                                            />
+                                        ))}
+                                        {(missingByCategory[cat] ?? []).map((r) => (
+                                            <MissingRow
+                                                key={`missing-${r.file_type_id}`}
+                                                requirement={r}
+                                                onUpload={openUploadFor}
                                             />
                                         ))}
                                     </div>
@@ -576,7 +697,16 @@ export default function EmployeeFilesCard({ employeeId }: { employeeId: number }
                 </CardContent>
             </Card>
 
-            <UploadFileDialog open={showUpload} onOpenChange={setShowUpload} employeeId={employeeId} fileTypes={fileTypes} />
+            <UploadFileDialog
+                open={showUpload}
+                onOpenChange={(v) => {
+                    setShowUpload(v);
+                    if (!v) setUploadPreselectId(null);
+                }}
+                employeeId={employeeId}
+                fileTypes={fileTypes}
+                initialFileTypeId={uploadPreselectId}
+            />
             <PreviewDialog file={previewFile} open={!!previewFile} onOpenChange={(v) => { if (!v) setPreviewFile(null); }} />
             <DeleteDialog open={deleteFileId !== null} onOpenChange={(v) => { if (!v) setDeleteFileId(null); }} onConfirm={handleDelete} />
         </>

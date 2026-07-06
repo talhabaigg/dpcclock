@@ -14,7 +14,7 @@ import type { JSONContent } from '@tiptap/react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
-import EmployeeDocumentsCard, { type EmployeeDocument } from '@/components/employee-documents/employee-documents-card';
+import EmployeeDocumentsCard, { type EmployeeDocument, type EmployeeSignedDocument } from '@/components/employee-documents/employee-documents-card';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import {
@@ -182,7 +182,7 @@ interface FormTemplateSummary {
 }
 
 export default function EmployeeShow() {
-    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documents, documentTemplates, signingRequests, availablePlaceholders, savedSenderSignatureUrl, appUsers, formTemplates, formRequests, auth } = usePage<{
+    const { employee: emp, projects, weekEnding, journal, canSendDocuments, documents, documentTemplates, signingRequests, applicationSignedDocuments, availablePlaceholders, savedSenderSignatureUrl, appUsers, formTemplates, formRequests, auth } = usePage<{
         employee: Employee;
         projects: Project[];
         weekEnding: string;
@@ -191,6 +191,7 @@ export default function EmployeeShow() {
         documents: EmployeeDocument[];
         documentTemplates: DocumentTemplate[];
         signingRequests: SigningRequestSummary[];
+        applicationSignedDocuments: EmployeeSignedDocument[];
         availablePlaceholders: { key: string; label: string; preview?: string }[];
         savedSenderSignatureUrl: string | null;
         appUsers: { id: number; name: string; position: string | null }[];
@@ -582,7 +583,7 @@ export default function EmployeeShow() {
         const all = [
             { id: 'overview', label: 'Overview', icon: User, visible: true, count: undefined as number | undefined },
             { id: 'journal', label: 'Journal', icon: BookOpen, visible: true, count: journal?.length || undefined },
-            { id: 'documents', label: 'Documents', icon: FileText, visible: true, count: (documents?.length || 0) + (canSendDocuments ? signedDocuments.length : 0) || undefined },
+            { id: 'documents', label: 'Documents', icon: FileText, visible: true, count: (documents?.length || 0) + (canSendDocuments ? signedDocuments.length + (applicationSignedDocuments?.length ?? 0) : 0) || undefined },
             { id: 'signing-requests', label: 'Signature Requests', icon: FileSignature, visible: canSendDocuments, count: activeSigningRequests.length || undefined },
             { id: 'forms', label: 'Forms', icon: ClipboardList, visible: true, count: formRequests?.length || undefined },
             { id: 'files', label: 'Licences & Training', icon: GraduationCap, visible: !emp.is_office_staff, count: undefined as number | undefined },
@@ -591,7 +592,7 @@ export default function EmployeeShow() {
             { id: 'injuries', label: 'Injury Register', icon: AlertTriangle, visible: !emp.is_office_staff, count: emp.incident_reports?.length || undefined },
         ];
         return all.filter((s) => s.visible);
-    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, activeSigningRequests, projects, formRequests]);
+    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, applicationSignedDocuments, activeSigningRequests, projects, formRequests]);
 
     const [activeSection, setActiveSection] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview';
@@ -914,13 +915,16 @@ export default function EmployeeShow() {
                                 employeeId={emp.id}
                                 documents={documents}
                                 signedDocuments={canSendDocuments
-                                    ? signedDocuments.map((sr) => ({
-                                          id: sr.id,
-                                          title: sr.document_template?.name ?? sr.document_title ?? 'Document',
-                                          signed_at: sr.signed_at ?? sr.updated_at ?? sr.created_at,
-                                          signer_name: sr.signer_full_name ?? sr.recipient_name,
-                                          download_url: `/signing-requests/${sr.id}/download`,
-                                      }))
+                                    ? [
+                                          ...signedDocuments.map((sr) => ({
+                                              id: sr.id,
+                                              title: sr.document_template?.name ?? sr.document_title ?? 'Document',
+                                              signed_at: sr.signed_at ?? sr.updated_at ?? sr.created_at,
+                                              signer_name: sr.signer_full_name ?? sr.recipient_name,
+                                              download_url: `/signing-requests/${sr.id}/download`,
+                                          })),
+                                          ...(applicationSignedDocuments ?? []),
+                                      ]
                                     : []}
                             />
                         )}

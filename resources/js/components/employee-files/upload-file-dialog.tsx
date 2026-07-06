@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { router } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { FileText, Loader2, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Dropzone from 'shadcn-dropzone';
 
 interface FileType {
@@ -28,9 +28,10 @@ interface Props {
     onOpenChange: (open: boolean) => void;
     employeeId: number;
     fileTypes: FileType[];
+    initialFileTypeId?: number | null;
 }
 
-export default function UploadFileDialog({ open, onOpenChange, employeeId, fileTypes }: Props) {
+export default function UploadFileDialog({ open, onOpenChange, employeeId, fileTypes, initialFileTypeId }: Props) {
     const [category, setCategory] = useState('');
     const [typeId, setTypeId] = useState('');
     const [customName, setCustomName] = useState('');
@@ -53,6 +54,17 @@ export default function UploadFileDialog({ open, onOpenChange, employeeId, fileT
         if (!category) return [];
         return fileTypes.filter((ft) => !ft.is_other && (ft.category ?? ['Other']).includes(category));
     }, [fileTypes, category]);
+
+    // Seed category + type when the dialog opens from a specific missing
+    // requirement — user clicked "Upload" on a placeholder row.
+    useEffect(() => {
+        if (!open || !initialFileTypeId) return;
+        const target = fileTypes.find((t) => t.id === initialFileTypeId);
+        if (!target) return;
+        const cat = (target.category && target.category.length > 0) ? target.category[0] : 'Other';
+        setCategory(cat);
+        setTypeId(String(target.id));
+    }, [open, initialFileTypeId, fileTypes]);
 
     const reset = () => {
         setCategory('');

@@ -48,9 +48,23 @@ class EmployeeFileController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'category', 'has_back_side', 'expiry_requirement', 'requires_completed_date', 'allow_multiple', 'options']);
 
+        // Applicable file types + requirement level, so the card can surface
+        // missing mandatory/preferred docs (not just what's already uploaded).
+        $requirements = collect($employee->fileComplianceStatus())
+            ->filter(fn (array $row) => $row['level'] !== EmployeeFileType::LEVEL_OPTIONAL)
+            ->map(fn (array $row) => [
+                'file_type_id' => $row['file_type']->id,
+                'file_type_name' => $row['file_type']->name,
+                'category' => $row['file_type']->category ?: ['Other'],
+                'level' => $row['level'],
+                'status' => $row['status'],
+            ])
+            ->values();
+
         return response()->json([
             'files' => $files,
             'all_file_types' => $allFileTypes,
+            'requirements' => $requirements,
         ]);
     }
 

@@ -316,6 +316,33 @@ class EmployeeController extends Controller
                 ->values();
         }
 
+        // Signed docs from the enquiry(ies) this employee was onboarded from —
+        // e.g. the contract they signed before hire. Surfaced in the Documents
+        // card so HR doesn't have to jump to the application to find them.
+        $applicationSignedDocuments = collect();
+        if ($canSendDocuments) {
+            $appIds = $employee->employmentApplications()->pluck('employment_applications.id');
+            if ($appIds->isNotEmpty()) {
+                $applicationSignedDocuments = \App\Models\SigningRequest::query()
+                    ->where('signable_type', \App\Models\EmploymentApplication::class)
+                    ->whereIn('signable_id', $appIds)
+                    ->whereIn('status', ['signed', 'delivered'])
+                    ->with(['documentTemplate:id,name', 'signable:id,first_name,surname'])
+                    ->latest('signed_at')
+                    ->get()
+                    ->map(fn ($sr) => [
+                        'id' => $sr->id,
+                        'title' => $sr->documentTemplate?->name ?? $sr->document_title ?? 'Document',
+                        'signed_at' => $sr->signed_at?->toISOString() ?? $sr->updated_at?->toISOString(),
+                        'signer_name' => $sr->signer_full_name ?? $sr->recipient_name,
+                        'download_url' => "/signing-requests/{$sr->id}/download",
+                        'source_label' => 'From enquiry',
+                        'source_url' => $sr->signable_id ? "/employment-applications/{$sr->signable_id}" : null,
+                    ])
+                    ->values();
+            }
+        }
+
         $formTemplates = FormTemplate::active()
             ->forModel(Employee::class)
             ->orderBy('name')
@@ -337,6 +364,7 @@ class EmployeeController extends Controller
             'documents' => $documents,
             'documentTemplates' => $documentTemplates,
             'signingRequests' => $signingRequests,
+            'applicationSignedDocuments' => $applicationSignedDocuments,
             'availablePlaceholders' => $availablePlaceholders,
             'formTemplates' => $formTemplates,
             'formRequests' => $formRequests->map(fn ($fr) => [

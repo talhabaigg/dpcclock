@@ -25,6 +25,10 @@ export interface EmployeeSignedDocument {
     signed_at: string | null;
     signer_name: string | null;
     download_url: string;
+    // Populated for docs that came from a linked employment application, so
+    // the badge lets HR jump back to the enquiry context.
+    source_label?: string | null;
+    source_url?: string | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -157,14 +161,31 @@ export default function EmployeeDocumentsCard({
                                         <FileSignature className="h-4 w-4 text-red-600 dark:text-red-400" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <a
-                                            href={sd.download_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="block truncate text-sm font-medium hover:underline"
-                                        >
-                                            {sd.title}
-                                        </a>
+                                        <div className="flex items-center gap-2">
+                                            <a
+                                                href={sd.download_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="truncate text-sm font-medium hover:underline"
+                                            >
+                                                {sd.title}
+                                            </a>
+                                            {sd.source_label && (
+                                                sd.source_url ? (
+                                                    <a
+                                                        href={sd.source_url}
+                                                        className="shrink-0 rounded-full border border-amber-500/30 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400"
+                                                        title="Open enquiry"
+                                                    >
+                                                        {sd.source_label}
+                                                    </a>
+                                                ) : (
+                                                    <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                                                        {sd.source_label}
+                                                    </span>
+                                                )
+                                            )}
+                                        </div>
                                         <p className="truncate text-[11px] text-muted-foreground">
                                             Signed {formatDate(sd.signed_at)}
                                             {sd.signer_name ? ` · ${sd.signer_name}` : ''}
