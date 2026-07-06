@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Checklist;
 use App\Models\ChecklistItem;
 use App\Models\ChecklistTemplate;
+use App\Models\EmploymentApplication;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,10 +14,24 @@ use Spatie\Activitylog\Models\Activity;
 class ChecklistController extends Controller
 {
     /**
+     * Refuse checklist mutations when the parent enquiry has been onboarded —
+     * the record is a historical snapshot at that point.
+     */
+    protected function abortIfParentLocked(?Checklist $checklist): void
+    {
+        $owner = $checklist?->checkable;
+        if ($owner instanceof EmploymentApplication && $owner->isLocked()) {
+            abort(403, 'Enquiry is locked — applicant has been onboarded.');
+        }
+    }
+
+    /**
      * Toggle a checklist item's completed state.
      */
     public function toggleItem(Request $request, ChecklistItem $checklistItem): RedirectResponse
     {
+        $this->abortIfParentLocked($checklistItem->checklist);
+
         if ($checklistItem->isCompleted()) {
             $checklistItem->update([
                 'completed_at' => null,
@@ -37,6 +52,8 @@ class ChecklistController extends Controller
      */
     public function updateItemNotes(Request $request, ChecklistItem $checklistItem): RedirectResponse
     {
+        $this->abortIfParentLocked($checklistItem->checklist);
+
         $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -51,6 +68,8 @@ class ChecklistController extends Controller
      */
     public function addItem(Request $request, Checklist $checklist): RedirectResponse
     {
+        $this->abortIfParentLocked($checklist);
+
         $request->validate([
             'label' => ['required', 'string', 'max:255'],
         ]);
@@ -69,6 +88,8 @@ class ChecklistController extends Controller
      */
     public function deleteItem(ChecklistItem $checklistItem): RedirectResponse
     {
+        $this->abortIfParentLocked($checklistItem->checklist);
+
         $checklistItem->delete();
 
         return back();
@@ -95,6 +116,9 @@ class ChecklistController extends Controller
         }
 
         $model = $modelClass::findOrFail($request->checkable_id);
+        if ($model instanceof EmploymentApplication && $model->isLocked()) {
+            abort(403, 'Enquiry is locked — applicant has been onboarded.');
+        }
         $template = ChecklistTemplate::with('items')->findOrFail($request->checklist_template_id);
 
         $model->attachChecklist($template);
@@ -125,6 +149,9 @@ class ChecklistController extends Controller
         }
 
         $model = $modelClass::findOrFail($request->checkable_id);
+        if ($model instanceof EmploymentApplication && $model->isLocked()) {
+            abort(403, 'Enquiry is locked — applicant has been onboarded.');
+        }
         $checklist = $model->addAdHocChecklist($request->name ?? 'General');
 
         foreach ($request->items as $index => $itemData) {
@@ -143,6 +170,8 @@ class ChecklistController extends Controller
      */
     public function destroyChecklist(Checklist $checklist): RedirectResponse
     {
+        $this->abortIfParentLocked($checklist);
+
         $checklist->delete();
 
         return back();

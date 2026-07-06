@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EmploymentApplication;
 use App\Models\FormRequest;
 use App\Services\FormPlaceholderResolver;
 use App\Services\FormResolverRegistry;
@@ -358,6 +359,7 @@ class FormRequestController extends Controller
         if ($formRequest->isCancelled()) {
             return back()->withErrors(['form' => 'This form has been cancelled.']);
         }
+        $this->abortIfFormParentLocked($formRequest);
 
         // Permission-assigned forms can only be submitted by users that hold
         // the permission (directly or via any of their roles).
@@ -517,6 +519,7 @@ class FormRequestController extends Controller
 
     public function cancel(Request $request, FormRequest $formRequest)
     {
+        $this->abortIfFormParentLocked($formRequest);
         $this->formService->cancel($formRequest, $request->user());
 
         return redirect()->back()->with('success', 'Form request cancelled.');
@@ -524,9 +527,22 @@ class FormRequestController extends Controller
 
     public function resend(Request $request, FormRequest $formRequest)
     {
+        $this->abortIfFormParentLocked($formRequest);
         $this->formService->resend($formRequest, $request->user());
 
         return redirect()->back()->with('success', 'Form resent.');
+    }
+
+    /**
+     * Refuse mutations when the parent enquiry has been onboarded — the
+     * record is a historical snapshot at that point.
+     */
+    protected function abortIfFormParentLocked(FormRequest $formRequest): void
+    {
+        $owner = $formRequest->formable;
+        if ($owner instanceof EmploymentApplication && $owner->isLocked()) {
+            abort(403, 'Enquiry is locked — applicant has been onboarded.');
+        }
     }
 
     private function validateToken(string $token): void

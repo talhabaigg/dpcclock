@@ -568,6 +568,10 @@ class EmploymentApplicationController extends Controller
         EmploymentApplication $employmentApplication,
         ModelTriggerFormService $triggerFormService,
     ): RedirectResponse {
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['status' => 'Enquiry is locked — applicant has been onboarded.']);
+        }
+
         $request->validate([
             'status' => ['required', 'string', 'in:' . implode(',', EmploymentApplication::STATUSES)],
         ]);
@@ -672,6 +676,10 @@ class EmploymentApplicationController extends Controller
             return back()->withErrors(['retrigger' => 'Only admins can re-trigger stage forms.']);
         }
 
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['retrigger' => 'Enquiry is locked — applicant has been onboarded.']);
+        }
+
         $created = $triggerFormService->dispatchFormsFor(
             $employmentApplication,
             $employmentApplication->status,
@@ -721,6 +729,10 @@ class EmploymentApplicationController extends Controller
      */
     public function decline(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
     {
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['decline' => 'Enquiry is locked — applicant has been onboarded.']);
+        }
+
         $request->validate([
             'reason' => ['nullable', 'string', 'max:2000'],
             'add_to_screening' => ['nullable', 'boolean'],
@@ -795,6 +807,10 @@ class EmploymentApplicationController extends Controller
      */
     public function onboard(Request $request, EmploymentApplication $employmentApplication, EmploymentHeroService $ehService): RedirectResponse
     {
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['onboard' => 'Applicant has already been onboarded.']);
+        }
+
         $request->validate([
             'eh_location_id' => ['required', 'string', 'exists:locations,eh_location_id'],
             'qualifications_required' => ['boolean'],
@@ -996,6 +1012,10 @@ class EmploymentApplicationController extends Controller
     {
         abort_unless($request->user()?->isAdmin(), 403);
 
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['reset' => 'Enquiry is locked — applicant has been onboarded.']);
+        }
+
         $employmentApplication->resetToFresh();
 
         return back()->with('success', 'Application reset to new — workflow data wiped.');
@@ -1010,6 +1030,10 @@ class EmploymentApplicationController extends Controller
     public function destroy(Request $request, EmploymentApplication $employmentApplication): RedirectResponse
     {
         abort_unless($request->user()?->isAdmin(), 403);
+
+        if ($employmentApplication->isLocked()) {
+            return back()->withErrors(['destroy' => 'Enquiry is locked — applicant has been onboarded.']);
+        }
 
         $label = $employmentApplication->displayLabel();
 

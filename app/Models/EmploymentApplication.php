@@ -158,6 +158,16 @@ class EmploymentApplication extends Model implements ProvidesFormPlaceholders
         return $this->status === self::STATUS_DECLINED;
     }
 
+    /**
+     * Once onboarded, the enquiry is a historical record — the employee lives
+     * in payroll now, so mutating this record risks drifting from the source
+     * of truth. Comments remain open so HR can still leave notes.
+     */
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_ONBOARDED;
+    }
+
     public function getFullNameAttribute(): string
     {
         return "{$this->first_name} {$this->surname}";

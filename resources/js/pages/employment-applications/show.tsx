@@ -39,6 +39,7 @@ import {
     History,
     ListChecks,
     Loader2,
+    Lock,
     Mail,
     MapPin,
     MessageSquare,
@@ -1266,6 +1267,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     // (directly or through any of their roles). Senior roles cover juniors as
     // long as their permission grants overlap.
     function canFillFormRequest(fr: FormRequestData): boolean {
+        if (app.status === 'onboarded') return false;
         if (auth.isAdmin) return true;
         if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
             return permissions.includes(fr.assignee_permission);
@@ -1274,10 +1276,18 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         return permissions.includes('employment-applications.screen');
     }
     const canView = auth.isAdmin || permissions.includes('employment-applications.view');
-    const canScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
-    const canWhsReview = auth.isAdmin || permissions.includes('employment-applications.whs-review');
-    const canWhs = auth.isAdmin || permissions.includes('employment-applications.whs');
-    const canApprove = auth.isAdmin || permissions.includes('employment-applications.approve');
+    // Once onboarded, the enquiry becomes a historical record — the employee
+    // lives in payroll now, so mutating this record risks drifting from the
+    // source of truth. Comments stay open so HR can still leave notes.
+    const isLocked = app.status === 'onboarded';
+    const hasScreen = auth.isAdmin || permissions.includes('employment-applications.screen');
+    const hasWhsReview = auth.isAdmin || permissions.includes('employment-applications.whs-review');
+    const hasWhs = auth.isAdmin || permissions.includes('employment-applications.whs');
+    const hasApprove = auth.isAdmin || permissions.includes('employment-applications.approve');
+    const canScreen = hasScreen && !isLocked;
+    const canWhsReview = hasWhsReview && !isLocked;
+    const canWhs = hasWhs && !isLocked;
+    const canApprove = hasApprove && !isLocked;
 
     const [showDeclineDialog, setShowDeclineDialog] = useState(false);
     const [showResetDialog, setShowResetDialog] = useState(false);
@@ -1817,6 +1827,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     <StatusBadge status={app.status} labels={statuses} />
                                 </div>
 
+                                {/* Locked notice — enquiry is now a historical record; only comments remain open */}
+                                {isLocked && (hasScreen || hasWhsReview || hasWhs || hasApprove) && (
+                                    <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50/50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                                        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <div className="leading-snug">
+                                            <p className="font-medium">Enquiry locked</p>
+                                            <p className="mt-0.5 text-[11px]">Applicant has been onboarded. Only comments can be added — all other actions are disabled.</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Status Controls */}
                                 {(canScreen || canWhsReview || canWhs || canApprove) && (
                                     <div className="mb-4 space-y-2">
@@ -1886,7 +1907,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                         Send Docs — New
                                                     </Button>
                                                 )}
-                                                {['contract_signed', 'onboarded'].includes(app.status) && (
+                                                {app.status === 'contract_signed' && (
                                                     <Button size="sm" variant="default" className="flex-1" onClick={() => setShowOnboardModal(true)}>
                                                         <User className="mr-1.5 h-3.5 w-3.5" />
                                                         Payroll
@@ -2241,7 +2262,7 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                     </button>
                                 )}
 
-                                {auth.isAdmin && (
+                                {auth.isAdmin && !isLocked && (
                                     <div className="mt-2 flex items-center gap-1">
                                         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Admin</span>
                                         <span aria-hidden className="h-px flex-1 bg-border" />

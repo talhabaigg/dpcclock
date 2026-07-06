@@ -223,6 +223,9 @@ class SigningRequestController extends Controller
             \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
         }
         // EmploymentApplication signables rely on the existing employment-applications permission gate at the route level.
+        if ($signable instanceof \App\Models\EmploymentApplication && $signable->isLocked()) {
+            abort(403, 'Enquiry is locked — applicant has been onboarded.');
+        }
     }
 
     private function resolveSignableLabel(SigningRequest $sr): ?string
