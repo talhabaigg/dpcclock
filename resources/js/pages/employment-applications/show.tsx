@@ -351,7 +351,7 @@ function UserAvatar({ name, className }: { name: string; className?: string }) {
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormResponse, onReply, isReply, statusLabels }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormResponse, onReply, isReply, statusLabels, formRequestsById }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
@@ -360,6 +360,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
     onReply?: (commentId: number, userName: string, userId: number | null) => void;
     isReply?: boolean;
     statusLabels: Record<string, string>;
+    formRequestsById?: Map<number, FormRequestData>;
 }) {
     const [showReplies, setShowReplies] = useState(false);
     const isSystem = comment.metadata !== null;
@@ -412,12 +413,26 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
     }
 
     if (isSystem && formSubmittedMeta) {
+        const fr = formRequestsById?.get(formSubmittedMeta.form_request_id);
+        const snapshot = fr?.response_snapshot ?? [];
+        // Show the first 2 answered questions as a real Q&A preview inside
+        // the thumbnail — like Drive's mini page render.
+        const answered = snapshot.filter(
+            (row) => row.type !== 'heading'
+                && row.value_display !== null
+                && row.value_display !== ''
+                && !(Array.isArray(row.value_display) && row.value_display.length === 0),
+        );
+        const preview = answered.slice(0, 2);
+        const answeredCount = answered.length;
+        const recipient = fr?.recipient_name;
+
         return (
             <div className="flex gap-3">
                 <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                     <Clipboard className="text-muted-foreground h-4 w-4" />
                 </div>
-                <div className="min-w-0 flex-1 pt-1">
+                <div className="min-w-0 flex-1 pt-0.5">
                     <p className="text-sm">
                         <span className="font-medium">{comment.user?.name ?? 'System'}</span>
                         <span className="text-muted-foreground"> {comment.body}</span>
@@ -426,10 +441,43 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                     <button
                         type="button"
                         onClick={() => onOpenFormResponse?.(formSubmittedMeta.form_request_id)}
-                        className="bg-background text-foreground hover:bg-muted mt-1.5 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors"
+                        className="group mt-1.5 block w-52 overflow-hidden rounded-md border bg-background text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md"
                     >
-                        <Clipboard className="h-3.5 w-3.5" />
-                        View response
+                        {/* Fake page preview — mini render of the response */}
+                        <div className="relative h-24 overflow-hidden border-b bg-white p-2 dark:bg-slate-950">
+                            <p className="mb-1.5 truncate text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                {formSubmittedMeta.form_name}
+                            </p>
+                            {preview.length > 0 ? (
+                                <div className="space-y-1.5">
+                                    {preview.map((row) => (
+                                        <div key={row.field_id} className="leading-tight">
+                                            <p className="truncate text-[8px] text-muted-foreground">{row.label}</p>
+                                            <p className="truncate text-[10px] font-medium text-foreground">
+                                                {Array.isArray(row.value_display) ? row.value_display.join(', ') : row.value_display}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-1 pt-1">
+                                    <div className="h-1 w-4/5 rounded-full bg-slate-200 dark:bg-slate-800" />
+                                    <div className="h-1 w-3/5 rounded-full bg-slate-200 dark:bg-slate-800" />
+                                    <div className="h-1 w-2/3 rounded-full bg-slate-200 dark:bg-slate-800" />
+                                </div>
+                            )}
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-white to-transparent dark:from-slate-950" />
+                        </div>
+                        {/* Footer bar — Drive-style file row */}
+                        <div className="flex items-center gap-1.5 px-2 py-1.5">
+                            <FileText className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                            <div className="min-w-0 leading-tight">
+                                <p className="truncate text-[11px] font-medium">{formSubmittedMeta.form_name}</p>
+                                <p className="truncate text-[9px] text-muted-foreground">
+                                    {recipient ?? 'Response'}{answeredCount > 0 ? ` · ${answeredCount} answer${answeredCount === 1 ? '' : 's'}` : ''}
+                                </p>
+                            </div>
+                        </div>
                     </button>
                 </div>
             </div>
@@ -568,7 +616,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                     {showReplies && (
                         <div className="mt-1 space-y-2.5 border-l-2 border-border/50 pl-3">
                             {comment.replies!.map((reply) => (
-                                <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} statusLabels={statusLabels} isReply />
+                                <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} statusLabels={statusLabels} formRequestsById={formRequestsById} isReply />
                             ))}
                         </div>
                     )}
@@ -1359,7 +1407,11 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     // Comment filter & sort
     const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('messages');
     const [mobileView, setMobileView] = useState<'details' | 'activity'>('details');
-    const messageCount = comments.filter((c) => c.metadata === null).length;
+    // Form responses and signed contracts carry reviewable content, so they
+    // surface alongside chat in Messages and Attachments — not buried in History.
+    const isContentBearingSystem = (c: CommentData) =>
+        c.metadata?.type === 'form_submitted' || c.metadata?.type === 'contract_signed';
+    const messageCount = comments.filter((c) => c.metadata === null || isContentBearingSystem(c)).length;
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
 
     const currentUser = (usePage().props.auth as { user?: { id: number; name: string } })?.user;
@@ -1466,13 +1518,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
         });
     }
 
+    // Lookup by id so form_submitted comment cards can render a preview of the
+    // response without another round-trip.
+    const formRequestsById = new Map((formRequests ?? []).map((fr) => [fr.id, fr]));
+
     // Compute filtered & sorted comments
     const filteredComments = (() => {
         let result = comments;
         if (commentFilter === 'messages') {
-            result = result.filter((c) => c.metadata === null && c.attachments.length === 0);
+            result = result.filter((c) => c.metadata === null || isContentBearingSystem(c));
         } else if (commentFilter === 'attachments') {
-            result = result.filter((c) => c.attachments.length > 0);
+            result = result.filter((c) => c.attachments.length > 0 || isContentBearingSystem(c));
         } else if (commentFilter === 'history') {
             result = result.filter((c) => c.metadata !== null);
         }
@@ -1731,11 +1787,12 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
                                                 onOpenFormResponse={(id) => {
-                                                    const fr = formRequests?.find((f) => f.id === id);
+                                                    const fr = formRequestsById.get(id);
                                                     if (fr) setViewingFormRequest(fr);
                                                 }}
                                                 onReply={handleReplyClick}
                                                 statusLabels={statuses}
+                                                formRequestsById={formRequestsById}
                                             />
                                         ))}
                                     </div>
