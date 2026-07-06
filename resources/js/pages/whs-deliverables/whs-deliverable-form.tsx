@@ -200,13 +200,25 @@ export default function WhsDeliverableForm({ baseUrl, types, entry, cancelUrl }:
                             <Label className="text-muted-foreground text-xs">{config.checklist_label ?? 'Inspection checklist'}</Label>
                             <div className="space-y-2">
                                 {config.checklist.map((item) => (
-                                    <label key={item.key} className="flex cursor-pointer items-center gap-2.5 text-sm">
-                                        <Checkbox
-                                            checked={!!checklist[item.key]}
-                                            onCheckedChange={(c) => setChecklist((s) => ({ ...s, [item.key]: !!c }))}
-                                        />
-                                        {item.label}
-                                    </label>
+                                    <div key={item.key} className="space-y-1.5">
+                                        <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+                                            <Checkbox
+                                                checked={!!checklist[item.key]}
+                                                onCheckedChange={(c) => setChecklist((s) => ({ ...s, [item.key]: !!c }))}
+                                            />
+                                            {item.label}
+                                        </label>
+                                        {item.input_key && checklist[item.key] && (
+                                            <Input
+                                                value={details[item.input_key] ?? ''}
+                                                onChange={(e) =>
+                                                    setDetails((d) => ({ ...d, [item.input_key!]: e.target.value }))
+                                                }
+                                                placeholder={item.input_placeholder ?? ''}
+                                                className="ml-[26px]"
+                                            />
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>

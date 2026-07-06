@@ -42,10 +42,14 @@
             ['Asset ID / Serial number', fn ($e) => $val($e, 'asset_id')],
             ['Type of asset', fn ($e) => $val($e, 'asset_type')],
             ['Asset condition', function ($e) use ($assetConditionShort) {
+                $otherText = trim((string) data_get($e->details, 'other_condition', ''));
                 $checks = collect($e->checklist ?? [])
                     ->filter(fn ($v) => (bool) $v)
                     ->keys()
-                    ->map(fn ($k) => $assetConditionShort[$k] ?? $k)
+                    ->map(function ($k) use ($assetConditionShort, $otherText) {
+                        $label = $assetConditionShort[$k] ?? $k;
+                        return $k === 'check_other' && $otherText !== '' ? "{$label}: {$otherText}" : $label;
+                    })
                     ->all();
                 return empty($checks) ? '—' : implode(', ', $checks);
             }],

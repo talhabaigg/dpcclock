@@ -294,18 +294,24 @@ export default function WhsDeliverableShow({ location, entry, comments, types }:
                                     <div className="space-y-2">
                                         {config.checklist.map((item) => {
                                             const checked = !!entry.checklist?.[item.key];
+                                            const inputValue = item.input_key ? entry.details?.[item.input_key] : undefined;
                                             return (
-                                                <div key={item.key} className="flex items-center gap-2.5 text-sm">
-                                                    <span
-                                                        className={`flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] ${
-                                                            checked
-                                                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                                : 'border-border text-transparent'
-                                                        }`}
-                                                    >
-                                                        ✓
-                                                    </span>
-                                                    <span className={checked ? '' : 'text-muted-foreground'}>{item.label}</span>
+                                                <div key={item.key} className="text-sm">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span
+                                                            className={`flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] ${
+                                                                checked
+                                                                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                                                    : 'border-border text-transparent'
+                                                            }`}
+                                                        >
+                                                            ✓
+                                                        </span>
+                                                        <span className={checked ? '' : 'text-muted-foreground'}>{item.label}</span>
+                                                    </div>
+                                                    {checked && inputValue && (
+                                                        <div className="text-muted-foreground mt-1 ml-[26px] text-xs">{inputValue}</div>
+                                                    )}
                                                 </div>
                                             );
                                         })}

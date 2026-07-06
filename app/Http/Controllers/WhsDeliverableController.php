@@ -334,10 +334,11 @@ class WhsDeliverableController extends Controller
 
         $config = WhsDeliverable::TYPES[$validated['type']];
 
-        // Keep only detail keys defined for this type.
+        // Keep only detail keys defined for this type (fields + any checklist-driven free-text keys).
         $fieldKeys = collect($config['fields'])->pluck('key')->all();
+        $checklistInputKeys = collect($config['checklist'] ?? [])->pluck('input_key')->filter()->values()->all();
         $details = collect($request->input('details', []))
-            ->only($fieldKeys)
+            ->only(array_merge($fieldKeys, $checklistInputKeys))
             ->map(fn ($v) => is_string($v) ? trim($v) : $v)
             ->filter(fn ($v) => $v !== null && $v !== '')
             ->all();

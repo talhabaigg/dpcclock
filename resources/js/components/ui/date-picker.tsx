@@ -63,6 +63,9 @@ export function DatePicker({
     const date = parseISODate(value);
     const minDate = parseISODate(min ?? '');
     const maxDate = parseISODate(max ?? '');
+    const currentYear = new Date().getFullYear();
+    const startMonth = minDate ?? new Date(currentYear - 50, 0);
+    const endMonth = maxDate ?? new Date(currentYear + 50, 11);
 
     const handleSelect = (next: Date | undefined) => {
         onChange(toISODate(next));
@@ -120,6 +123,8 @@ export function DatePicker({
                     onSelect={handleSelect}
                     captionLayout="dropdown"
                     defaultMonth={date ?? new Date()}
+                    startMonth={startMonth}
+                    endMonth={endMonth}
                     disabled={[
                         ...(minDate ? [{ before: minDate }] : []),
                         ...(maxDate ? [{ after: maxDate }] : []),

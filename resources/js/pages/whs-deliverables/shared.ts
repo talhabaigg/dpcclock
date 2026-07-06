@@ -16,6 +16,9 @@ export interface TypeField {
 export interface ChecklistItem {
     key: string;
     label: string;
+    /** When set, a free-text input appears beneath the checkbox once ticked; its value is stored in `details[input_key]`. */
+    input_key?: string;
+    input_placeholder?: string;
 }
 
 export interface TypeConfig {

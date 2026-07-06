@@ -58,7 +58,7 @@ class WhsDeliverable extends Model implements HasMedia
                 ['key' => 'check_tagged', 'label' => 'Asset tagged, serviced and in date'],
                 ['key' => 'check_undamaged', 'label' => 'Free from any damage and faults'],
                 ['key' => 'check_logbooks', 'label' => 'Logbooks provided where applicable'],
-                ['key' => 'check_other', 'label' => 'Other'],
+                ['key' => 'check_other', 'label' => 'Other', 'input_key' => 'other_condition', 'input_placeholder' => 'Describe condition'],
             ],
         ],
         'lifting' => [
