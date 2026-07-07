@@ -194,10 +194,12 @@ export function TurnoverPrintReport({
             );
         };
 
-        // Filter and transform by company
-        const swcpRows = data.filter((r) => r.company === 'SWCP').map(transformRow);
-        const greRows = data.filter((r) => r.company === 'GRE').map(transformRow);
-        const forecastRows = data.filter((r) => r.company === 'Forecast').map(transformRow);
+        // Filter and transform by company. Forecast projects are always kept in their
+        // own section — never grouped with real SWCP/GRE jobs even when their company
+        // field is set to SWCP or GRE.
+        const swcpRows = data.filter((r) => r.type === 'location' && r.company === 'SWCP').map(transformRow);
+        const greRows = data.filter((r) => r.type === 'location' && r.company === 'GRE').map(transformRow);
+        const forecastRows = data.filter((r) => r.type === 'forecast_project').map(transformRow);
 
         const swcpTotals = calculateTotals(swcpRows);
         const greTotals = calculateTotals(greRows);
