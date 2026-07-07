@@ -67,9 +67,21 @@ class RetentionReportController extends Controller
             ->orderBy('name')
             ->get();
 
-        // Part B: Locations that have manual retention entries but may not have a JobSummary
-        $manualJobNumbers = JobRetentionSetting::whereNotNull('manual_retention_held')
-            ->where('manual_retention_held', '!=', 0)
+        // Part B: Locations that have any manual override but may not have a JobSummary.
+        // "Any manual override" — not just retention_held — because the user might have set
+        // release amount overrides, a manual completion date, etc. on a job with zero cash holding.
+        // Losing those on the next page load would silently discard their edits.
+        $manualOverrideFields = [
+            'manual_retention_held', 'manual_customer_name', 'manual_contract_value',
+            'manual_estimated_end_date', 'manual_first_release_date', 'manual_second_release_date',
+            'manual_first_release_amount', 'manual_second_release_amount',
+        ];
+        $manualJobNumbers = JobRetentionSetting::query()
+            ->where(function ($q) use ($manualOverrideFields) {
+                foreach ($manualOverrideFields as $field) {
+                    $q->orWhereNotNull($field);
+                }
+            })
             ->pluck('job_number')
             ->toArray();
 
@@ -142,8 +154,13 @@ class RetentionReportController extends Controller
             $manual = (float) ($setting?->manual_retention_held ?? 0);
             $currentCashHolding = $retainage + $manual;
 
-            // Only include jobs with non-zero retention
-            if ($retainage == 0 && $manual == 0) continue;
+            // Skip only when there's nothing to show — no cash, no manual override anywhere.
+            // If the user has explicitly set any manual field (including deliberately zeroing the
+            // cash holding, or setting release-amount overrides), keep the row visible so those
+            // edits don't silently vanish.
+            $hasManualOverride = $setting && collect($manualOverrideFields)
+                ->contains(fn ($field) => $setting->getAttribute($field) !== null);
+            if ($retainage == 0 && $manual == 0 && ! $hasManualOverride) continue;
 
             // Manual fields override system data when present
             $customerName = $setting?->manual_customer_name ?? $customerNames[$jobNumber] ?? '';
