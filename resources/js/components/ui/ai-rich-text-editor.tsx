@@ -31,6 +31,9 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 interface BaseAiRichTextEditorProps {
     placeholder?: string;
@@ -611,7 +614,21 @@ export default function AiRichTextEditor(props: AiRichTextEditorProps) {
                         className="hidden"
                         onChange={(e) => {
                             if (e.target.files) {
-                                onAttachmentsChange?.([...(attachments || []), ...Array.from(e.target.files)]);
+                                const picked = Array.from(e.target.files);
+                                const accepted: File[] = [];
+                                const rejected: string[] = [];
+                                for (const f of picked) {
+                                    if (f.size > MAX_ATTACHMENT_BYTES) rejected.push(f.name);
+                                    else accepted.push(f);
+                                }
+                                if (rejected.length) {
+                                    toast.error(
+                                        rejected.length === 1
+                                            ? `"${rejected[0]}" is larger than 20 MB and was not attached.`
+                                            : `${rejected.length} files exceed the 20 MB limit and were not attached.`,
+                                    );
+                                }
+                                if (accepted.length) onAttachmentsChange?.([...(attachments || []), ...accepted]);
                                 e.target.value = '';
                             }
                         }}

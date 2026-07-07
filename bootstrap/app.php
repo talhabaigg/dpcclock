@@ -40,5 +40,27 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (\Spatie\MediaLibrary\MediaCollections\Exceptions\FileCannotBeAdded $e, \Illuminate\Http\Request $request) {
+            $field = collect(['attachments', 'files', 'file', 'attachment', 'media'])
+                ->first(fn ($candidate) => $request->hasFile($candidate)) ?? 'file';
+
+            $message = match (true) {
+                $e instanceof \Spatie\MediaLibrary\MediaCollections\Exceptions\FileIsTooBig
+                    => sprintf('File is too large. Maximum allowed size is %d MB.', (int) (config('media-library.max_file_size') / 1024 / 1024)),
+                $e instanceof \Spatie\MediaLibrary\MediaCollections\Exceptions\MimeTypeNotAllowed
+                    => 'This file type is not allowed.',
+                $e instanceof \Spatie\MediaLibrary\MediaCollections\Exceptions\FileUnacceptableForCollection
+                    => 'This file is not acceptable for upload.',
+                default => 'The file could not be uploaded.',
+            };
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'errors' => [$field => [$message]],
+                ], 422);
+            }
+
+            return back()->withInput()->withErrors([$field => $message]);
+        });
     })->create();

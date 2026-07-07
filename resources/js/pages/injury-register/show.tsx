@@ -27,6 +27,7 @@ import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Downloa
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -625,6 +626,10 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
             preserveScroll: true,
             forceFormData: true,
             onSuccess: () => { setCommentDoc(null); setAttachments([]); },
+            onError: (errors) => {
+                const first = Object.values(errors)[0];
+                if (first) toast.error(Array.isArray(first) ? first[0] : String(first));
+            },
             onFinish: () => setSubmitting(false),
         });
     }
