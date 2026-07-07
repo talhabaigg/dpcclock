@@ -4,7 +4,11 @@ import LocationPageHeader from '@/components/location-page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,8 +16,8 @@ import LocationLayout, { type LocationBase } from '@/layouts/location-layout';
 import { cn } from '@/lib/utils';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Download, FileSpreadsheet, Lock, Package } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, Download, FileSpreadsheet, Lock, Package, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import AttachMaterialsDialog from './partials.tsx/AttachMaterialsDialog';
 import EditPriceDialog from './partials.tsx/EditPriceDialog';
@@ -60,6 +64,27 @@ export default function LocationPriceList() {
     const [showLockedOnly, setShowLockedOnly] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [shouldUploadAfterSet, setShouldUploadAfterSet] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [supplierFilter, setSupplierFilter] = useState<string[]>([]);
+    const [supplierPopoverOpen, setSupplierPopoverOpen] = useState(false);
+
+    const availableSuppliers = useMemo(() => {
+        const set = new Set<string>();
+        let hasNoSupplier = false;
+        (location.material_items ?? []).forEach((item) => {
+            if (item.supplier?.code) {
+                set.add(item.supplier.code);
+            } else {
+                hasNoSupplier = true;
+            }
+        });
+        const codes = Array.from(set).sort((a, b) => a.localeCompare(b));
+        return hasNoSupplier ? [...codes, '__none__'] : codes;
+    }, [location.material_items]);
+
+    const toggleSupplier = (code: string) => {
+        setSupplierFilter((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+    };
 
     const handleUpload = (locationId: number) => {
         if (!selectedFile) {
@@ -103,9 +128,23 @@ export default function LocationPriceList() {
         }
     }, [selectedFile, shouldUploadAfterSet]);
 
-    const filteredMaterialItems = showLockedOnly
-        ? (location.material_items?.filter((item) => Boolean(item.pivot?.is_locked)) ?? [])
-        : (location.material_items ?? []);
+    const filteredMaterialItems = useMemo(() => {
+        const items = location.material_items ?? [];
+        const query = searchQuery.trim().toLowerCase();
+        return items.filter((item) => {
+            if (showLockedOnly && !item.pivot?.is_locked) return false;
+            if (supplierFilter.length > 0) {
+                const code = item.supplier?.code ?? '__none__';
+                if (!supplierFilter.includes(code)) return false;
+            }
+            if (!query) return true;
+            return (
+                item.code?.toLowerCase().includes(query) ||
+                item.description?.toLowerCase().includes(query) ||
+                item.supplier?.code?.toLowerCase().includes(query)
+            );
+        });
+    }, [location.material_items, showLockedOnly, searchQuery, supplierFilter]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
@@ -152,8 +191,80 @@ export default function LocationPriceList() {
                 </a>
             </LocationPageHeader>
 
-            <div className="text-muted-foreground flex items-center justify-between px-1 text-xs">
-                <span>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                    <div className="relative w-full max-w-xs">
+                        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2" />
+                        <Input
+                            placeholder="Search code, description, supplier..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-7 pr-7 pl-7 text-xs"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+                                aria-label="Clear search"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
+                    <Popover open={supplierPopoverOpen} onOpenChange={setSupplierPopoverOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                                <span>Supplier</span>
+                                {supplierFilter.length > 0 && (
+                                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                                        {supplierFilter.length}
+                                    </Badge>
+                                )}
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[220px] p-0" align="start">
+                            <Command>
+                                <CommandInput placeholder="Search suppliers..." className="h-8 text-xs" />
+                                <CommandList>
+                                    <CommandEmpty>No suppliers found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {availableSuppliers.map((code) => {
+                                            const isNone = code === '__none__';
+                                            const label = isNone ? 'No supplier' : code;
+                                            const checked = supplierFilter.includes(code);
+                                            return (
+                                                <CommandItem
+                                                    key={code}
+                                                    value={label}
+                                                    onSelect={() => toggleSupplier(code)}
+                                                    className="text-xs"
+                                                >
+                                                    <Checkbox checked={checked} className="mr-2 h-3.5 w-3.5" />
+                                                    <span className={cn(isNone && 'text-muted-foreground italic')}>{label}</span>
+                                                </CommandItem>
+                                            );
+                                        })}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                            {supplierFilter.length > 0 && (
+                                <div className="border-t p-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-full justify-center text-xs"
+                                        onClick={() => setSupplierFilter([])}
+                                    >
+                                        Clear
+                                    </Button>
+                                </div>
+                            )}
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">
                     {filteredMaterialItems.length.toLocaleString()} {showLockedOnly ? 'locked items' : 'items'}
                 </span>
             </div>
