@@ -86,6 +86,16 @@ const formatPct = (value: number | null): string => {
     return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 };
 
+const formatRatio = (value: number | null): string => {
+    if (value === null) return '—';
+    return `${value.toFixed(1)}%`;
+};
+
+const calcRatio = (actual: number, revenueBase: number): number | null => {
+    if (revenueBase === 0) return null;
+    return (actual / revenueBase) * 100;
+};
+
 // Variance $ carries the favourability signal (positive = favourable).
 // Variance % is raw direction. Color keys off variance $ + magnitude relative to budget.
 function varianceColor(variance: number | null, budget: number): string {
@@ -99,6 +109,35 @@ function varianceColor(variance: number | null, budget: number): string {
 
 const HEAD_LABEL = 'h-6 px-2 py-1 text-right text-xs font-semibold text-muted-foreground';
 const CELL_PAD = 'py-0.5 px-2 text-xs';
+
+function RatioCell({ value, className }: { value: number | null; className?: string }) {
+    return (
+        <TableCell className={cn(CELL_PAD, 'text-right tabular-nums pr-3', className)}>
+            {formatRatio(value)}
+        </TableCell>
+    );
+}
+
+function SubtotalRatioCell({ value, bordered = true }: { value: number | null; bordered?: boolean }) {
+    return (
+        <TableCell
+            className={cn(
+                'py-1 px-2 pr-3 text-right tabular-nums font-semibold text-xs',
+                bordered && 'border-y border-border',
+            )}
+        >
+            {formatRatio(value)}
+        </TableCell>
+    );
+}
+
+function ComputedRatioCell({ value }: { value: number | null }) {
+    return (
+        <TableCell className="py-1.5 px-2 pr-3 text-right tabular-nums font-bold text-xs">
+            {formatRatio(value)}
+        </TableCell>
+    );
+}
 
 function PeriodCells({ data, drillUrl }: { data: PeriodTotals; drillUrl?: string }) {
     const pctColor = varianceColor(data.variance, data.budget);
@@ -161,14 +200,14 @@ function ComputedCells({ data }: { data: PeriodTotals }) {
 
 type DrillRange = { monthStart: string; monthEnd: string; fyStart: string; fyEnd: string };
 
-function SectionBlock({ section, range }: { section: Section; range: DrillRange }) {
+function SectionBlock({ section, range, revenueBase }: { section: Section; range: DrillRange; revenueBase: number }) {
     if (section.groups.length === 0) return null;
     const showGroupSubtotals = section.groups.length > 1;
     return (
         <>
             {/* Section header */}
             <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={10} className="pt-4 pb-1 pl-3 text-[11px] font-bold uppercase tracking-wide text-foreground">
+                <TableCell colSpan={11} className="pt-4 pb-1 pl-3 text-[11px] font-bold uppercase tracking-wide text-foreground">
                     {section.label}
                 </TableCell>
             </TableRow>
@@ -177,7 +216,7 @@ function SectionBlock({ section, range }: { section: Section; range: DrillRange 
                     {/* Group name (only when section has more than one group) */}
                     {showGroupSubtotals && (
                         <TableRow className="hover:bg-transparent">
-                            <TableCell colSpan={10} className="pt-2 pb-1 pl-5 text-xs font-semibold text-muted-foreground">
+                            <TableCell colSpan={11} className="pt-2 pb-1 pl-5 text-xs font-semibold text-muted-foreground">
                                 {group.name}
                             </TableCell>
                         </TableRow>
@@ -192,6 +231,7 @@ function SectionBlock({ section, range }: { section: Section; range: DrillRange 
                             </TableCell>
                             <PeriodCells data={row.month} drillUrl={buildDrillUrl(row.account_number, range.monthStart, range.monthEnd)} />
                             <PeriodCells data={row.fy} drillUrl={buildDrillUrl(row.account_number, range.fyStart, range.fyEnd)} />
+                            <RatioCell value={calcRatio(row.fy.actual, revenueBase)} className="text-muted-foreground" />
                         </TableRow>
                     ))}
                     {showGroupSubtotals && (
@@ -201,6 +241,7 @@ function SectionBlock({ section, range }: { section: Section; range: DrillRange 
                             </TableCell>
                             <SubtotalCells data={group.subtotal.month} />
                             <SubtotalCells data={group.subtotal.fy} />
+                            <SubtotalRatioCell value={calcRatio(group.subtotal.fy.actual, revenueBase)} />
                         </TableRow>
                     )}
                 </Fragment>
@@ -217,12 +258,13 @@ function SectionBlock({ section, range }: { section: Section; range: DrillRange 
                 </TableCell>
                 <SubtotalCells data={section.subtotal.month} bordered={!showGroupSubtotals} />
                 <SubtotalCells data={section.subtotal.fy} bordered={!showGroupSubtotals} />
+                <SubtotalRatioCell value={calcRatio(section.subtotal.fy.actual, revenueBase)} bordered={!showGroupSubtotals} />
             </TableRow>
         </>
     );
 }
 
-function ComputedLine({ label, data }: { label: string; data: Totals }) {
+function ComputedLine({ label, data, revenueBase }: { label: string; data: Totals; revenueBase: number }) {
     return (
         <TableRow className="hover:bg-transparent">
             <TableCell colSpan={2} className="pl-3 py-2 text-[11px] font-bold uppercase tracking-wide text-foreground">
@@ -230,6 +272,7 @@ function ComputedLine({ label, data }: { label: string; data: Totals }) {
             </TableCell>
             <ComputedCells data={data.month} />
             <ComputedCells data={data.fy} />
+            <ComputedRatioCell value={calcRatio(data.fy.actual, revenueBase)} />
         </TableRow>
     );
 }
@@ -459,6 +502,7 @@ export default function GlBudgetActualReport({
 
     const findSection = (key: Section['key']) => sections.find((s) => s.key === key);
     const ungroupedSection = findSection('ungrouped');
+    const revenueBase = findSection('revenue')?.subtotal.fy.actual ?? 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -548,6 +592,9 @@ export default function GlBudgetActualReport({
                                     <TableHead colSpan={4} className="h-6 px-2 py-1 text-center text-[11px] font-semibold text-muted-foreground">
                                         {fyLabel} To Date
                                     </TableHead>
+                                    <TableHead rowSpan={2} className={cn(HEAD_LABEL, 'align-bottom border-b border-border pr-3 leading-tight')}>
+                                        <span className="inline-block max-w-[80px] whitespace-normal text-right">Ratio to Revenue %</span>
+                                    </TableHead>
                                 </TableRow>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
@@ -571,13 +618,13 @@ export default function GlBudgetActualReport({
                                     <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Actual</TableHead>
                                     <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Budget</TableHead>
                                     <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>Variance</TableHead>
-                                    <TableHead className={cn(HEAD_LABEL, 'border-b border-border pr-3')}>%</TableHead>
+                                    <TableHead className={cn(HEAD_LABEL, 'border-b border-border')}>%</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!hasData ? (
                                     <TableRow className="hover:bg-transparent">
-                                        <TableCell colSpan={10} className="py-12 text-center">
+                                        <TableCell colSpan={11} className="py-12 text-center">
                                             <div className="text-muted-foreground space-y-1 text-xs">
                                                 <p>No GL activity or budgets for {monthLabel}.</p>
                                                 <p className="text-[11px]">Try a different month, or set budgets in Budget Management.</p>
@@ -586,19 +633,19 @@ export default function GlBudgetActualReport({
                                     </TableRow>
                                 ) : (
                                     <>
-                                        <SectionBlock section={findSection('revenue')!} range={drillRange} />
-                                        <SectionBlock section={findSection('cogs')!} range={drillRange} />
-                                        <ComputedLine label="Gross Profit" data={computed.gross_profit} />
+                                        <SectionBlock section={findSection('revenue')!} range={drillRange} revenueBase={revenueBase} />
+                                        <SectionBlock section={findSection('cogs')!} range={drillRange} revenueBase={revenueBase} />
+                                        <ComputedLine label="Gross Profit" data={computed.gross_profit} revenueBase={revenueBase} />
 
-                                        <SectionBlock section={findSection('operating_expense')!} range={drillRange} />
-                                        <ComputedLine label="Net Operating Income" data={computed.net_operating_income} />
+                                        <SectionBlock section={findSection('operating_expense')!} range={drillRange} revenueBase={revenueBase} />
+                                        <ComputedLine label="Net Operating Income" data={computed.net_operating_income} revenueBase={revenueBase} />
 
-                                        <SectionBlock section={findSection('other_income')!} range={drillRange} />
-                                        <SectionBlock section={findSection('other_expense')!} range={drillRange} />
-                                        <ComputedLine label="Net Income" data={computed.net_income} />
+                                        <SectionBlock section={findSection('other_income')!} range={drillRange} revenueBase={revenueBase} />
+                                        <SectionBlock section={findSection('other_expense')!} range={drillRange} revenueBase={revenueBase} />
+                                        <ComputedLine label="Net Income" data={computed.net_income} revenueBase={revenueBase} />
 
                                         {ungroupedSection && (
-                                            <SectionBlock section={ungroupedSection} range={drillRange} />
+                                            <SectionBlock section={ungroupedSection} range={drillRange} revenueBase={revenueBase} />
                                         )}
                                     </>
                                 )}

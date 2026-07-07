@@ -71,9 +71,17 @@
             text-align: right;
         }
 
-        col.col-code { width: 6%; }
-        col.col-name { width: 22%; }
-        col.col-num  { width: 9%; }
+        col.col-code  { width: 5%; }
+        col.col-name  { width: 20%; }
+        col.col-num   { width: 8.4%; }
+        col.col-ratio { width: 7.8%; }
+
+        table.data thead th.ratio-head {
+            border-bottom: 1px solid #cbd5e1;
+            vertical-align: bottom;
+            font-size: 8px;
+            padding: 2px 5px 3px;
+        }
 
         table.data tbody td {
             padding: 1.5px 5px;
@@ -173,6 +181,11 @@
     };
     $sectionByKey = collect($sections)->keyBy('key');
     $hasData = $sectionByKey->contains(fn ($s) => ! empty($s['groups']));
+    $revenueBase = (float) ($sectionByKey->get('revenue')['subtotal']['fy']['actual'] ?? 0);
+    $formatRatio = function ($actual) use ($revenueBase) {
+        if ($revenueBase == 0.0) return '—';
+        return number_format(((float) $actual / $revenueBase) * 100, 1) . '%';
+    };
 @endphp
 
 <div class="doc-header">
@@ -203,6 +216,7 @@
             <col class="col-num">
             <col class="col-num">
             <col class="col-num">
+            <col class="col-ratio">
         </colgroup>
         <thead>
             <tr>
@@ -210,6 +224,7 @@
                 <th rowspan="2" aria-hidden="true"></th>
                 <th colspan="4">{{ $monthLabel }}</th>
                 <th colspan="4">{{ $fyLabel }} To Date</th>
+                <th rowspan="2" class="ratio-head">Ratio to Revenue %</th>
             </tr>
             <tr class="sub">
                 <th>Actual</th>
@@ -245,12 +260,12 @@
                 @if($section && ! empty($section['groups']))
                     @php $showGroupSubtotals = count($section['groups']) > 1; @endphp
                     <tr class="section-header">
-                        <td colspan="10">{{ $section['label'] }}</td>
+                        <td colspan="11">{{ $section['label'] }}</td>
                     </tr>
                     @foreach($section['groups'] as $group)
                         @if($showGroupSubtotals)
                             <tr class="group-header">
-                                <td colspan="10">{{ $group['name'] }}</td>
+                                <td colspan="11">{{ $group['name'] }}</td>
                             </tr>
                         @endif
                         @foreach($group['rows'] as $row)
@@ -269,6 +284,7 @@
                                 <td class="num">{{ $formatCurrency($row['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($row['fy']['variance']) }}</td>
                                 <td class="num {{ $fyPctClass }}">{{ $formatPct($row['fy']['variance_pct']) }}</td>
+                                <td class="num">{{ $formatRatio($row['fy']['actual']) }}</td>
                             </tr>
                         @endforeach
                         @if($showGroupSubtotals)
@@ -287,6 +303,7 @@
                                 <td class="num">{{ $formatCurrency($sub['fy']['budget']) }}</td>
                                 <td class="num">{{ $formatCurrency($sub['fy']['variance']) }}</td>
                                 <td class="num {{ $subFyClass }}">{{ $formatPct($sub['fy']['variance_pct']) }}</td>
+                                <td class="num">{{ $formatRatio($sub['fy']['actual']) }}</td>
                             </tr>
                         @endif
                     @endforeach
@@ -305,6 +322,7 @@
                         <td class="num">{{ $formatCurrency($st['fy']['budget']) }}</td>
                         <td class="num">{{ $formatCurrency($st['fy']['variance']) }}</td>
                         <td class="num {{ $stFyClass }}">{{ $formatPct($st['fy']['variance_pct']) }}</td>
+                        <td class="num">{{ $formatRatio($st['fy']['actual']) }}</td>
                     </tr>
                 @endif
             @elseif($entry['type'] === 'computed')
@@ -323,6 +341,7 @@
                     <td class="num">{{ $formatCurrency($data['fy']['budget']) }}</td>
                     <td class="num">{{ $formatCurrency($data['fy']['variance']) }}</td>
                     <td class="num {{ $fyClass }}">{{ $formatPct($data['fy']['variance_pct']) }}</td>
+                    <td class="num">{{ $formatRatio($data['fy']['actual']) }}</td>
                 </tr>
             @endif
         @endforeach
