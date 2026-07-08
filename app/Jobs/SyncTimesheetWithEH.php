@@ -18,6 +18,12 @@ class SyncTimesheetWithEH implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
+     * The EH bulk endpoint can take >30s per chunk and the job sends multiple
+     * chunks, so allow well beyond the worker's default 60s kill threshold.
+     */
+    public $timeout = 600;
+
+    /**
      * Create a new job instance.
      */
     public function __construct()
@@ -165,7 +171,7 @@ class SyncTimesheetWithEH implements ShouldQueue
         $apiKey = config('services.employment_hero.api_key');
         // Send POST request to the API with correct headers and JSON data
         Log::info(json_encode($chunkData, JSON_PRETTY_PRINT));
-        $response = Http::withHeaders([
+        $response = Http::timeout(120)->withHeaders([
             'Authorization' => 'Basic '.base64_encode($apiKey.':'),
             'Content-Type' => 'Application/Json',  // Ensure the content type is set to JSON
         ])->post('https://api.yourpayroll.com.au/api/v2/business/431152/timesheet/bulk', $chunkData);
