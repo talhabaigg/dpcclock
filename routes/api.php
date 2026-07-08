@@ -95,6 +95,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Worker screening list (paginated; filters: search, status=active|removed|all, per_page)
     Route::get('/worker-screening', [WorkerScreeningController::class, 'index'])
         ->name('api.worker-screening.index');
+    Route::post('/worker-screening', [WorkerScreeningController::class, 'store'])
+        ->name('api.worker-screening.store');
 
     // Drawings
     Route::apiResource('drawings', DrawingController::class)->names('api.drawings');

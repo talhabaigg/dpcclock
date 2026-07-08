@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\WorkerScreening;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class WorkerScreeningController extends Controller
 {
@@ -51,5 +52,61 @@ class WorkerScreeningController extends Controller
             ]);
 
         return response()->json($screenings);
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'date_of_birth' => 'nullable|date',
+            'reason' => 'required|string',
+        ]);
+
+        $phone = WorkerScreening::normalizePhone($validated['phone'] ?? null);
+        $email = $validated['email'] ?? null;
+        $firstName = $validated['first_name'];
+        $surname = $validated['surname'];
+        $dob = $validated['date_of_birth'] ?? null;
+
+        if (! $phone && ! $email && ! ($firstName && $surname && $dob)) {
+            throw ValidationException::withMessages([
+                'phone' => 'At least one identifier is required: phone, email, or name with date of birth.',
+            ]);
+        }
+
+        $existing = WorkerScreening::checkWorker([
+            'phone' => $phone,
+            'email' => $email,
+            'first_name' => $firstName,
+            'surname' => $surname,
+            'date_of_birth' => $dob,
+        ]);
+
+        if ($existing) {
+            throw ValidationException::withMessages([
+                'first_name' => 'An active screening entry already exists for this person.',
+            ]);
+        }
+
+        $screening = WorkerScreening::create([
+            ...$validated,
+            'added_by' => $request->user()->id,
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'id' => $screening->id,
+            'first_name' => $screening->first_name,
+            'surname' => $screening->surname,
+            'phone' => $screening->phone,
+            'email' => $screening->email,
+            'date_of_birth' => $screening->date_of_birth?->format('Y-m-d'),
+            'reason' => $screening->reason,
+            'status' => $screening->status,
+            'created_at' => $screening->created_at->toIso8601String(),
+        ], 201);
     }
 }

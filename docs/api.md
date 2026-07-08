@@ -881,7 +881,56 @@ GET /api/worker-screening?page=2                   → next page
 - When checking whether a specific person is flagged, treat only `status = "active"` entries as a match; `removed` entries are historical.
 - `phone` is stored digits-only, so normalize any phone number to digits before comparing (e.g. `+61 412-345-678` → `61412345678` / `0412345678` — compare on trailing digits).
 - Results are ordered newest-first by `created_at`.
-- This endpoint is read-only; adding/removing entries is done in the web app at `/worker-screening`.
+- Removing/updating entries is done in the web app at `/worker-screening`; the API supports listing and creating only.
+
+### Create Screening Entry
+```
+POST /api/worker-screening
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "first_name": "John",
+    "surname": "Smith",
+    "phone": "0412 345 678",
+    "email": "john.smith@example.com",
+    "date_of_birth": "1990-05-14",
+    "reason": "Failed site induction twice; falsified white card."
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `first_name` | string | Yes | First name (max 255 chars) |
+| `surname` | string | Yes | Surname (max 255 chars) |
+| `phone` | string | No* | Phone number (normalized to digits-only on save) |
+| `email` | string | No* | Email address |
+| `date_of_birth` | date | No* | `YYYY-MM-DD` |
+| `reason` | string | Yes | Why the person is being added |
+
+*At least one identifier is required: `phone`, **or** `email`, **or** full name **with** `date_of_birth`. Name alone is not enough.
+
+**Response (201 Created):**
+```json
+{
+    "id": 2,
+    "first_name": "John",
+    "surname": "Smith",
+    "phone": "0412345678",
+    "email": "john.smith@example.com",
+    "date_of_birth": "1990-05-14",
+    "reason": "Failed site induction twice; falsified white card.",
+    "status": "active",
+    "created_at": "2026-07-09T10:15:00+10:00"
+}
+```
+
+**Errors (422 Validation Error):**
+- Missing identifier: `errors.phone` → "At least one identifier is required: phone, email, or name with date of birth."
+- Duplicate: `errors.first_name` → "An active screening entry already exists for this person." (an **active** entry matching the same phone, email, or name+DOB already exists — check with `GET /api/worker-screening` first if unsure)
 
 ---
 
@@ -1367,6 +1416,7 @@ Returns the high-resolution page preview image. Redirects to a signed S3 URL.
 | GET | `/api/site-walk-photos/{id}/file` | Stream a photo file |
 | **Worker Screening** | | |
 | GET | `/api/worker-screening` | List screening entries (filter by `search`, `status`; paginated) |
+| POST | `/api/worker-screening` | Create a screening entry |
 
 ## Migration Notes (for Mobile App)
 
