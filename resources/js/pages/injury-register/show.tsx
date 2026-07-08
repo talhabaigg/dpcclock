@@ -23,13 +23,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FormFillPane, FormResponsePane, type FormRequestData } from '@/components/form-renderer/form-fill-pane';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Download, EllipsisVertical, ExternalLink, File as FileIcon, FileImage, FileText, HeartPulse, Loader2, Lock, Mail, MapPin, MessageSquare, Paperclip, Pencil, Send, Stethoscope, Trash2, Unlock, User, Users, X } from 'lucide-react';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorkerUrl from '../../pdf-worker-with-polyfill?worker&url';
-import { useEffect, useRef, useState } from 'react';
+import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Download, EllipsisVertical, ExternalLink, File as FileIcon, FileImage, FileText, HeartPulse, Lock, Mail, MapPin, MessageSquare, Paperclip, Pencil, Send, Stethoscope, Trash2, Unlock, User, Users, X } from 'lucide-react';
+import { PdfThumbnail } from '@/components/ui/pdf-thumbnail';
+import { ZoomableImage } from '@/components/ui/zoomable-image';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-
-GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface Attachment {
     id: number;
@@ -88,55 +86,6 @@ function attachmentKind(mime: string): 'pdf' | 'image' | 'other' {
     if (mime === 'application/pdf') return 'pdf';
     if (mime.startsWith('image/')) return 'image';
     return 'other';
-}
-
-function PdfThumbnail({ url }: { url: string }) {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-
-    useEffect(() => {
-        let cancelled = false;
-        setState('loading');
-        const task = getDocument(url);
-
-        task.promise
-            .then(async (pdf) => {
-                if (cancelled) return;
-                const page = await pdf.getPage(1);
-                if (cancelled || !canvasRef.current) return;
-
-                const baseViewport = page.getViewport({ scale: 1 });
-                const targetWidth = 360;
-                const scale = targetWidth / baseViewport.width;
-                const viewport = page.getViewport({ scale });
-
-                const canvas = canvasRef.current;
-                const context = canvas.getContext('2d');
-                if (!context) return;
-
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-
-                await page.render({ canvas, canvasContext: context, viewport }).promise;
-                if (!cancelled) setState('ready');
-            })
-            .catch(() => { if (!cancelled) setState('error'); });
-
-        return () => { cancelled = true; task.destroy(); };
-    }, [url]);
-
-    if (state === 'error') {
-        return <FileText className="text-muted-foreground h-10 w-10" />;
-    }
-    return (
-        <>
-            {state === 'loading' && <Loader2 className="text-muted-foreground absolute h-4 w-4 animate-spin" />}
-            <canvas
-                ref={canvasRef}
-                className={`h-full w-full object-cover object-top ${state === 'ready' ? 'opacity-100' : 'opacity-0'}`}
-            />
-        </>
-    );
 }
 
 function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onPreview: (a: Attachment) => void }) {
@@ -258,9 +207,7 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
                         <iframe src={active.url} title={active.file_name} className="h-full w-full bg-white" />
                     )}
                     {active && kind === 'image' && (
-                        <div className="flex h-full w-full items-center justify-center p-4">
-                            <img src={active.url} alt={active.file_name} className="max-h-full max-w-full object-contain" />
-                        </div>
+                        <ZoomableImage src={active.url} alt={active.file_name} />
                     )}
                     {active && kind === 'other' && (
                         <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">

@@ -16,13 +16,16 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useHttp, usePage } from '@inertiajs/react';
 import EmployeeDocumentsCard, { type EmployeeDocument, type EmployeeSignedDocument } from '@/components/employee-documents/employee-documents-card';
 import EmployeeFilesCard from '@/components/employee-files/employee-files-card';
+import InjuryStatusBadge from '@/components/injury-register/InjuryStatusBadge';
+import InjuryWorkerCell from '@/components/injury-register/InjuryWorkerCell';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import SendForSigningModal from '@/components/signing/send-for-signing-modal';
 import {
     FormFillPane,
     FormResponsePane,
     type FormRequestData,
 } from '@/components/form-renderer/form-fill-pane';
-import { AlertTriangle, BookOpen, Check, ClipboardList, Clock, EllipsisVertical, Eye, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, HandMetal, LinkIcon, Loader2, Mail, MessageSquare, Pencil, Plus, ThumbsDown, ThumbsUp, Trash2, User, UserCheck, X, XCircle } from 'lucide-react';
+import { BookOpen, Check, ClipboardList, Clock, EllipsisVertical, Eye, FileIcon, FilePlus2, FileSignature, FileText, FolderOpen, GraduationCap, HandMetal, HeartPulse, LinkIcon, Loader2, Lock, Mail, MessageSquare, Pencil, Plus, ThumbsDown, ThumbsUp, Trash2, User, UserCheck, X, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Worktype {
@@ -46,10 +49,28 @@ interface IncidentReport {
     location?: { external_id: string; name: string } | null;
 }
 
+interface InjuryRecord {
+    id: number;
+    id_formal: string;
+    occurred_at: string | null;
+    incident_label: string | null;
+    report_type: string | null;
+    report_type_label: string | null;
+    work_cover_claim: boolean;
+    work_days_missed: number | null;
+    locked_at: string | null;
+    employee_name: string | null;
+    location?: { id: number; external_id: string | null; name: string } | null;
+}
+
 interface Project {
     id: number;
     name: string;
-    external_id: string;
+    external_id: string | null;
+    city: string | null;
+    state_code: string | null;
+    company_name: string;
+    last_clocked_at: string | null;
     kiosk_id: number;
 }
 
@@ -128,6 +149,7 @@ interface Employee {
     worktypes?: Worktype[];
     clocks?: ClockEntry[];
     incident_reports?: IncidentReport[];
+    injuries?: InjuryRecord[];
     created_at: string;
     updated_at: string;
 }
@@ -581,7 +603,7 @@ export default function EmployeeShow() {
     // Section nav (master-detail layout)
     const sections = useMemo(() => {
         const all = [
-            { id: 'overview', label: 'Overview', icon: User, visible: true, count: undefined as number | undefined },
+            { id: 'overview', label: 'About', icon: User, visible: true, count: undefined as number | undefined },
             { id: 'journal', label: 'Journal', icon: BookOpen, visible: true, count: journal?.length || undefined },
             { id: 'documents', label: 'Documents', icon: FileText, visible: true, count: (documents?.length || 0) + (canSendDocuments ? signedDocuments.length + (applicationSignedDocuments?.length ?? 0) : 0) || undefined },
             { id: 'signing-requests', label: 'Signature Requests', icon: FileSignature, visible: canSendDocuments, count: activeSigningRequests.length || undefined },
@@ -589,16 +611,19 @@ export default function EmployeeShow() {
             { id: 'files', label: 'Licences & Training', icon: GraduationCap, visible: !emp.is_office_staff, count: undefined as number | undefined },
             { id: 'projects', label: 'Projects', icon: FolderOpen, visible: !emp.is_office_staff, count: projects?.length || undefined },
             { id: 'timesheets', label: 'Timesheets', icon: Clock, visible: !emp.is_office_staff, count: undefined as number | undefined },
-            { id: 'injuries', label: 'Injury Register', icon: AlertTriangle, visible: !emp.is_office_staff, count: emp.incident_reports?.length || undefined },
+            { id: 'injuries', label: 'Injury Register', icon: HeartPulse, visible: !emp.is_office_staff, count: emp.injuries?.length || undefined },
         ];
-        return all.filter((s) => s.visible);
-    }, [emp.is_office_staff, emp.incident_reports, canSendDocuments, journal, documents, signingRequests, signedDocuments, applicationSignedDocuments, activeSigningRequests, projects, formRequests]);
+        return all
+            .filter((s) => s.visible)
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [emp.is_office_staff, emp.injuries, canSendDocuments, journal, documents, signingRequests, signedDocuments, applicationSignedDocuments, activeSigningRequests, projects, formRequests]);
 
     const [activeSection, setActiveSection] = useState<string>(() => {
         if (typeof window === 'undefined') return 'overview';
         const hash = window.location.hash.replace('#', '');
         return hash || 'overview';
     });
+    const [injuryActionsFor, setInjuryActionsFor] = useState<number | null>(null);
 
     // Drop the hash back to overview if the section is hidden (e.g. office staff loading a site-only deep link)
     useEffect(() => {
@@ -639,8 +664,8 @@ export default function EmployeeShow() {
                             </div>
                         </div>
 
-                        {/* Section nav: horizontal scroll on mobile, vertical on desktop */}
-                        <nav className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
+                        {/* Section nav: stacked on all sizes */}
+                        <nav className="flex flex-col gap-0.5">
                             {sections.map((s) => {
                                 const Icon = s.icon;
                                 const isActive = activeSection === s.id;
@@ -649,7 +674,7 @@ export default function EmployeeShow() {
                                         key={s.id}
                                         type="button"
                                         onClick={() => setActiveSection(s.id)}
-                                        className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors lg:shrink ${
+                                        className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                                             isActive
                                                 ? 'bg-accent font-medium text-accent-foreground'
                                                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
@@ -1274,38 +1299,75 @@ export default function EmployeeShow() {
                         {activeSection === 'files' && !emp.is_office_staff && <EmployeeFilesCard employeeId={emp.id} />}
 
                         {/* PROJECTS */}
-                        {activeSection === 'projects' && !emp.is_office_staff && (
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="flex items-center gap-2 text-base">
-                                            <FolderOpen className="h-4 w-4" />
-                                            Projects
-                                        </CardTitle>
-                                        <Button variant="outline" size="sm" className="gap-1.5" onClick={openLocationDialog}>
-                                            <Pencil className="h-3.5 w-3.5" />
-                                            Edit Locations
-                                        </Button>
+                        {activeSection === 'projects' && !emp.is_office_staff && (() => {
+                            const projectsByCompany = new Map<string, Project[]>();
+                            (projects ?? []).forEach((p) => {
+                                const key = p.company_name || 'Other';
+                                if (!projectsByCompany.has(key)) projectsByCompany.set(key, []);
+                                projectsByCompany.get(key)!.push(p);
+                            });
+                            const companyGroups = Array.from(projectsByCompany.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+                            return (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-end">
+                                    <Button variant="outline" size="sm" className="gap-1.5" onClick={openLocationDialog}>
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit Locations
+                                    </Button>
+                                </div>
+                                {companyGroups.length > 0 ? (
+                                    <div className="flex flex-col gap-5">
+                                        {companyGroups.map(([company, groupProjects]) => (
+                                            <div key={company} className="flex flex-col gap-2">
+                                                <h3 className="text-sm font-semibold">{company}</h3>
+                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                    {groupProjects.map((project) => {
+                                                        const address = [project.city, project.state_code].filter(Boolean).join(', ');
+                                                        const lastClocked = project.last_clocked_at
+                                                            ? new Date(project.last_clocked_at).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                            : null;
+                                                        return (
+                                                            <Link
+                                                                key={project.id}
+                                                                href={`/kiosks/${project.kiosk_id}/edit`}
+                                                                className="hover:bg-accent/40 hover:border-accent-foreground/20 group block rounded-lg border bg-card p-3 transition-colors"
+                                                            >
+                                                                <div className="flex items-baseline justify-between gap-2">
+                                                                    <p className="text-sm font-medium leading-tight">{project.name}</p>
+                                                                    {project.external_id && (
+                                                                        <span className="text-muted-foreground shrink-0 font-mono text-[11px]">
+                                                                            {project.external_id}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-muted-foreground mt-2 flex flex-col gap-1 text-xs">
+                                                                    {address && (
+                                                                        <span className="inline-flex items-center gap-1.5">
+                                                                            <FolderOpen className="h-3 w-3 shrink-0" />
+                                                                            {address}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="inline-flex items-center gap-1.5">
+                                                                        <Clock className="h-3 w-3 shrink-0" />
+                                                                        {lastClocked ? `Last worked ${lastClocked}` : 'Never clocked here'}
+                                                                    </span>
+                                                                </div>
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                    <Separator className="mb-4" />
-                                    {projects && projects.length > 0 ? (
-                                        <div className="flex flex-wrap gap-2">
-                                            {projects.map((project) => (
-                                                <Link key={project.id} href={`/kiosks/${project.kiosk_id}/edit`}>
-                                                    <Badge variant="outline" className="text-sm hover:bg-accent cursor-pointer">
-                                                        {project.external_id || project.name}
-                                                    </Badge>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground text-sm italic">No projects assigned</p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
+                                ) : (
+                                    <p className="text-muted-foreground rounded-md border py-8 text-center text-sm">
+                                        No projects assigned
+                                    </p>
+                                )}
+                            </div>
+                            );
+                        })()}
 
                         {/* INJURY REGISTER */}
                         {activeSection === 'forms' && (
@@ -1447,55 +1509,196 @@ export default function EmployeeShow() {
                         </Card>
                         )}
 
-                        {activeSection === 'injuries' && !emp.is_office_staff && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    Injury Register
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-0">
-                                <Separator className="mb-4" />
-                                {emp.incident_reports && emp.incident_reports.length > 0 ? (
-                                    <div className="overflow-hidden rounded-lg border">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow className="bg-muted/50">
-                                                    <TableHead className="px-3 text-xs">ID</TableHead>
-                                                    <TableHead className="px-3 text-xs">Occurred at</TableHead>
-                                                    <TableHead className="px-3 text-xs">Project</TableHead>
-                                                    <TableHead className="px-3 text-xs">Incident</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {emp.incident_reports.map((report) => (
-                                                    <TableRow key={report.id}>
-                                                        <TableCell className="px-3 text-xs font-medium">{report.report_number}</TableCell>
-                                                        <TableCell className="px-3 text-xs">{formatDate(report.incident_date)}</TableCell>
-                                                        <TableCell className="px-3 text-xs">
-                                                            {report.project_name || report.location?.external_id || '—'}
-                                                        </TableCell>
-                                                        <TableCell className="px-3">
-                                                            {report.incident_type ? (
-                                                                <Badge variant="outline" className="text-[10px]">
-                                                                    {report.incident_type}
-                                                                </Badge>
-                                                            ) : (
-                                                                <span className="text-muted-foreground text-xs">—</span>
+                        {activeSection === 'injuries' && !emp.is_office_staff && (() => {
+                            const injuryRows = emp.injuries ?? [];
+                            const workerEmployee = {
+                                id: emp.id,
+                                name: emp.name,
+                                preferred_name: emp.preferred_name,
+                                employment_type: emp.employment_type ?? null,
+                                display_name: emp.display_name,
+                            };
+                            const canEditInjury = permissions.includes('injury-register.edit');
+
+                            const formatOccurred = (iso: string | null) =>
+                                iso ? new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+                            return (
+                        <>
+                            {/* Desktop / tablet: table */}
+                            <div className="hidden rounded-md border md:block">
+                                <Table className="text-xs [&_td]:py-1.5 [&_th]:py-1.5">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>ID</TableHead>
+                                            <TableHead>Occurred</TableHead>
+                                            <TableHead>Worker</TableHead>
+                                            <TableHead>Project / Location</TableHead>
+                                            <TableHead>Incident</TableHead>
+                                            <TableHead>WorkCover</TableHead>
+                                            <TableHead>Days Lost</TableHead>
+                                            <TableHead>Report Type</TableHead>
+                                            <TableHead className="w-12 text-right" />
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {injuryRows.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                                                    No injury records found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        {injuryRows.map((injury) => (
+                                            <TableRow key={injury.id}>
+                                                <TableCell>
+                                                    <Link href={`/injury-register/${injury.id}`} className="hover:underline">
+                                                        <Badge variant="outline" className="font-mono text-xs">
+                                                            {injury.id_formal}
+                                                            {injury.locked_at && <Lock className="ml-1 inline h-3 w-3" />}
+                                                        </Badge>
+                                                    </Link>
+                                                </TableCell>
+                                                <TableCell className="text-xs">{formatOccurred(injury.occurred_at)}</TableCell>
+                                                <TableCell>
+                                                    <InjuryWorkerCell employee={workerEmployee} fallbackName={injury.employee_name} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {injury.location ? (
+                                                        <span title={injury.location.name} className="font-mono">
+                                                            {injury.location.external_id ?? injury.location.name}
+                                                        </span>
+                                                    ) : (
+                                                        '—'
+                                                    )}
+                                                </TableCell>
+                                                <TableCell><Badge variant="secondary" className="inline-block text-xs max-w-[100px] truncate">{injury.incident_label}</Badge></TableCell>
+                                                <TableCell className="text-sm">{injury.work_cover_claim ? 'Yes' : 'No'}</TableCell>
+                                                <TableCell className="text-sm">{injury.work_days_missed}</TableCell>
+                                                <TableCell>
+                                                    <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon" aria-label="Row actions">
+                                                                <EllipsisVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem asChild>
+                                                                <Link href={`/injury-register/${injury.id}`}>View</Link>
+                                                            </DropdownMenuItem>
+                                                            {canEditInjury && !injury.locked_at && (
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link href={`/injury-register/${injury.id}/edit`}>Edit</Link>
+                                                                </DropdownMenuItem>
                                                             )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Mobile: card list */}
+                            <div className="flex flex-col gap-2 md:hidden">
+                                {injuryRows.length === 0 && (
+                                    <div className="text-muted-foreground rounded-md border py-8 text-center text-sm">
+                                        No injury records found.
                                     </div>
-                                ) : (
-                                    <p className="text-muted-foreground text-sm italic">No injury register records found</p>
                                 )}
-                            </CardContent>
-                        </Card>
-                        )}
+                                {injuryRows.map((injury) => (
+                                    <Sheet
+                                        key={injury.id}
+                                        open={injuryActionsFor === injury.id}
+                                        onOpenChange={(o) => setInjuryActionsFor(o ? injury.id : null)}
+                                    >
+                                        <Link
+                                            href={`/injury-register/${injury.id}`}
+                                            className="hover:bg-accent/40 group relative block rounded-lg border bg-card p-3 transition-colors"
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <Badge variant="outline" className="font-mono text-[11px]">
+                                                        {injury.id_formal}
+                                                        {injury.locked_at && <Lock className="ml-1 inline h-3 w-3" />}
+                                                    </Badge>
+                                                    {injury.report_type_label && (
+                                                        <InjuryStatusBadge reportType={injury.report_type} label={injury.report_type_label} />
+                                                    )}
+                                                </div>
+                                                <SheetTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label="Row actions"
+                                                        className="-my-1 h-8 w-8 shrink-0"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                        }}
+                                                    >
+                                                        <EllipsisVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </SheetTrigger>
+                                            </div>
+
+                                            {injury.incident_label && (
+                                                <p className="mt-2 text-sm font-medium leading-tight">{injury.incident_label}</p>
+                                            )}
+
+                                            <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {formatOccurred(injury.occurred_at)}
+                                                </span>
+                                                {(injury.location?.external_id || injury.location?.name) && (
+                                                    <span className="inline-flex items-center gap-1 font-mono" title={injury.location?.name ?? undefined}>
+                                                        <FolderOpen className="h-3 w-3" />
+                                                        {injury.location?.external_id ?? injury.location?.name}
+                                                    </span>
+                                                )}
+                                                {injury.work_cover_claim && (
+                                                    <Badge variant="outline" className="text-[10px]">WorkCover</Badge>
+                                                )}
+                                            </div>
+                                        </Link>
+
+                                        <SheetContent side="bottom" className="rounded-t-lg pb-safe">
+                                            <SheetHeader>
+                                                <SheetTitle className="flex items-center gap-2 text-sm">
+                                                    <Badge variant="outline" className="font-mono text-[11px]">
+                                                        {injury.id_formal}
+                                                    </Badge>
+                                                    <span className="text-muted-foreground truncate">{injury.incident_label}</span>
+                                                </SheetTitle>
+                                            </SheetHeader>
+                                            <div className="flex flex-col gap-1 p-2">
+                                                <Button variant="ghost" className="justify-start" asChild>
+                                                    <Link href={`/injury-register/${injury.id}`} onClick={() => setInjuryActionsFor(null)}>
+                                                        <Eye className="mr-2 h-4 w-4" />
+                                                        View
+                                                    </Link>
+                                                </Button>
+                                                {canEditInjury && !injury.locked_at && (
+                                                    <Button variant="ghost" className="justify-start" asChild>
+                                                        <Link href={`/injury-register/${injury.id}/edit`} onClick={() => setInjuryActionsFor(null)}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </SheetContent>
+                                    </Sheet>
+                                ))}
+                            </div>
+                        </>
+                            );
+                        })()}
                     </main>
                 </div>
             </div>

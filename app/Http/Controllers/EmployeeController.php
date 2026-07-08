@@ -184,19 +184,65 @@ class EmployeeController extends Controller
     {
         Gate::authorize('view', $employee);
 
-        $employee->load(['worktypes', 'kiosks.location', 'incidentReports.location', 'clocks' => function ($query) {
+        $employee->load(['worktypes', 'kiosks.location', 'injuries.location', 'clocks' => function ($query) {
             $query->select('id', 'eh_employee_id', 'clock_in')->latest('clock_in')->limit(10);
         }]);
 
-        // Get unique locations/projects with their kiosk IDs
+        $injuries = $employee->injuries
+            ->sortByDesc('occurred_at')
+            ->values()
+            ->map(fn ($i) => [
+                'id' => $i->id,
+                'id_formal' => $i->id_formal,
+                'occurred_at' => $i->occurred_at?->toISOString(),
+                'incident_label' => $i->incident_label,
+                'report_type' => $i->report_type,
+                'report_type_label' => $i->report_type_label,
+                'work_cover_claim' => (bool) $i->work_cover_claim,
+                'work_days_missed' => $i->work_days_missed,
+                'locked_at' => $i->locked_at?->toISOString(),
+                'employee_name' => $i->employee_name,
+                'location' => $i->location ? [
+                    'id' => $i->location->id,
+                    'external_id' => $i->location->external_id,
+                    'name' => $i->location->name,
+                ] : null,
+            ]);
+
+        // Last clock-in per location for this employee (used to show recency on the Projects tab)
+        $lastClockedByLocation = \App\Models\Clock::query()
+            ->where('eh_employee_id', $employee->eh_employee_id)
+            ->selectRaw('eh_location_id, MAX(clock_in) as last_clock_in')
+            ->groupBy('eh_location_id')
+            ->pluck('last_clock_in', 'eh_location_id');
+
+        // Preload parent locations (companies) for grouping in one go
+        $parentEhIds = $employee->kiosks
+            ->map(fn ($k) => $k->location?->eh_parent_id)
+            ->filter()
+            ->unique()
+            ->values();
+        $parentsByEhId = Location::whereIn('eh_location_id', $parentEhIds)
+            ->get(['eh_location_id', 'name'])
+            ->keyBy('eh_location_id');
+
+        // Get unique open locations/projects with their kiosk IDs (closed locations hidden)
         $projects = $employee->kiosks
-            ->filter(fn ($kiosk) => $kiosk->location)
-            ->map(fn ($kiosk) => [
-                'id' => $kiosk->location->id,
-                'name' => $kiosk->location->name,
-                'external_id' => $kiosk->location->external_id,
-                'kiosk_id' => $kiosk->id,
-            ])
+            ->filter(fn ($kiosk) => $kiosk->location && $kiosk->location->closed_at === null)
+            ->map(function ($kiosk) use ($lastClockedByLocation, $parentsByEhId) {
+                $location = $kiosk->location;
+                $lastClocked = $lastClockedByLocation[$location->eh_location_id] ?? null;
+                return [
+                    'id' => $location->id,
+                    'name' => $location->name,
+                    'external_id' => $location->external_id,
+                    'city' => $location->city,
+                    'state_code' => $location->state_code,
+                    'company_name' => trim(preg_replace('/\s*\bjobs\b\s*/i', ' ', $parentsByEhId[$location->eh_parent_id]->name ?? 'Other')),
+                    'last_clocked_at' => $lastClocked ? \Carbon\Carbon::parse($lastClocked)->toISOString() : null,
+                    'kiosk_id' => $kiosk->id,
+                ];
+            })
             ->unique('id')
             ->values();
 
@@ -356,6 +402,7 @@ class EmployeeController extends Controller
         return Inertia::render('employees/show', [
             'employee' => array_merge($employee->toArray(), [
                 'is_office_staff' => $employee->isOfficeStaff(),
+                'injuries' => $injuries,
             ]),
             'projects' => $projects,
             'weekEnding' => $weekEnding,

@@ -247,6 +247,8 @@ class EmployeeFileController extends Controller
             'back_filename' => $backMedia?->file_name,
             'front_mime_type' => $frontMedia?->mime_type,
             'back_mime_type' => $backMedia?->mime_type,
+            'front_size' => $frontMedia?->size,
+            'back_size' => $backMedia?->size,
         ];
     }
 
