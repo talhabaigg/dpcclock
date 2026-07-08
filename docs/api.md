@@ -798,6 +798,93 @@ Streams the 360-degree photo file from S3 with appropriate Content-Type headers.
 
 ---
 
+## Worker Screening
+
+The worker screening list holds people flagged during recruitment/site screening. Each entry records who the person is (name, phone, email, DOB), why they were flagged (`reason`), and its lifecycle (`status`: `active` or `removed`). Use it to check whether a worker appears on the screening list before engaging them.
+
+### List Screening Entries
+```
+GET /api/worker-screening
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `search` | string | No | Matches against first name, surname, phone, or email (partial match) |
+| `status` | string | No | `active` (default), `removed`, or `all` |
+| `page` | integer | No | Page number (default: 1) |
+| `per_page` | integer | No | Results per page, 1-500 (default: 100) |
+
+**Examples:**
+```
+GET /api/worker-screening                          → first 100 active entries
+GET /api/worker-screening?search=smith             → active entries matching "smith"
+GET /api/worker-screening?status=all&per_page=500  → everything, biggest pages
+GET /api/worker-screening?page=2                   → next page
+```
+
+**Response (200 OK):** standard Laravel pagination envelope — the entries are in `data`, and `last_page` / `next_page_url` tell you whether to keep paging.
+```json
+{
+    "current_page": 1,
+    "data": [
+        {
+            "id": 1,
+            "first_name": "John",
+            "surname": "Smith",
+            "phone": "0412345678",
+            "email": "john.smith@example.com",
+            "date_of_birth": "1990-05-14",
+            "reason": "Failed site induction twice; falsified white card.",
+            "status": "active",
+            "added_by_name": "Jane Manager",
+            "removed_by_name": null,
+            "removed_at": null,
+            "created_at": "2026-04-01T09:30:00+10:00",
+            "updated_at": "2026-04-01T09:30:00+10:00"
+        }
+    ],
+    "first_page_url": "https://.../api/worker-screening?page=1",
+    "from": 1,
+    "last_page": 1,
+    "last_page_url": "https://.../api/worker-screening?page=1",
+    "links": [ ... ],
+    "next_page_url": null,
+    "path": "https://.../api/worker-screening",
+    "per_page": 100,
+    "prev_page_url": null,
+    "to": 1,
+    "total": 1
+}
+```
+
+**Field notes:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | integer | Unique identifier |
+| `first_name` / `surname` | string | Person's name |
+| `phone` | string\|null | Phone number, stored digits-only (normalized on save) |
+| `email` | string\|null | Email address |
+| `date_of_birth` | date\|null | `YYYY-MM-DD` |
+| `reason` | string | Why the person was added to the screening list |
+| `status` | string | `active` = currently flagged; `removed` = no longer flagged |
+| `added_by_name` | string\|null | Name of the user who added the entry |
+| `removed_by_name` | string\|null | Name of the user who removed it (null while active) |
+| `removed_at` | datetime\|null | ISO-8601 timestamp of removal (null while active) |
+| `created_at` / `updated_at` | datetime | ISO-8601 timestamps |
+
+**Usage notes for automated clients:**
+- To fetch the complete list, request `?status=all&per_page=500` and follow `next_page_url` until it is `null`.
+- When checking whether a specific person is flagged, treat only `status = "active"` entries as a match; `removed` entries are historical.
+- `phone` is stored digits-only, so normalize any phone number to digits before comparing (e.g. `+61 412-345-678` → `61412345678` / `0412345678` — compare on trailing digits).
+- Results are ordered newest-first by `created_at`.
+- This endpoint is read-only; adding/removing entries is done in the web app at `/worker-screening`.
+
+---
+
 ## Data Models Reference
 
 ### Drawing Properties
@@ -1278,6 +1365,8 @@ Returns the high-resolution page preview image. Redirects to a signed S3 URL.
 | PUT | `/api/site-walk-photos/{id}` | Update a photo (caption, position) |
 | DELETE | `/api/site-walk-photos/{id}` | Delete a photo |
 | GET | `/api/site-walk-photos/{id}/file` | Stream a photo file |
+| **Worker Screening** | | |
+| GET | `/api/worker-screening` | List screening entries (filter by `search`, `status`; paginated) |
 
 ## Migration Notes (for Mobile App)
 

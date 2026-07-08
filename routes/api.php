@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\SiteWalkController;
 use App\Http\Controllers\Api\SyncController;
+use App\Http\Controllers\Api\WorkerScreeningController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\RequisitionAgentController;
@@ -90,6 +91,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         return response()->json(['message' => 'Logged out successfully']);
     });
+
+    // Worker screening list (paginated; filters: search, status=active|removed|all, per_page)
+    Route::get('/worker-screening', [WorkerScreeningController::class, 'index'])
+        ->name('api.worker-screening.index');
 
     // Drawings
     Route::apiResource('drawings', DrawingController::class)->names('api.drawings');
