@@ -31,6 +31,18 @@ class LabourDashboardController extends Controller
     // (quick fix — replace with a per-location flag when weekend rules generalise).
     const WEEKEND_ORDINARY_EXTERNAL_ID_PREFIX = 'QTMP';
 
+    /**
+     * Whether the selection covers every open project — i.e. no filtering intent,
+     * so widgets should keep their company-wide (unfiltered) behaviour.
+     */
+    private function allOpenProjectsSelected(array $locationIds): bool
+    {
+        return Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+            ->open()
+            ->pluck('id')
+            ->diff($locationIds)
+            ->isEmpty();
+    }
 
     public function index(Request $request)
     {
@@ -724,13 +736,7 @@ class LabourDashboardController extends Controller
         // When every open project is selected there's no filtering intent — keep the full
         // company-wide list. Only a narrower selection restricts names to employees with
         // timesheets at those locations.
-        $isAllProjects = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
-            ->open()
-            ->pluck('id')
-            ->diff($locationIds)
-            ->isEmpty();
-
-        if (!$isAllProjects) {
+        if (!$this->allOpenProjectsSelected($locationIds)) {
             $employeesAtSelected = Clock::whereIn('eh_location_id', $allEhLocationIds)
                 ->where('clock_in', '>=', $dateFrom)
                 ->where('clock_in', '<=', $dateTo)
@@ -905,15 +911,27 @@ class LabourDashboardController extends Controller
             $allEhLocationIds = array_merge($allEhLocationIds, $subIds);
         }
 
-        // Get unique employee IDs who actually worked in the period
-        $activeEmployeeIds = Clock::whereIn('eh_location_id', array_unique($allEhLocationIds))
-            ->where('clock_in', '>=', $dateFrom)
-            ->where('clock_in', '<=', $dateTo)
-            ->whereIn('status', ['Processed', 'Approved'])
-            ->distinct()
-            ->pluck('eh_employee_id')
-            ->map(fn ($id) => (int) $id)
-            ->toArray();
+        if ($this->allOpenProjectsSelected($request->input('location_ids'))) {
+            // All-projects mode: employees who actually worked in the period, as before.
+            $activeEmployeeIds = Clock::whereIn('eh_location_id', array_unique($allEhLocationIds))
+                ->where('clock_in', '>=', $dateFrom)
+                ->where('clock_in', '<=', $dateTo)
+                ->whereIn('status', ['Processed', 'Approved'])
+                ->distinct()
+                ->pluck('eh_employee_id')
+                ->map(fn ($id) => (int) $id)
+                ->toArray();
+        } else {
+            // Filtered: use the locations' kiosk rosters instead of clock activity, so
+            // employees currently on leave (no clocks in range) still show, and crew
+            // transferred away from the site don't.
+            $activeEmployeeIds = Employee::whereHas('kiosks', function ($q) use ($allEhLocationIds) {
+                $q->whereIn('kiosks.eh_location_id', array_unique($allEhLocationIds));
+            })
+                ->pluck('eh_employee_id')
+                ->map(fn ($id) => (int) $id)
+                ->toArray();
+        }
 
         $employees = Employee::withTrashed()
             ->get(['eh_employee_id', 'name', 'preferred_name', 'external_id', 'start_date', 'deleted_at'])
@@ -1073,13 +1091,20 @@ class LabourDashboardController extends Controller
         $publicHolidayWorkTypeIds = Worktype::where('name', 'like', '%Public Holiday%')
             ->pluck('eh_worktype_id')->toArray();
 
-        // Fetch all sick leave clocks across all locations (not just selected)
-        $clocks = Clock::where('clock_in', '>=', $dateFrom)
+        // All-projects mode keeps the company-wide view; a narrower selection only
+        // counts timesheets at the filtered locations.
+        $clocksQuery = Clock::where('clock_in', '>=', $dateFrom)
             ->where('clock_in', '<=', $dateTo)
             ->where('status', 'Processed')
             ->whereNotIn('eh_worktype_id', $excludedWorkTypeIds)
             ->whereNotNull('hours_worked')
-            ->where('hours_worked', '>', 0)
+            ->where('hours_worked', '>', 0);
+
+        if (!$this->allOpenProjectsSelected($locationIds)) {
+            $clocksQuery->whereIn('eh_location_id', $allEhLocationIds);
+        }
+
+        $clocks = $clocksQuery
             ->select('eh_employee_id', 'eh_worktype_id', 'clock_in')
             ->get();
 
