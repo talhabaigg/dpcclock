@@ -13,6 +13,7 @@ export interface SickLeaveEmployee {
     name: string;
     external_id: string | null;
     hours: number;
+    other_hours: number;
     archived: boolean;
 }
 
@@ -49,7 +50,14 @@ function EmployeeCard({ emp, rank }: { emp: SickLeaveEmployee; rank: number }) {
                     )}
                 </div>
             </div>
-            <span className="shrink-0 text-xs font-semibold tabular-nums">{formatHours(emp.hours)}h</span>
+            <div className="shrink-0 text-right">
+                <span className={cn('text-xs font-semibold tabular-nums', emp.hours === 0 && 'text-muted-foreground')}>
+                    {formatHours(emp.hours)}h
+                </span>
+                {emp.other_hours > 0 && (
+                    <div className="text-[10px] tabular-nums text-muted-foreground">+{formatHours(emp.other_hours)}h other</div>
+                )}
+            </div>
         </div>
     );
 }
@@ -67,7 +75,12 @@ export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
     if (data.length === 0) return null;
 
     const top5 = data.slice(0, 5);
-    const totalHours = data.reduce((sum, e) => sum + e.hours, 0);
+    const selectedHours = data.reduce((sum, e) => sum + e.hours, 0);
+    const otherHours = data.reduce((sum, e) => sum + (e.other_hours ?? 0), 0);
+    const totalsLabel =
+        otherHours > 0
+            ? `${formatHours(selectedHours)}h at selected projects · +${formatHours(otherHours)}h other projects`
+            : `${formatHours(selectedHours)} total hours`;
 
     return (
         <>
@@ -76,7 +89,7 @@ export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
                     <div>
                         <CardTitle className="text-sm">Sick Leave — By Employee</CardTitle>
                         <p className="text-xs text-muted-foreground">
-                            Top 5 of {data.length} employees — {formatHours(totalHours)} total hours
+                            Top 5 of {data.length} employees — {totalsLabel}
                         </p>
                     </div>
                     {data.length > 5 && (
@@ -97,7 +110,7 @@ export default function SickLeaveEmployees({ data }: SickLeaveEmployeesProps) {
                     <DialogHeader>
                         <DialogTitle>Sick Leave — By Employee</DialogTitle>
                         <p className="text-xs text-muted-foreground">
-                            {data.length} employees — {formatHours(totalHours)} total hours
+                            {data.length} employees — {totalsLabel}
                         </p>
                     </DialogHeader>
                     <div className="relative">

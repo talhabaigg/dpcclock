@@ -707,36 +707,67 @@ class LabourDashboardController extends Controller
             $lastMonth = $month;
         }
 
-        // Aggregate sick leave by employee (all locations, not just selected)
-        $byEmployee = [];
+        // Aggregate sick leave by employee, split into selected projects vs everywhere else.
+        // Only employees with timesheets at the selected locations in the period are listed;
+        // for those, sick leave logged to other projects still shows as "other" so cross-project
+        // hours aren't hidden by the filter.
+        $selectedByEmployee = [];
+        foreach ($clocks as $clock) {
+            $selectedByEmployee[$clock->eh_employee_id] = ($selectedByEmployee[$clock->eh_employee_id] ?? 0) + $clock->hours_worked;
+        }
+
+        $totalByEmployee = [];
         foreach ($allSickLeaveClocks as $clock) {
-            $employeeId = $clock->eh_employee_id;
-            if (!isset($byEmployee[$employeeId])) {
-                $byEmployee[$employeeId] = 0;
-            }
-            $byEmployee[$employeeId] += $clock->hours_worked;
+            $totalByEmployee[$clock->eh_employee_id] = ($totalByEmployee[$clock->eh_employee_id] ?? 0) + $clock->hours_worked;
+        }
+
+        // When every open project is selected there's no filtering intent — keep the full
+        // company-wide list. Only a narrower selection restricts names to employees with
+        // timesheets at those locations.
+        $isAllProjects = Location::whereIn('eh_parent_id', ['1149031', '1198645', '1249093'])
+            ->open()
+            ->pluck('id')
+            ->diff($locationIds)
+            ->isEmpty();
+
+        if (!$isAllProjects) {
+            $employeesAtSelected = Clock::whereIn('eh_location_id', $allEhLocationIds)
+                ->where('clock_in', '>=', $dateFrom)
+                ->where('clock_in', '<=', $dateTo)
+                ->whereIn('status', ['Processed', 'Approved'])
+                ->distinct()
+                ->pluck('eh_employee_id')
+                ->flip();
+
+            $totalByEmployee = array_filter(
+                $totalByEmployee,
+                fn ($employeeId) => isset($employeesAtSelected[$employeeId]),
+                ARRAY_FILTER_USE_KEY,
+            );
         }
 
         // Resolve employee names
-        $employeeIds = array_keys($byEmployee);
+        $employeeIds = array_keys($totalByEmployee);
         $employees = Employee::withTrashed()->whereIn('eh_employee_id', $employeeIds)
             ->get(['eh_employee_id', 'name', 'preferred_name', 'external_id', 'deleted_at'])
             ->keyBy('eh_employee_id');
 
         $employeeSummary = [];
-        foreach ($byEmployee as $employeeId => $hours) {
+        foreach ($totalByEmployee as $employeeId => $totalHours) {
             $employee = $employees->get($employeeId);
+            $selectedHours = $selectedByEmployee[$employeeId] ?? 0;
             $employeeSummary[] = [
                 'employee_id' => $employeeId,
                 'name' => $employee?->display_name ?? "Unknown ({$employeeId})",
                 'external_id' => $employee?->external_id,
-                'hours' => round($hours, 2),
+                'hours' => round($selectedHours, 2),
+                'other_hours' => round(max(0, $totalHours - $selectedHours), 2),
                 'archived' => $employee?->trashed() ?? false,
             ];
         }
 
-        // Sort by hours descending
-        usort($employeeSummary, fn ($a, $b) => $b['hours'] <=> $a['hours']);
+        // Rank by hours at the selected projects, then by hours elsewhere
+        usort($employeeSummary, fn ($a, $b) => [$b['hours'], $b['other_hours']] <=> [$a['hours'], $a['other_hours']]);
 
         return response()->json([
             'weekly_trend' => $weeklyTrend,
