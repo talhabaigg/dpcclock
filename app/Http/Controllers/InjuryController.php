@@ -273,6 +273,8 @@ class InjuryController extends Controller
                     'file_name' => $m->file_name,
                     'url' => route('comments.attachment', ['comment' => $c->id, 'media' => $m->id]),
                     'mime_type' => $m->mime_type,
+                    'annotations' => $m->getCustomProperty('annotations'),
+                    'annotations_url' => route('comments.attachment.annotations', ['comment' => $c->id, 'media' => $m->id]),
                 ]),
                 'replies' => $c->replies->map(fn ($r) => [
                     'id' => $r->id,
@@ -287,6 +289,8 @@ class InjuryController extends Controller
                         'file_name' => $m->file_name,
                         'url' => route('comments.attachment', ['comment' => $r->id, 'media' => $m->id]),
                         'mime_type' => $m->mime_type,
+                        'annotations' => $m->getCustomProperty('annotations'),
+                        'annotations_url' => route('comments.attachment.annotations', ['comment' => $r->id, 'media' => $m->id]),
                     ]),
                 ]),
             ]);

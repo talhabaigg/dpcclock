@@ -140,6 +140,40 @@ class CommentController extends Controller
     }
 
     /**
+     * Replace the annotation set stored against a comment attachment. Annotations
+     * are vector data (kept in the media item's custom_properties) drawn over the
+     * photo client-side, so individual annotations stay deletable — the image
+     * file itself is never modified.
+     */
+    public function updateAttachmentAnnotations(Request $request, Comment $comment, int $media): \Illuminate\Http\JsonResponse
+    {
+        $mediaItem = $comment->getMedia('attachments')->firstWhere('id', $media);
+        abort_unless($mediaItem, 404);
+
+        $validated = $request->validate([
+            'canvas' => ['required', 'array'],
+            'canvas.w' => ['required', 'integer', 'min:1', 'max:50000'],
+            'canvas.h' => ['required', 'integer', 'min:1', 'max:50000'],
+            'items' => ['present', 'array', 'max:300'],
+            'items.*.id' => ['required', 'string', 'max:64'],
+            'items.*.type' => ['required', 'string', 'in:text,line,arrow,double-arrow,freehand'],
+            'items.*.color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'items.*.strokeWidth' => ['nullable', 'numeric', 'min:0.1', 'max:1000'],
+            'items.*.points' => ['nullable', 'array', 'max:20000'],
+            'items.*.points.*' => ['numeric'],
+            'items.*.x' => ['nullable', 'numeric'],
+            'items.*.y' => ['nullable', 'numeric'],
+            'items.*.text' => ['nullable', 'string', 'max:1000'],
+            'items.*.fontSize' => ['nullable', 'numeric', 'min:1', 'max:2000'],
+        ]);
+
+        $mediaItem->setCustomProperty('annotations', $validated);
+        $mediaItem->save();
+
+        return response()->json(['annotations' => $validated]);
+    }
+
+    /**
      * Search users for the @mention picker. Caller passes the commentable scope so
      * we can later narrow to project members, etc. — for now we list active users.
      */

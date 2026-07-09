@@ -2328,6 +2328,16 @@
   resolved "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz"
   integrity sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==
 
+"@types/react-reconciler@^0.28.9":
+  version "0.28.9"
+  resolved "https://registry.npmjs.org/@types/react-reconciler/-/react-reconciler-0.28.9.tgz"
+  integrity sha512-HHM3nxyUZ3zAylX8ZEyrDNd2XZOnQ0D5XfunJF5FLQnZbHHYq4UWvW1QfelQNXv1ICNkwYhfxjwfnqivYB6bFg==
+
+"@types/react-reconciler@^0.33.0":
+  version "0.33.0"
+  resolved "https://registry.npmjs.org/@types/react-reconciler/-/react-reconciler-0.33.0.tgz"
+  integrity sha512-HZOXsKT0tGI9LlUw2LuedXsVeB88wFa536vVL0M6vE8zN63nI+sSr1ByxmPToP5K5bukaVscyeCJcF9guVNJ1g==
+
 "@types/react@^19.2.7":
   version "19.2.7"
   resolved "https://registry.npmjs.org/@types/react/-/react-19.2.7.tgz"
@@ -5519,6 +5529,13 @@ iterator.prototype@^1.1.4:
     has-symbols "^1.1.0"
     set-function-name "^2.0.2"
 
+its-fine@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.npmjs.org/its-fine/-/its-fine-2.0.0.tgz"
+  integrity sha512-KLViCmWx94zOvpLwSlsx6yOCeMhZYaxrJV87Po5k/FoZzcPSahvK5qJ7fYhS61sZi5ikmh2S3Hz55A2l3U69ng==
+  dependencies:
+    "@types/react-reconciler" "^0.28.9"
+
 jiti@^2.4.2:
   version "2.4.2"
   resolved "https://registry.npmjs.org/jiti/-/jiti-2.4.2.tgz"
@@ -5643,6 +5660,11 @@ kleur@^4.1.5:
   version "4.1.5"
   resolved "https://registry.npmjs.org/kleur/-/kleur-4.1.5.tgz"
   integrity sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==
+
+konva@^10.3.0:
+  version "10.3.0"
+  resolved "https://registry.npmjs.org/konva/-/konva-10.3.0.tgz"
+  integrity sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==
 
 laravel-echo@^2.0.2:
   version "2.0.2"
@@ -7513,6 +7535,16 @@ react-is@^16.13.1:
   resolved "https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz"
   integrity sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==
 
+react-konva@^19.2.5:
+  version "19.2.5"
+  resolved "https://registry.npmjs.org/react-konva/-/react-konva-19.2.5.tgz"
+  integrity sha512-AdsuDB59GdB86QdenTAqRzr6Tfw3z9x9Opxo4BoqDjdNLsjekF9a1VhN4FlMPvg0qtrMl3d4dNmagaUTGH7fSA==
+  dependencies:
+    "@types/react-reconciler" "^0.33.0"
+    its-fine "^2.0.0"
+    react-reconciler "0.33.0"
+    scheduler "0.27.0"
+
 react-leaflet-cluster@^4.1.3:
   version "4.1.3"
   resolved "https://registry.npmjs.org/react-leaflet-cluster/-/react-leaflet-cluster-4.1.3.tgz"
@@ -7526,6 +7558,13 @@ react-leaflet@^5.0.0:
   integrity sha512-CWbTpr5vcHw5bt9i4zSlPEVQdTVcML390TjeDG0cK59z1ylexpqC6M1PJFjV8jD7CF+ACBFsLIDs6DRMoLEofw==
   dependencies:
     "@react-leaflet/core" "^3.0.0"
+
+react-reconciler@0.33.0:
+  version "0.33.0"
+  resolved "https://registry.npmjs.org/react-reconciler/-/react-reconciler-0.33.0.tgz"
+  integrity sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==
+  dependencies:
+    scheduler "^0.27.0"
 
 "react-redux@8.x.x || 9.x.x":
   version "9.2.0"
@@ -7978,6 +8017,16 @@ scheduler@^0.25.0:
   version "0.25.0"
   resolved "https://registry.npmjs.org/scheduler/-/scheduler-0.25.0.tgz"
   integrity sha512-xFVuu11jh+xcO7JOAGJNOXld8/TcEHK/4CituBUeUb5hqxJLj9YuemAEuvm9gQ/+pgXYfbQuqAkiYu+u7YEsNA==
+
+scheduler@^0.27.0:
+  version "0.27.0"
+  resolved "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz"
+  integrity sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==
+
+scheduler@0.27.0:
+  version "0.27.0"
+  resolved "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz"
+  integrity sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==
 
 semver@^6.3.1:
   version "6.3.1"
@@ -8915,6 +8964,11 @@ use-callback-ref@^1.3.3:
   integrity sha512-jQL3lRnocaFtu3V00JToYz/4QkNWswxijDaCVNZRiRTO3HQDLsdu1ZtmIUvV4yPp+rvWm5j0y0TG/S61cuijTg==
   dependencies:
     tslib "^2.0.0"
+
+use-image@^1.1.4:
+  version "1.1.4"
+  resolved "https://registry.npmjs.org/use-image/-/use-image-1.1.4.tgz"
+  integrity sha512-P+swhszzHHgEb2X2yQ+vQNPCq/8Ks3hyfdXAVN133pvnvK7UK++bUaZUa5E+A3S02Mw8xOCBr9O6CLhk2fjrWA==
 
 use-sidecar@^1.1.3:
   version "1.1.3"

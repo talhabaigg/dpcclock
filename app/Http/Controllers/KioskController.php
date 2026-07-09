@@ -111,27 +111,93 @@ class KioskController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
+    private function upcomingEventsQuery(Kiosk $kiosk)
+    {
+        return TimesheetEvent::where('state', $kiosk->location?->state)->whereDate('start', '>=', now());
+    }
+
+    private function kioskBaseProps(Kiosk $kiosk): array
+    {
+        return [
+            'id' => $kiosk->id,
+            'name' => $kiosk->name,
+            'eh_kiosk_id' => $kiosk->eh_kiosk_id,
+            'is_active' => (bool) $kiosk->is_active,
+            'tab_counts' => [
+                'employees' => $kiosk->employees()->count(),
+                'events' => $this->upcomingEventsQuery($kiosk)->count(),
+                'managers' => $kiosk->managers()->count(),
+                'devices' => $kiosk->devices()->count(),
+            ],
+        ];
+    }
+
     public function edit(Kiosk $kiosk)
     {
-        $allEmployees = Employee::all();
         $kiosk->load([
             'employees' => function ($query) {
                 $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
             },
-            'relatedKiosks',
-            'managers',
-            'devices',
         ]);
 
-        $events = TimesheetEvent::where('state', $kiosk->location->state)->whereDate('start', '>=', now())->get();
-        $users = User::all();
-
-        return Inertia::render('kiosks/edit', [
-            'kiosk' => $kiosk,
+        return Inertia::render('kiosks/edit/employees', [
+            'kiosk' => $this->kioskBaseProps($kiosk),
             'employees' => $kiosk->employees,
-            'events' => $events,
-            'allEmployees' => $allEmployees,
-            'users' => $users,
+            'allEmployees' => Employee::all(),
+        ]);
+    }
+
+    public function editEvents(Kiosk $kiosk)
+    {
+        $kiosk->load([
+            'employees' => function ($query) {
+                $query->select('employees.id', 'name')->withPivot('zone', 'top_up');
+            },
+        ]);
+
+        return Inertia::render('kiosks/edit/events', [
+            'kiosk' => $this->kioskBaseProps($kiosk),
+            'employees' => $kiosk->employees,
+            'events' => $this->upcomingEventsQuery($kiosk)->get(),
+        ]);
+    }
+
+    public function editManagers(Kiosk $kiosk)
+    {
+        $kiosk->load('managers');
+
+        return Inertia::render('kiosks/edit/managers', [
+            'kiosk' => $this->kioskBaseProps($kiosk),
+            'managers' => $kiosk->managers,
+            'users' => User::all(),
+        ]);
+    }
+
+    public function editDevices(Kiosk $kiosk)
+    {
+        return Inertia::render('kiosks/edit/devices', [
+            'kiosk' => $this->kioskBaseProps($kiosk),
+            'devices' => $kiosk->devices,
+        ]);
+    }
+
+    public function editSettings(Kiosk $kiosk)
+    {
+        $kiosk->load('relatedKiosks');
+
+        return Inertia::render('kiosks/edit/settings', [
+            'kiosk' => [
+                ...$this->kioskBaseProps($kiosk),
+                'default_start_time' => $kiosk->default_start_time,
+                'default_end_time' => $kiosk->default_end_time,
+                'laser_allowance_enabled' => $kiosk->laser_allowance_enabled,
+                'insulation_allowance_enabled' => $kiosk->insulation_allowance_enabled,
+                'setout_allowance_enabled' => $kiosk->setout_allowance_enabled,
+                'related_kiosks' => $kiosk->relatedKiosks->map(fn (Kiosk $related) => [
+                    'id' => $related->id,
+                    'name' => $related->name,
+                ]),
+            ],
         ]);
     }
 

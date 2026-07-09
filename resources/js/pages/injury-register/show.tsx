@@ -23,17 +23,23 @@ import { Calendar } from '@/components/ui/calendar';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FormFillPane, FormResponsePane, type FormRequestData } from '@/components/form-renderer/form-fill-pane';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Download, EllipsisVertical, ExternalLink, File as FileIcon, FileImage, FileText, HeartPulse, Lock, Mail, MapPin, MessageSquare, Paperclip, Pencil, Send, Stethoscope, Trash2, Unlock, User, Users, X } from 'lucide-react';
+import { Activity, ArrowRight, CalendarIcon, ClipboardCheck, DollarSign, Download, EllipsisVertical, ExternalLink, File as FileIcon, FileImage, FileText, HeartPulse, Lock, Mail, MapPin, MessageSquare, Minus, Paperclip, Pencil, PenLine, Plus, Send, Stethoscope, Trash2, Unlock, User, Users, X } from 'lucide-react';
 import { PdfThumbnail } from '@/components/ui/pdf-thumbnail';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
-import { useEffect, useState } from 'react';
+import { PhotoAnnotationOverlay, type PhotoAnnotationData } from '@/components/annotations/photo-annotations';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+
+// Konva-based editor, loaded on demand so the canvas library stays out of the main bundle.
+const PhotoAnnotationEditor = lazy(() => import('@/components/annotations/photo-annotation-editor'));
 
 interface Attachment {
     id: number;
     file_name: string;
     url: string;
     mime_type: string;
+    annotations?: PhotoAnnotationData | null;
+    annotations_url?: string;
 }
 
 interface CommentData {
@@ -88,7 +94,18 @@ function attachmentKind(mime: string): 'pdf' | 'image' | 'other' {
     return 'other';
 }
 
-function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onPreview: (a: Attachment) => void }) {
+type AnnotationOverrides = Record<number, PhotoAnnotationData>;
+
+/** Latest annotations for an attachment: unsaved-this-session edits win over server data. */
+function resolveAnnotations(attachment: Attachment, overrides: AnnotationOverrides): PhotoAnnotationData | null {
+    return attachment.id in overrides ? overrides[attachment.id] : (attachment.annotations ?? null);
+}
+
+function AttachmentCard({ attachment, onPreview, annotations }: {
+    attachment: Attachment;
+    onPreview: (a: Attachment) => void;
+    annotations: PhotoAnnotationData | null;
+}) {
     const kind = attachmentKind(attachment.mime_type);
     const Icon = kind === 'pdf' ? FileText : kind === 'image' ? FileImage : FileIcon;
 
@@ -103,7 +120,12 @@ function AttachmentCard({ attachment, onPreview }: { attachment: Attachment; onP
             >
                 {kind === 'pdf' && <PdfThumbnail url={attachment.url} />}
                 {kind === 'image' && (
-                    <img src={attachment.url} alt="" className="h-full w-full object-cover" />
+                    <div className="relative h-full w-full">
+                        <img src={attachment.url} alt="" className="h-full w-full object-cover" />
+                        <div className="pointer-events-none absolute inset-0">
+                            <PhotoAnnotationOverlay data={annotations} fit="cover" />
+                        </div>
+                    </div>
                 )}
                 {kind === 'other' && <Icon className="text-muted-foreground h-10 w-10" />}
             </button>
@@ -135,11 +157,12 @@ interface AttachmentPreview {
     context?: AttachmentPreviewContext;
 }
 
-function AttachmentList({ attachments, onPreview, context, compact = false }: {
+function AttachmentList({ attachments, onPreview, context, compact = false, annotationOverrides }: {
     attachments: Attachment[];
     onPreview: (preview: AttachmentPreview) => void;
     context?: AttachmentPreviewContext;
     compact?: boolean;
+    annotationOverrides: AnnotationOverrides;
 }) {
     if (attachments.length === 0) return null;
     return (
@@ -148,6 +171,7 @@ function AttachmentList({ attachments, onPreview, context, compact = false }: {
                 <AttachmentCard
                     key={att.id}
                     attachment={att}
+                    annotations={resolveAnnotations(att, annotationOverrides)}
                     onPreview={(a) => onPreview({ attachment: a, siblings: attachments, context })}
                 />
             ))}
@@ -155,17 +179,59 @@ function AttachmentList({ attachments, onPreview, context, compact = false }: {
     );
 }
 
-function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPreview | null; onClose: () => void }) {
+function AttachmentPreviewDialog({ preview, onClose, annotationOverrides, onAnnotationsSaved }: {
+    preview: AttachmentPreview | null;
+    onClose: () => void;
+    annotationOverrides: AnnotationOverrides;
+    onAnnotationsSaved: (mediaId: number, data: PhotoAnnotationData) => void;
+}) {
     const open = preview !== null;
     const [activeId, setActiveId] = useState<number | null>(null);
+    const [annotating, setAnnotating] = useState(false);
+    const [savingAnnotations, setSavingAnnotations] = useState(false);
 
     useEffect(() => {
         setActiveId(preview?.attachment.id ?? null);
     }, [preview?.attachment.id]);
 
+    useEffect(() => {
+        setAnnotating(false);
+    }, [activeId, open]);
+
+    // Warm the lazy editor chunk while the dialog is open so the first click
+    // on the pencil doesn't sit in the Suspense fallback (toolbar flash).
+    useEffect(() => {
+        if (open) void import('@/components/annotations/photo-annotation-editor');
+    }, [open]);
+
     const active = preview
         ? preview.siblings.find((s) => s.id === activeId) ?? preview.attachment
         : null;
+    const activeAnnotations = active ? resolveAnnotations(active, annotationOverrides) : null;
+
+    function saveAnnotations(data: PhotoAnnotationData) {
+        const url = active?.annotations_url;
+        const mediaId = active?.id;
+        if (!url || mediaId === undefined) return;
+        setSavingAnnotations(true);
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(data),
+        })
+            .then(async (res) => {
+                if (!res.ok) {
+                    const err = await res.json().catch(() => null);
+                    throw new Error(err?.message ?? 'Failed to save annotations.');
+                }
+                onAnnotationsSaved(mediaId, data);
+                setAnnotating(false);
+            })
+            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed to save annotations.'))
+            .finally(() => setSavingAnnotations(false));
+    }
     const kind = active ? attachmentKind(active.mime_type) : 'other';
     const imageSiblings = preview ? preview.siblings.filter((s) => attachmentKind(s.mime_type) === 'image') : [];
     const hasGallery = kind === 'image' && imageSiblings.length > 1;
@@ -173,7 +239,7 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
     const typeLabel = kind === 'pdf' ? 'PDF' : kind === 'image' ? 'Image' : active ? (active.mime_type.split('/')[1] ?? 'File').toUpperCase() : '';
 
     useEffect(() => {
-        if (!open || !hasGallery || activeIndex === -1) return;
+        if (!open || !hasGallery || activeIndex === -1 || annotating) return;
         const handler = (e: KeyboardEvent) => {
             if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
             e.preventDefault();
@@ -184,7 +250,7 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [open, hasGallery, activeIndex, imageSiblings]);
+    }, [open, hasGallery, activeIndex, imageSiblings, annotating]);
 
     const headingText = hasGallery && activeIndex !== -1
         ? `Photo ${activeIndex + 1} of ${imageSiblings.length}`
@@ -206,8 +272,104 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
                     {active && kind === 'pdf' && (
                         <iframe src={active.url} title={active.file_name} className="h-full w-full bg-white" />
                     )}
-                    {active && kind === 'image' && (
-                        <ZoomableImage src={active.url} alt={active.file_name} />
+                    {active && kind === 'image' && !annotating && (
+                        <ZoomableImage
+                            src={active.url}
+                            alt={active.file_name}
+                            overlay={<PhotoAnnotationOverlay data={activeAnnotations} />}
+                            renderControls={({ zoomIn, zoomOut }) => (
+                                <div className="bg-background/90 absolute left-3 top-3 z-10 flex flex-col items-center gap-0.5 rounded-full border p-1 shadow-md backdrop-blur">
+                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Download" aria-label={`Download ${active.file_name}`}>
+                                        <a href={active.url} download={active.file_name}>
+                                            <Download className="h-3.5 w-3.5" />
+                                        </a>
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomIn} title="Zoom in" aria-label="Zoom in">
+                                        <Plus className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomOut} title="Zoom out" aria-label="Zoom out">
+                                        <Minus className="h-3.5 w-3.5" />
+                                    </Button>
+                                    {active.annotations_url && (
+                                        <>
+                                            <div className="bg-border my-0.5 h-px w-4" />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={() => setAnnotating(true)}
+                                                title="Annotate"
+                                                aria-label="Annotate photo"
+                                            >
+                                                <PenLine className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        />
+                    )}
+                    {active && kind === 'image' && annotating && (
+                        <Suspense
+                            fallback={
+                                <div className="relative h-full w-full">
+                                    <img src={active.url} alt={active.file_name} className="h-full w-full object-contain" draggable={false} />
+                                    <div className="pointer-events-none absolute inset-0">
+                                        <PhotoAnnotationOverlay data={activeAnnotations} />
+                                    </div>
+                                    {/* Toolbar skeleton so the controls don't blink out while the editor chunk loads */}
+                                    <div className="bg-background/90 absolute left-3 top-3 z-10 flex flex-col items-center gap-0.5 rounded-full border p-1 shadow-md backdrop-blur">
+                                        <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Download" aria-label={`Download ${active.file_name}`}>
+                                            <a href={active.url} download={active.file_name}>
+                                                <Download className="h-3.5 w-3.5" />
+                                            </a>
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Zoom in">
+                                            <Plus className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Zoom out">
+                                            <Minus className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <div className="bg-border my-0.5 h-px w-4" />
+                                        <Button
+                                            variant="secondary"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() => setAnnotating(false)}
+                                            title="Stop annotating"
+                                            aria-label="Stop annotating"
+                                            aria-pressed
+                                        >
+                                            <PenLine className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            }
+                        >
+                            <PhotoAnnotationEditor
+                                key={active.id}
+                                src={active.url}
+                                initial={activeAnnotations}
+                                saving={savingAnnotations}
+                                onSave={saveAnnotations}
+                                onCancel={() => setAnnotating(false)}
+                                leadingControls={({ zoomIn, zoomOut }) => (
+                                    <>
+                                        <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Download" aria-label={`Download ${active.file_name}`}>
+                                            <a href={active.url} download={active.file_name}>
+                                                <Download className="h-3.5 w-3.5" />
+                                            </a>
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomIn} title="Zoom in" aria-label="Zoom in">
+                                            <Plus className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={zoomOut} title="Zoom out" aria-label="Zoom out">
+                                            <Minus className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </>
+                                )}
+                            />
+                        </Suspense>
                     )}
                     {active && kind === 'other' && (
                         <div className="text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-3 p-8 text-center text-sm">
@@ -223,6 +385,7 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
                             <button
                                 key={s.id}
                                 type="button"
+                                disabled={annotating}
                                 onClick={() => setActiveId(s.id)}
                                 className={cn(
                                     'relative aspect-square h-full shrink-0 overflow-hidden rounded border-2 transition-all md:h-auto md:w-full',
@@ -234,6 +397,9 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
                                 aria-current={s.id === active?.id}
                             >
                                 <img src={s.url} alt="" className="h-full w-full object-cover" />
+                                <div className="pointer-events-none absolute inset-0">
+                                    <PhotoAnnotationOverlay data={resolveAnnotations(s, annotationOverrides)} fit="cover" />
+                                </div>
                             </button>
                         ))}
                     </div>
@@ -262,7 +428,7 @@ function AttachmentPreviewDialog({ preview, onClose }: { preview: AttachmentPrev
                         )}
                     </div>
 
-                    {active && (
+                    {active && kind !== 'image' && (
                         <Button asChild variant="outline" size="sm" className="mt-1 md:mt-auto">
                             <a href={active.url} download={active.file_name}>
                                 <Download className="mr-1.5 h-3.5 w-3.5" /> Download
@@ -285,10 +451,11 @@ function AttachmentBadge({ count }: { count: number }) {
     );
 }
 
-function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
+function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse, annotationOverrides }: {
     comment: CommentData;
     onPreviewAttachment: (preview: AttachmentPreview) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
+    annotationOverrides: AnnotationOverrides;
 }) {
     const metadata = comment.metadata as Record<string, unknown> | null;
     const event = metadata?.event as string | undefined;
@@ -326,6 +493,7 @@ function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
                     onPreview={onPreviewAttachment}
                     context={{ uploaderName: comment.user?.name ?? 'System', uploadedAt: comment.created_at }}
                     compact
+                    annotationOverrides={annotationOverrides}
                 />
                 {formSubmittedMeta && onOpenFormResponse && (
                     <button
@@ -342,16 +510,17 @@ function SystemComment({ comment, onPreviewAttachment, onOpenFormResponse }: {
     );
 }
 
-function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment, onOpenFormResponse }: {
+function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAttachment, onOpenFormResponse, annotationOverrides }: {
     comment: CommentData;
     currentUserId?: number;
     onEdit?: (comment: CommentData) => void;
     onDelete?: (commentId: number) => void;
     onPreviewAttachment: (preview: AttachmentPreview) => void;
     onOpenFormResponse?: (formRequestId: number) => void;
+    annotationOverrides: AnnotationOverrides;
 }) {
     if (comment.metadata) {
-        return <SystemComment comment={comment} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} />;
+        return <SystemComment comment={comment} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} annotationOverrides={annotationOverrides} />;
     }
 
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
@@ -384,11 +553,12 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onPreviewAtta
                     attachments={comment.attachments}
                     onPreview={onPreviewAttachment}
                     context={{ uploaderName: comment.user?.name ?? 'System', uploadedAt: comment.created_at }}
+                    annotationOverrides={annotationOverrides}
                 />
                 {comment.replies && comment.replies.length > 0 && (
                     <div className="mt-3 space-y-3 pl-6">
                         {comment.replies.map((reply) => (
-                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} />
+                            <CommentBubble key={reply.id} comment={reply} currentUserId={currentUserId} onEdit={onEdit} onDelete={onDelete} onPreviewAttachment={onPreviewAttachment} onOpenFormResponse={onOpenFormResponse} annotationOverrides={annotationOverrides} />
                         ))}
                     </div>
                 )}
@@ -487,6 +657,9 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
     const [commentFilter, setCommentFilter] = useState<'all' | 'messages' | 'attachments' | 'history'>('messages');
     const [commentSort, setCommentSort] = useState<'oldest' | 'newest'>('oldest');
     const [preview, setPreview] = useState<AttachmentPreview | null>(null);
+    // Annotations saved this session, keyed by media id — lets thumbnails and
+    // the preview dialog reflect edits without an Inertia page reload.
+    const [annotationOverrides, setAnnotationOverrides] = useState<AnnotationOverrides>({});
     const [removingMediaId, setRemovingMediaId] = useState<number | null>(null);
     const [mobileView, setMobileView] = useState<'details' | 'activity'>('details');
     const messageCount = comments.filter((c) => c.metadata === null).length;
@@ -709,6 +882,7 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
                                                 onEdit={handleEditComment}
                                                 onDelete={handleDeleteComment}
                                                 onPreviewAttachment={setPreview}
+                                                annotationOverrides={annotationOverrides}
                                                 onOpenFormResponse={(id) => {
                                                     const fr = formRequests.find((f) => f.id === id);
                                                     if (fr) setViewingFormRequest(fr);
@@ -1192,7 +1366,12 @@ export default function InjuryShow({ injury, comments, options, notifyUsers, for
             </div>
 
             {/* Attachment Preview Dialog */}
-            <AttachmentPreviewDialog preview={preview} onClose={() => setPreview(null)} />
+            <AttachmentPreviewDialog
+                preview={preview}
+                onClose={() => setPreview(null)}
+                annotationOverrides={annotationOverrides}
+                onAnnotationsSaved={(mediaId, data) => setAnnotationOverrides((prev) => ({ ...prev, [mediaId]: data }))}
+            />
 
             {/* Send Notification Dialog */}
             <Dialog open={sendOpen} onOpenChange={setSendOpen}>

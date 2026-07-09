@@ -533,6 +533,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
     Route::get('/comments/{comment}/attachments/{media}', [CommentController::class, 'streamAttachment'])->name('comments.attachment');
+    Route::put('/comments/{comment}/attachments/{media}/annotations', [CommentController::class, 'updateAttachmentAnnotations'])->name('comments.attachment.annotations');
     Route::get('/comments/users/search', [CommentController::class, 'searchUsers'])->name('comments.users.search');
 
     // ============================================
@@ -749,8 +750,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:kiosks.sync');
     Route::get('/kiosks/sync', [KioskController::class, 'sync'])->name('kiosks.sync')
         ->middleware('permission:kiosks.sync');
-    Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit')
-        ->middleware('permission:kiosks.edit');
+    Route::middleware('permission:kiosks.edit')->group(function () {
+        Route::get('/kiosks/{kiosk}/edit', [KioskController::class, 'edit'])->name('kiosks.edit');
+        Route::get('/kiosks/{kiosk}/edit/events', [KioskController::class, 'editEvents'])->name('kiosks.edit.events');
+        Route::get('/kiosks/{kiosk}/edit/managers', [KioskController::class, 'editManagers'])->name('kiosks.edit.managers');
+        Route::get('/kiosks/{kiosk}/edit/devices', [KioskController::class, 'editDevices'])->name('kiosks.edit.devices');
+        Route::get('/kiosks/{kiosk}/edit/settings', [KioskController::class, 'editSettings'])->name('kiosks.edit.settings');
+    });
     Route::post('/kiosks/{kiosk}/zones', [KioskController::class, 'updateZones'])->name('kiosks.updateZones')
         ->middleware('permission:kiosks.manage-zones');
     Route::get('/kiosks/{kiosk}/toggleActive', [KioskController::class, 'toggleActive'])->name('kiosk.toggleActive')
