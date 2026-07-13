@@ -399,12 +399,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             [EmploymentApplicationController::class, 'startReferenceForm'],
         )->name('employment-applications.references.start-form');
 
-        // Re-dispatch auto-mode forms for the current stage — used to recover
-        // from an accidentally cancelled trigger form.
+        // Re-dispatch auto-mode actions for the current stage — used to recover
+        // from an accidentally cancelled trigger form, or to re-fire notifications.
         Route::post(
-            '/employment-applications/{employmentApplication}/retrigger-stage-forms',
-            [EmploymentApplicationController::class, 'retriggerStageForms'],
-        )->name('employment-applications.retrigger-stage-forms');
+            '/employment-applications/{employmentApplication}/retrigger-stage-actions',
+            [EmploymentApplicationController::class, 'retriggerStageActions'],
+        )->name('employment-applications.retrigger-stage-actions');
 
         // Face-to-Face Screening Interview
         Route::get('/employment-applications/{employmentApplication}/screening-interview/create', [ScreeningInterviewController::class, 'create'])->name('screening-interviews.create');
@@ -473,12 +473,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/form-templates/import', [FormTemplateController::class, 'import'])->name('form-templates.import');
         Route::get('/form-templates/placeholders/list', [FormTemplateController::class, 'placeholders'])->name('form-templates.placeholders');
 
-        // Trigger-form mappings (which form auto-fires on which model trigger, to whom)
+        // Trigger actions (what auto-fires on which model trigger, to whom —
+        // assign a form or send a notification)
         // URL avoids the `/app*` prefix because the prod nginx Reverb location block swallows it.
-        Route::get('/trigger-form-mappings', [\App\Http\Controllers\ModelTriggerFormController::class, 'index'])->name('model-trigger-forms.index');
-        Route::post('/trigger-form-mappings', [\App\Http\Controllers\ModelTriggerFormController::class, 'store'])->name('model-trigger-forms.store');
-        Route::put('/trigger-form-mappings/{modelTriggerForm}', [\App\Http\Controllers\ModelTriggerFormController::class, 'update'])->name('model-trigger-forms.update');
-        Route::delete('/trigger-form-mappings/{modelTriggerForm}', [\App\Http\Controllers\ModelTriggerFormController::class, 'destroy'])->name('model-trigger-forms.destroy');
+        Route::get('/trigger-actions', [\App\Http\Controllers\ModelTriggerActionController::class, 'index'])->name('model-trigger-actions.index');
+        Route::get('/trigger-actions/create', [\App\Http\Controllers\ModelTriggerActionController::class, 'create'])->name('model-trigger-actions.create');
+        Route::get('/trigger-actions/{modelTriggerAction}/edit', [\App\Http\Controllers\ModelTriggerActionController::class, 'edit'])->name('model-trigger-actions.edit');
+        Route::post('/trigger-actions', [\App\Http\Controllers\ModelTriggerActionController::class, 'store'])->name('model-trigger-actions.store');
+        Route::put('/trigger-actions/{modelTriggerAction}', [\App\Http\Controllers\ModelTriggerActionController::class, 'update'])->name('model-trigger-actions.update');
+        Route::delete('/trigger-actions/{modelTriggerAction}', [\App\Http\Controllers\ModelTriggerActionController::class, 'destroy'])->name('model-trigger-actions.destroy');
     });
 
     // Form Requests (admin actions)

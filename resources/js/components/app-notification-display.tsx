@@ -6,6 +6,7 @@ import JobForecastStatusNotification from './notification-components/job-forecas
 import { NotificationProps } from './notification-components/Notification';
 import RequisitionSentToOfficeNotification from './notification-components/requisition-sent-to-office-notification';
 import SyncNotification from './notification-components/sync-notification';
+import TriggerActionNotification from './notification-components/trigger-action-notification';
 import { Button } from './ui/button';
 
 interface AppNotificationDisplayProps {
@@ -75,6 +76,9 @@ const AppNotificationDisplay = ({ notifications, onDismiss }: AppNotificationDis
 
                     case 'CommentMentioned':
                         return <CommentMentionedNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
+
+                    case 'TriggerAction':
+                        return <TriggerActionNotification key={notification.id} notification={notification} onDismiss={handleDismiss} />;
 
                     default:
                         return (

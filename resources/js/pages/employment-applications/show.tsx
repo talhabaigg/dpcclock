@@ -1933,13 +1933,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                                     variant="outline"
                                                                     size="icon"
                                                                     className="h-9 w-9 shrink-0"
-                                                                    onClick={() => router.post(route('employment-applications.retrigger-stage-forms', app.id), {}, { preserveScroll: true })}
-                                                                    aria-label="Re-trigger stage forms"
+                                                                    onClick={() => router.post(route('employment-applications.retrigger-stage-actions', app.id), {}, { preserveScroll: true })}
+                                                                    aria-label="Re-trigger stage actions"
                                                                 >
                                                                     <RotateCcw className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             </TooltipTrigger>
-                                                            <TooltipContent>Re-trigger stage forms</TooltipContent>
+                                                            <TooltipContent>Re-trigger stage actions</TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>
                                                 )}
