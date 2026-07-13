@@ -19,7 +19,9 @@ export default function InjuryWorkerCell({ employee, fallbackName }: InjuryWorke
                 <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
             </Avatar>
             <div>
-                <div className="text-xs font-medium leading-tight">{displayName}</div>
+              <div className="text-xs font-medium leading-tight">
+  {displayName.length > 20 ? `${displayName.slice(0, 20)}...` : displayName}
+</div>
                 {employee?.employment_type && (
                     <div className="text-muted-foreground text-xs leading-tight">{employee.employment_type}</div>
                 )}
