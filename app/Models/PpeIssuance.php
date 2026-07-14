@@ -10,6 +10,8 @@ class PpeIssuance extends Model
 {
     use HasUuids, SoftDeletes;
 
+    public const MULTIPLE_REASONS = 'multiple_reasons';
+
     public const REASON_OPTIONS = [
         'new_starter' => 'New Starter',
         'replacement_worn' => 'Replacement - Worn/Damaged',
@@ -29,6 +31,7 @@ class PpeIssuance extends Model
     ];
 
     public const SOURCE_QR = 'qr';
+
     public const SOURCE_KIOSK = 'kiosk';
 
     /**
@@ -84,7 +87,36 @@ class PpeIssuance extends Model
 
     public function getReasonLabelAttribute(): string
     {
-        return self::REASON_OPTIONS[$this->reason] ?? $this->reason;
+        return self::reasonLabel($this->reason);
+    }
+
+    public static function reasonLabel(string $reason): string
+    {
+        if ($reason === self::MULTIPLE_REASONS) {
+            return 'Multiple reasons';
+        }
+
+        return self::REASON_OPTIONS[$reason] ?? $reason;
+    }
+
+    public function getReasonLabelsAttribute(): array
+    {
+        $labels = collect($this->issued_items ?? [])
+            ->map(fn (array $item) => self::reasonLabel($item['reason'] ?? $this->reason))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $labels ?: [self::reasonLabel($this->reason)];
+    }
+
+    public static function summariseItemReasons(array $items): string
+    {
+        $reasons = collect($items)->pluck('reason')->unique()->values();
+
+        return $reasons->count() === 1
+            ? $reasons->first()
+            : self::MULTIPLE_REASONS;
     }
 
     public function getReturnedLabelAttribute(): string

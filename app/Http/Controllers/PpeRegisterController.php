@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\PpeIssuance;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Spatie\Browsershot\Browsershot;
@@ -50,10 +51,12 @@ class PpeRegisterController extends Controller
             $query->withTrashed();
         }
 
-        foreach (['reason', 'source'] as $col) {
-            if ($request->filled($col)) {
-                $query->where($col, $request->input($col));
-            }
+        if ($request->filled('reason')) {
+            $this->applyReasonFilter($query, $request->string('reason')->toString());
+        }
+
+        if ($request->filled('source')) {
+            $query->where('source', $request->input('source'));
         }
 
         $issuances = $query->latest('submitted_at')->paginate($perPage)->withQueryString();
@@ -70,6 +73,7 @@ class PpeRegisterController extends Controller
                 'authorised_by' => $i->authorisedBy ? ['id' => $i->authorisedBy->id, 'name' => $i->authorisedBy->name] : null,
                 'reason' => $i->reason,
                 'reason_label' => $i->reason_label,
+                'reason_labels' => $i->reason_labels,
                 'items_count' => collect($i->issued_items ?? [])->sum(fn ($it) => (int) ($it['qty'] ?? 0)),
                 'ppe_returned' => $i->ppe_returned,
                 'returned_label' => $i->returned_label,
@@ -111,7 +115,7 @@ class PpeRegisterController extends Controller
 
         $catalogByKey = collect(PpeIssuance::PPE_CATALOG)->keyBy('key');
 
-        $items = collect($issuance->issued_items ?? [])->map(function ($it) use ($catalogByKey) {
+        $items = collect($issuance->issued_items ?? [])->map(function ($it) use ($catalogByKey, $issuance) {
             $catalog = $catalogByKey->get($it['key']) ?? null;
 
             return [
@@ -120,6 +124,8 @@ class PpeRegisterController extends Controller
                 'qty' => (int) ($it['qty'] ?? 0),
                 'size' => $it['size'] ?? null,
                 'make_model' => $it['make_model'] ?? null,
+                'reason' => $it['reason'] ?? $issuance->reason,
+                'reason_label' => PpeIssuance::reasonLabel($it['reason'] ?? $issuance->reason),
             ];
         })->values();
 
@@ -175,6 +181,44 @@ class PpeRegisterController extends Controller
         return redirect()->back()->with('success', 'PPE register entry restored.');
     }
 
+    private function applyReasonFilter(Builder $query, string $reason): void
+    {
+        $driver = $query->getConnection()->getDriverName();
+
+        $query->where(function (Builder $query) use ($driver, $reason) {
+            $query->where('reason', $reason);
+
+            if ($driver === 'sqlite') {
+                $query->orWhereRaw(
+                    "exists (select 1 from json_each(ppe_issuances.issued_items) where json_extract(json_each.value, '$.reason') = ?)",
+                    [$reason],
+                );
+
+                return;
+            }
+
+            if ($driver === 'pgsql') {
+                $query->orWhereRaw(
+                    '(ppe_issuances.issued_items)::jsonb @> ?::jsonb',
+                    [json_encode([['reason' => $reason]])],
+                );
+
+                return;
+            }
+
+            if (in_array($driver, ['mysql', 'mariadb'], true)) {
+                $query->orWhereRaw(
+                    "json_search(ppe_issuances.issued_items, 'one', ?, null, '$[*].reason') is not null",
+                    [$reason],
+                );
+
+                return;
+            }
+
+            $query->orWhereJsonContains('issued_items', ['reason' => $reason]);
+        });
+    }
+
     /**
      * Render the printable PPE cabinet QR sheet as a PDF (mirrors toolbox QR sheet style).
      */
@@ -192,7 +236,7 @@ class PpeRegisterController extends Controller
 
         $pdf = $this->renderPdf($html);
 
-        $filename = 'ppe-cabinet-qr-' . ($location->external_id ?: $location->id) . '.pdf';
+        $filename = 'ppe-cabinet-qr-'.($location->external_id ?: $location->id).'.pdf';
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',

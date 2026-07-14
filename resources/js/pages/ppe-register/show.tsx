@@ -1,5 +1,5 @@
-import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
+import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -9,6 +9,8 @@ type Item = {
     qty: number;
     size: string | null;
     make_model: string | null;
+    reason: string;
+    reason_label: string;
 };
 
 interface Props {
@@ -41,12 +43,12 @@ export default function PpeRegisterShow({ location, issuance }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`PPE — ${issuance.employee?.name ?? 'Entry'}`} />
             <div className="mx-auto w-full max-w-3xl space-y-6 p-4">
-                <div className="rounded-lg border bg-card p-5">
+                <div className="bg-card rounded-lg border p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Issued to</p>
+                            <p className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">Issued to</p>
                             <h1 className="text-xl font-semibold tracking-tight">{issuance.employee?.full_name ?? '—'}</h1>
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="text-muted-foreground mt-1 text-xs">
                                 {issuance.submitted_at_formatted} · {location.name}
                             </p>
                         </div>
@@ -63,22 +65,23 @@ export default function PpeRegisterShow({ location, issuance }: Props) {
                     </div>
                 </div>
 
-                <Field label="Reason for issue">{issuance.reason_label}</Field>
-
-                <div className="rounded-lg border bg-card">
+                <div className="bg-card rounded-lg border">
                     <div className="border-b px-5 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PPE/RPE issued</p>
+                        <p className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">PPE/RPE issued</p>
                     </div>
                     <div className="divide-y">
                         {issuance.items.length === 0 ? (
-                            <p className="px-5 py-4 text-sm italic text-muted-foreground">No items recorded.</p>
+                            <p className="text-muted-foreground px-5 py-4 text-sm italic">No items recorded.</p>
                         ) : (
                             issuance.items.map((it) => (
                                 <div key={it.key} className="flex items-center justify-between px-5 py-3">
                                     <div className="flex-1">
                                         <p className="text-sm font-medium">{it.label}</p>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-muted-foreground text-xs">
                                             {[it.size ? `Size ${it.size}` : null, it.make_model].filter(Boolean).join(' · ')}
+                                        </p>
+                                        <p className="text-muted-foreground mt-1 text-xs">
+                                            Reason: <span className="text-foreground">{it.reason_label}</span>
                                         </p>
                                     </div>
                                     <p className="text-sm font-semibold tabular-nums">×{it.qty}</p>
@@ -102,9 +105,9 @@ export default function PpeRegisterShow({ location, issuance }: Props) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="rounded-lg border bg-card px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-            <p className="mt-1 text-sm text-foreground">{children}</p>
+        <div className="bg-card rounded-lg border px-5 py-4">
+            <p className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">{label}</p>
+            <p className="text-foreground mt-1 text-sm">{children}</p>
         </div>
     );
 }

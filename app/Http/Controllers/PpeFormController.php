@@ -172,15 +172,15 @@ class PpeFormController extends Controller
         $itemKeys = collect(PpeIssuance::PPE_CATALOG)->pluck('key')->all();
 
         $rules = [
-            'reason' => ['required', 'string', 'in:' . implode(',', array_keys(PpeIssuance::REASON_OPTIONS))],
             'issued_items' => 'required|array|min:1',
-            'issued_items.*.key' => ['required', 'string', 'in:' . implode(',', $itemKeys)],
+            'issued_items.*.key' => ['required', 'string', 'in:'.implode(',', $itemKeys)],
             'issued_items.*.qty' => 'required|integer|min:1|max:50',
+            'issued_items.*.reason' => ['required', 'string', 'in:'.implode(',', array_keys(PpeIssuance::REASON_OPTIONS))],
             'issued_items.*.size' => 'nullable|string|max:8',
             'issued_items.*.make_model' => 'nullable|string|max:255',
             'fit_test_completed' => 'nullable|boolean',
             'authorised_by_user_id' => 'required|integer|exists:users,id',
-            'ppe_returned' => ['required', 'string', 'in:' . implode(',', array_keys(PpeIssuance::RETURNED_OPTIONS))],
+            'ppe_returned' => ['required', 'string', 'in:'.implode(',', array_keys(PpeIssuance::RETURNED_OPTIONS))],
         ];
 
         if (! $preAuthedEmployee) {
@@ -202,12 +202,15 @@ class PpeFormController extends Controller
 
         $this->guardAuthorisedBy($location, (int) $data['authorised_by_user_id']);
 
-        $issuance = DB::transaction(function () use ($data, $location, $employee, $source) {
+        $issuedItems = $this->normaliseItems($data['issued_items']);
+        $summaryReason = PpeIssuance::summariseItemReasons($issuedItems);
+
+        $issuance = DB::transaction(function () use ($data, $issuedItems, $summaryReason, $location, $employee, $source) {
             return PpeIssuance::create([
                 'location_id' => $location->id,
                 'employee_id' => $employee->id,
-                'reason' => $data['reason'],
-                'issued_items' => $this->normaliseItems($data['issued_items']),
+                'reason' => $summaryReason,
+                'issued_items' => $issuedItems,
                 'fit_test_completed' => $data['fit_test_completed'] ?? null,
                 'authorised_by_user_id' => $data['authorised_by_user_id'],
                 'ppe_returned' => $data['ppe_returned'],
@@ -319,6 +322,7 @@ class PpeFormController extends Controller
             return array_filter([
                 'key' => $item['key'],
                 'qty' => (int) $item['qty'],
+                'reason' => $item['reason'],
                 'size' => ! empty($item['size']) ? $item['size'] : null,
                 'make_model' => ! empty($item['make_model']) ? $item['make_model'] : null,
             ], fn ($v) => $v !== null);
