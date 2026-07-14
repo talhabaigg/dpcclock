@@ -40,6 +40,7 @@ interface DocumentTemplate {
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Document Templates', href: route('document-templates.index') }];
 
 const CATEGORIES: Record<string, string> = {
+    employment: 'Employment',
     employment_contract: 'Employment Contract',
     policies: 'Policies',
 };
