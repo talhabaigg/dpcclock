@@ -28,9 +28,6 @@ class ModelTriggerActionController extends Controller
         return Inertia::render('trigger-actions/index', [
             'actions' => $actions,
             'modelTypes' => $this->modelTypeOptions(),
-            'subjectSourcesByModel' => $this->subjectSourcesByModel(),
-            'permissions' => Permission::orderBy('name')->get(['id', 'name']),
-            'users' => User::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
