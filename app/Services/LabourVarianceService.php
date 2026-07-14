@@ -215,8 +215,8 @@ class LabourVarianceService
     }
 
     /**
-     * Worktypes to exclude from actual worked hours (leave, RDO, public holidays)
-     * These are non-productive hours where wages are paid from accruals, not job costed
+     * Worktypes to exclude from actual worked hours (leave, RDO, public holidays, workcover)
+     * These are non-productive hours where wages are not job costed
      */
     private function getExcludedWorktypePatterns(): array
     {
@@ -225,6 +225,7 @@ class LabourVarianceService
             '%rdo%',
             '%public holiday%',
             '%not worked%',
+            '%workcover%',
         ];
     }
 
