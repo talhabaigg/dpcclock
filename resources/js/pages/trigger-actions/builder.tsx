@@ -67,6 +67,21 @@ const ACTION_OPTIONS = [
 /** Which sheet is open. 'trigger' and 'action-picker' are pickers; 'action' is the detail config. */
 type Panel = 'trigger' | 'action-picker' | 'action' | 'settings';
 
+/**
+ * Trigger events are derived from each model's trigger keys: plain workflow
+ * statuses become a "status changes to …" event with a status select, and the
+ * 'created' sentinel becomes a "record is created" event. New event kinds get
+ * a new entry here rather than another flat list in the picker.
+ */
+type TriggerEvent = 'status_change' | 'created';
+
+function eventsForKeys(keys: string[]): { value: TriggerEvent; label: string }[] {
+    const events: { value: TriggerEvent; label: string }[] = [];
+    if (keys.some((k) => k !== 'created')) events.push({ value: 'status_change', label: 'Status changes' });
+    if (keys.includes('created')) events.push({ value: 'created', label: 'Record is created' });
+    return events;
+}
+
 /** Which validation error keys belong to which step card. */
 const PANEL_FIELDS: Record<'trigger' | 'action' | 'settings', string[]> = {
     trigger: ['model_type', 'trigger_key'],
@@ -253,6 +268,9 @@ export default function TriggerActionBuilder(props: PageProps) {
     // trigger gets picked, then the action. Editing starts fully configured.
     const [triggerConfigured, setTriggerConfigured] = useState(isEdit);
     const [actionChosen, setActionChosen] = useState(isEdit);
+    const [triggerEvent, setTriggerEvent] = useState<TriggerEvent | ''>(
+        isEdit ? (props.action!.trigger_key === 'created' ? 'created' : 'status_change') : '',
+    );
 
     // Canvas zoom + pan, Power Automate style: drag empty canvas to pan,
     // ctrl/cmd + wheel (or the toolbar) to zoom.
@@ -323,17 +341,32 @@ export default function TriggerActionBuilder(props: PageProps) {
         return PANEL_FIELDS[panel].some((field) => Object.keys(errors).some((key) => key === field || key.startsWith(`${field}.`)));
     }
 
-    function pickTrigger(modelType: string, triggerKey: string) {
+    function pickTriggerModel(modelType: string) {
+        const events = eventsForKeys(triggerKeysByModel[modelType] ?? []);
+        const only = events.length === 1 ? events[0].value : '';
+        setTriggerEvent(only);
         setForm((f) => ({
             ...f,
             model_type: modelType,
-            trigger_key: triggerKey,
+            trigger_key: only === 'created' ? 'created' : '',
             // Model-dependent picks reset when the model changes.
-            ...(modelType !== f.model_type ? { form_template_id: '' as const, subject_source: '', dispatch_mode: 'auto' as const, min_submissions: 1 } : {}),
+            form_template_id: '',
+            subject_source: '',
+            dispatch_mode: 'auto',
+            min_submissions: 1,
         }));
+        setTriggerConfigured(only === 'created');
+    }
+
+    function pickTriggerEvent(event: TriggerEvent) {
+        setTriggerEvent(event);
+        setForm((f) => ({ ...f, trigger_key: event === 'created' ? 'created' : '' }));
+        setTriggerConfigured(event === 'created');
+    }
+
+    function pickTriggerStatus(status: string) {
+        setForm((f) => ({ ...f, trigger_key: status }));
         setTriggerConfigured(true);
-        // Progressive flow: straight on to picking the action if there is none yet.
-        setOpenPanel(actionChosen ? null : 'action-picker');
     }
 
     function pickAction(actionType: ActionType) {
@@ -564,32 +597,74 @@ export default function TriggerActionBuilder(props: PageProps) {
                             </SheetHeader>
 
                             <div className="grid flex-1 content-start gap-4 overflow-y-auto px-4 py-4">
-                                {/* Trigger picker — every model × trigger combination */}
+                                {/* Trigger — cascading definition: model → event → status */}
                                 {openPanel === 'trigger' && (
                                     <>
-                                        {modelTypes.map((mt) => (
-                                            <div key={mt.value} className="grid gap-2">
-                                                <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                                    {mt.label}
-                                                </p>
-                                                {(triggerKeysByModel[mt.value] ?? []).map((key) => (
-                                                    <PickerRow
-                                                        key={key}
-                                                        icon={Zap}
-                                                        label={triggerLabel(key)}
-                                                        hint={
-                                                            key === 'created'
-                                                                ? `When a ${mt.label.toLowerCase()} is created`
-                                                                : `When a ${mt.label.toLowerCase()} enters ${triggerLabel(key)}`
-                                                        }
-                                                        selected={
-                                                            triggerConfigured && form.model_type === mt.value && form.trigger_key === key
-                                                        }
-                                                        onClick={() => pickTrigger(mt.value, key)}
-                                                    />
-                                                ))}
+                                        <div>
+                                            <Label className="text-muted-foreground mb-1 text-xs">When</Label>
+                                            <Select value={form.model_type} onValueChange={pickTriggerModel}>
+                                                <SelectTrigger className="h-9">
+                                                    <SelectValue placeholder="Select a model" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {modelTypes.map((mt) => (
+                                                        <SelectItem key={mt.value} value={mt.value}>
+                                                            {mt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FieldError message={errors.model_type} />
+                                        </div>
+
+                                        {form.model_type && (
+                                            <div>
+                                                <Label className="text-muted-foreground mb-1 text-xs">Event</Label>
+                                                <Select value={triggerEvent} onValueChange={(v) => pickTriggerEvent(v as TriggerEvent)}>
+                                                    <SelectTrigger className="h-9">
+                                                        <SelectValue placeholder="Select an event" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {eventsForKeys(triggerKeysByModel[form.model_type] ?? []).map((ev) => (
+                                                            <SelectItem key={ev.value} value={ev.value}>
+                                                                {ev.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
-                                        ))}
+                                        )}
+
+                                        {triggerEvent === 'status_change' && (
+                                            <div>
+                                                <Label className="text-muted-foreground mb-1 text-xs">Status changes to</Label>
+                                                <Select value={form.trigger_key} onValueChange={pickTriggerStatus}>
+                                                    <SelectTrigger className="h-9">
+                                                        <SelectValue placeholder="Select a status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(triggerKeysByModel[form.model_type] ?? [])
+                                                            .filter((key) => key !== 'created')
+                                                            .map((key) => (
+                                                                <SelectItem key={key} value={key}>
+                                                                    {triggerLabel(key)}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FieldError message={errors.trigger_key} />
+                                            </div>
+                                        )}
+
+                                        {triggerConfigured && (
+                                            <p className="bg-muted/40 text-muted-foreground rounded-md border p-2.5 text-xs">
+                                                When a {modelLabel.toLowerCase()}{' '}
+                                                {form.trigger_key === 'created'
+                                                    ? 'is created'
+                                                    : `status changes to ${triggerLabel(form.trigger_key)}`}
+                                                , run the action.
+                                            </p>
+                                        )}
                                     </>
                                 )}
 
@@ -880,6 +955,16 @@ export default function TriggerActionBuilder(props: PageProps) {
                                 )}
                             </div>
 
+                            {openPanel === 'trigger' && (
+                                <SheetFooter className="border-t">
+                                    <Button
+                                        disabled={!triggerConfigured}
+                                        onClick={() => setOpenPanel(actionChosen ? null : 'action-picker')}
+                                    >
+                                        Continue
+                                    </Button>
+                                </SheetFooter>
+                            )}
                             {(openPanel === 'action' || openPanel === 'settings') && (
                                 <SheetFooter className="border-t">
                                     <Button variant="outline" onClick={() => setOpenPanel(null)}>
