@@ -127,6 +127,7 @@ class LabourVarianceService
             'target_month' => $targetMonth->format('F Y'),
             'variances' => $variances,
             'summary' => $summary,
+            'drill_worktypes' => $this->getDrillWorktypes($location, $targetMonth),
             'debug' => [
                 'location_external_id' => $location->external_id,
                 'location_eh_location_id' => $location->eh_location_id,
@@ -289,6 +290,41 @@ class LabourVarianceService
             ->groupBy('week_ending')
             ->get()
             ->keyBy('week_ending');
+    }
+
+    /**
+     * Worktype names to feed the labour-dashboard timesheets drill-through so its
+     * results line up with this report's "worked hours" definition (pattern-based
+     * exclusion) rather than the dashboard's own category buckets.
+     */
+    private function getDrillWorktypes(Location $location, Carbon $targetMonth): array
+    {
+        $queryStart = $this->payrollWeekStart($targetMonth);
+        $endOfMonth = $targetMonth->copy()->endOfMonth();
+        $locationIds = $this->getLocationIds($location);
+
+        $names = Clock::join('worktypes', 'clocks.eh_worktype_id', '=', 'worktypes.eh_worktype_id')
+            ->whereIn('clocks.eh_location_id', $locationIds)
+            ->where('clocks.status', 'processed')
+            ->whereNotNull('clocks.clock_out')
+            ->whereBetween('clocks.clock_out', [$queryStart, $endOfMonth])
+            ->distinct()
+            ->pluck('worktypes.name');
+
+        $matchesAny = function (string $name, array $patterns): bool {
+            foreach ($patterns as $pattern) {
+                if (str_contains(mb_strtolower($name), mb_strtolower(trim($pattern, '%')))) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        return [
+            'worked' => $names->reject(fn ($n) => $matchesAny($n, $this->getExcludedWorktypePatterns()))->values()->all(),
+            'leave' => $names->filter(fn ($n) => $matchesAny($n, $this->getLeaveWorktypePatterns()))->values()->all(),
+        ];
     }
 
     /**
@@ -495,6 +531,12 @@ class LabourVarianceService
             $weekActualHours = $actualHours->get($weekEnding);
             $weekLeaveHours = $leaveHours->get($weekEnding);
             $weekActualCosts = $actualCosts->get($weekEnding) ?? collect();
+
+            // Flag whether any actuals exist for this week, so the UI can distinguish
+            // "no data yet" (show a dash) from a genuine zero returned by the query.
+            $weekData['totals']['has_actual_hours'] = $weekActualHours !== null;
+            $weekData['totals']['has_actual_leave'] = $weekLeaveHours !== null;
+            $weekData['totals']['has_actual_cost'] = $weekActualCosts->isNotEmpty();
 
             // Calculate leave hours
             $leaveHoursThisWeek = round((float) ($weekLeaveHours->total_hours ?? 0), 2);

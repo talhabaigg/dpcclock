@@ -322,7 +322,7 @@ class LabourDashboardController extends Controller
             'location_ids' => 'required|string',
             'date_from' => 'required|date',
             'date_to' => 'required|date|after_or_equal:date_from',
-            'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,lost,non_standard,available,industrial_action',
+            'category' => 'required|in:nt,ot,worked,weather,safety,al,sick,rdo,ph,leave,lost,non_standard,available,industrial_action',
             'worktypes' => 'nullable|array',
             'worktypes.*' => 'string|max:255',
             'search' => 'nullable|string|max:255',
@@ -384,6 +384,8 @@ class LabourDashboardController extends Controller
         })->pluck('eh_worktype_id')->toArray();
         $phIds = Worktype::where('name', 'like', '%Public Holiday%')->pluck('eh_worktype_id')->toArray();
         $wcIds = Worktype::where('name', 'like', '%Workcover%')->pluck('eh_worktype_id')->toArray();
+        // All leave types — same %leave% pattern the labour-forecast variance report uses
+        $leaveIds = Worktype::where('name', 'like', '%leave%')->pluck('eh_worktype_id')->toArray();
 
         // Weather/Safety sub-locations
         $weatherEhIds = [];
@@ -404,17 +406,18 @@ class LabourDashboardController extends Controller
             ->where('clock_in', '>=', $dateFrom)
             ->where('clock_in', '<=', $dateTo)
             ->whereIn('status', ['Processed', 'Approved'])
-            ->whereNotIn('eh_worktype_id', $wcIds)
             ->whereNotNull('hours_worked')
             ->where('hours_worked', '>', 0);
 
         // If worktypes[] is provided, it takes precedence over the category's worktype/location filter.
         // This lets callers drill through to "all clocks for these specific worktypes" without
-        // the category's extra constraints (normal-work-codes intersect, weather/safety exclusion, NT/OT split).
+        // the category's extra constraints (Workcover exclusion, normal-work-codes intersect,
+        // weather/safety exclusion, NT/OT split).
         $worktypeFilter = $request->input('worktypes');
         $useWorktypeFilter = is_array($worktypeFilter) && !empty($worktypeFilter);
 
         if (!$useWorktypeFilter) {
+            $query->whereNotIn('eh_worktype_id', $wcIds);
             match ($category) {
                 'available' => null,
                 'worked', 'nt', 'ot' => $query->whereIn('eh_worktype_id', $normalIds)
@@ -425,6 +428,7 @@ class LabourDashboardController extends Controller
                 'sick' => $query->whereIn('eh_worktype_id', $sickIds),
                 'rdo' => $query->whereIn('eh_worktype_id', $rdoIds),
                 'ph' => $query->whereIn('eh_worktype_id', $phIds),
+                'leave' => $query->whereIn('eh_worktype_id', $leaveIds ?: [0]),
                 'lost' => $query->where(function ($q) use ($weatherSafetyEhIds, $alIds, $sickIds, $rdoIds, $phIds) {
                     $q->whereIn('eh_location_id', $weatherSafetyEhIds)
                       ->orWhereIn('eh_worktype_id', array_merge($alIds, $sickIds, $rdoIds, $phIds));

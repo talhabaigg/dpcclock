@@ -108,6 +108,7 @@ type Category =
     | 'sick'
     | 'rdo'
     | 'ph'
+    | 'leave'
     | 'lost'
     | 'non_standard'
     | 'available';
@@ -122,6 +123,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
     sick: "Sick / Carer's Leave",
     rdo: 'Rostered Day Off',
     ph: 'Public Holiday',
+    leave: 'Leave (all types)',
     lost: 'Lost (all non-productive)',
     non_standard: 'Non-Standard',
     available: 'Available (all clocks)',
