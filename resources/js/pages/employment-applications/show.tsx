@@ -61,6 +61,7 @@ import {
     XIcon,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
     FormFillPane,
     FormResponsePane,
@@ -1307,9 +1308,19 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, availableOnDemandForms, onboardingLocations, statuses, screeningAlert, injuryHistory }: PageProps) {
-    const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
-    const { auth, errors: pageErrors } = pageProps;
+    const pageProps = usePage<{
+        auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } };
+        errors: Record<string, string>;
+        flash: { success?: string; info?: string; error?: string };
+    }>().props;
+    const { auth, errors: pageErrors, flash } = pageProps;
     const permissions = auth.permissions ?? [];
+
+    useEffect(() => {
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.info) toast.info(flash.info);
+        if (flash?.error) toast.error(flash.error);
+    }, [flash?.success, flash?.info, flash?.error]);
 
     // Permission-assigned forms can be filled by anyone holding the permission
     // (directly or through any of their roles). Senior roles cover juniors as
