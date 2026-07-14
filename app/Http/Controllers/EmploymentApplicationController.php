@@ -12,10 +12,10 @@ use App\Models\Employee;
 use App\Models\EmploymentApplication;
 use App\Models\EmploymentApplicationReference;
 use App\Models\Location;
-use App\Models\ModelTriggerForm;
+use App\Models\ModelTriggerAction;
 use App\Models\Skill;
 use App\Models\WorkerScreening;
-use App\Services\ModelTriggerFormService;
+use App\Services\ModelTriggerActionService;
 use App\Services\EmploymentHeroService;
 use App\Services\FormPlaceholderResolver;
 use App\Services\GetCompanyCodeService;
@@ -234,7 +234,7 @@ class EmploymentApplicationController extends Controller
     /**
      * Admin detail view.
      */
-    public function show(EmploymentApplication $employmentApplication, ModelTriggerFormService $triggerFormService): Response
+    public function show(EmploymentApplication $employmentApplication, ModelTriggerActionService $triggerActionService): Response
     {
         $employmentApplication->load([
             'references.subjectFormRequests',
@@ -520,7 +520,7 @@ class EmploymentApplicationController extends Controller
             // On-demand trigger mappings active for the application's current
             // status. The show page uses these to render per-subject "Start"
             // actions (e.g. one per reference for the reference check stage).
-            'availableOnDemandForms' => $triggerFormService
+            'availableOnDemandForms' => $triggerActionService
                 ->availableOnDemandForms($employmentApplication, $employmentApplication->status)
                 ->map(fn ($mapping) => [
                     'id' => $mapping->id,
@@ -566,7 +566,7 @@ class EmploymentApplicationController extends Controller
     public function updateStatus(
         Request $request,
         EmploymentApplication $employmentApplication,
-        ModelTriggerFormService $triggerFormService,
+        ModelTriggerActionService $triggerActionService,
     ): RedirectResponse {
         if ($employmentApplication->isLocked()) {
             return back()->withErrors(['status' => 'Enquiry is locked — applicant has been onboarded.']);
@@ -626,7 +626,7 @@ class EmploymentApplicationController extends Controller
 
         // Gate: block forward transitions if required phase forms on the
         // current status haven't been submitted yet.
-        $blockers = $triggerFormService->blockersForLeaving($employmentApplication, $oldStatus);
+        $blockers = $triggerActionService->blockersForLeaving($employmentApplication, $oldStatus);
         if (! empty($blockers)) {
             $list = implode(', ', $blockers);
             return back()->withErrors(['status' => "Cannot move on: required form(s) not yet submitted — {$list}"]);
@@ -648,10 +648,10 @@ class EmploymentApplicationController extends Controller
         // Sweep any pending forms tied to the trigger stage we just left so HR
         // doesn't see stranded "in progress" reference checks (etc.) forever.
         if ($oldStatus !== $newStatus) {
-            $triggerFormService->cancelPendingForTrigger($employmentApplication, $oldStatus, $request->user());
+            $triggerActionService->cancelPendingForTrigger($employmentApplication, $oldStatus, $request->user());
         }
 
-        $triggerFormService->dispatchFormsFor($employmentApplication, $newStatus, $request->user());
+        $triggerActionService->dispatchActionsFor($employmentApplication, $newStatus, $request->user());
 
         return back();
     }
@@ -663,43 +663,51 @@ class EmploymentApplicationController extends Controller
      * reference that already has a non-cancelled form returns the existing one.
      */
     /**
-     * Re-dispatch every auto-mode form mapping for the application's current
-     * status. Idempotent — mappings that already have a live (non-cancelled)
-     * FormRequest are skipped. Used to recover from an accidental cancel.
+     * Re-dispatch every auto-mode action for the application's current status.
+     * Form actions are idempotent — ones that already have a live
+     * (non-cancelled) FormRequest are skipped — so this recovers from an
+     * accidental cancel. Notification actions re-fire every time.
      */
-    public function retriggerStageForms(
+    public function retriggerStageActions(
         Request $request,
         EmploymentApplication $employmentApplication,
-        ModelTriggerFormService $triggerFormService,
+        ModelTriggerActionService $triggerActionService,
     ): RedirectResponse {
         if (! $request->user()->isAdmin()) {
-            return back()->withErrors(['retrigger' => 'Only admins can re-trigger stage forms.']);
+            return back()->withErrors(['retrigger' => 'Only admins can re-trigger stage actions.']);
         }
 
         if ($employmentApplication->isLocked()) {
             return back()->withErrors(['retrigger' => 'Enquiry is locked — applicant has been onboarded.']);
         }
 
-        $created = $triggerFormService->dispatchFormsFor(
+        $result = $triggerActionService->dispatchActionsFor(
             $employmentApplication,
             $employmentApplication->status,
             $request->user(),
         );
 
-        $count = $created->count();
-        if ($count === 0) {
-            return back()->with('info', 'No missing forms for this stage — all mappings already have a live form.');
+        $parts = [];
+        if (($formCount = $result['forms']->count()) > 0) {
+            $parts[] = "{$formCount} form" . ($formCount === 1 ? '' : 's');
+        }
+        if ($result['notified'] > 0) {
+            $parts[] = "notified {$result['notified']} recipient" . ($result['notified'] === 1 ? '' : 's');
         }
 
-        return back()->with('success', "Re-triggered {$count} form" . ($count === 1 ? '' : 's') . ' for this stage.');
+        if (empty($parts)) {
+            return back()->with('info', 'No actions fired for this stage — all form actions already have a live form.');
+        }
+
+        return back()->with('success', 'Re-triggered ' . implode(', ', $parts) . ' for this stage.');
     }
 
     public function startReferenceForm(
         Request $request,
         EmploymentApplication $employmentApplication,
         EmploymentApplicationReference $reference,
-        ModelTriggerForm $mapping,
-        ModelTriggerFormService $triggerFormService,
+        ModelTriggerAction $mapping,
+        ModelTriggerActionService $triggerActionService,
     ): RedirectResponse {
         // Belt-and-braces: refuse mismatched routes.
         abort_unless($reference->employment_application_id === $employmentApplication->id, 404);
@@ -714,7 +722,7 @@ class EmploymentApplicationController extends Controller
             return back()->withErrors(['form' => 'You do not have permission to start this form.']);
         }
 
-        $triggerFormService->startOnDemand(
+        $triggerActionService->startOnDemand(
             mapping: $mapping,
             formable: $employmentApplication,
             subject: $reference,

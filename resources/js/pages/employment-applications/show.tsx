@@ -61,6 +61,7 @@ import {
     XIcon,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
     FormFillPane,
     FormResponsePane,
@@ -1307,9 +1308,19 @@ function SendToPayrollModal({ open, onOpenChange, application, locations }: {
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function EmploymentApplicationShow({ application: app, comments, checklists, availableTemplates, duplicates, signingRequests, documentTemplates, formTemplates, formRequests, availableOnDemandForms, onboardingLocations, statuses, screeningAlert, injuryHistory }: PageProps) {
-    const pageProps = usePage<{ auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } }; errors: Record<string, string> }>().props;
-    const { auth, errors: pageErrors } = pageProps;
+    const pageProps = usePage<{
+        auth: { permissions?: string[]; isAdmin?: boolean; user?: { id: number; name: string } };
+        errors: Record<string, string>;
+        flash: { success?: string; info?: string; error?: string };
+    }>().props;
+    const { auth, errors: pageErrors, flash } = pageProps;
     const permissions = auth.permissions ?? [];
+
+    useEffect(() => {
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.info) toast.info(flash.info);
+        if (flash?.error) toast.error(flash.error);
+    }, [flash?.success, flash?.info, flash?.error]);
 
     // Permission-assigned forms can be filled by anyone holding the permission
     // (directly or through any of their roles). Senior roles cover juniors as
@@ -1933,13 +1944,13 @@ export default function EmploymentApplicationShow({ application: app, comments, 
                                                                     variant="outline"
                                                                     size="icon"
                                                                     className="h-9 w-9 shrink-0"
-                                                                    onClick={() => router.post(route('employment-applications.retrigger-stage-forms', app.id), {}, { preserveScroll: true })}
-                                                                    aria-label="Re-trigger stage forms"
+                                                                    onClick={() => router.post(route('employment-applications.retrigger-stage-actions', app.id), {}, { preserveScroll: true })}
+                                                                    aria-label="Re-trigger stage actions"
                                                                 >
                                                                     <RotateCcw className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             </TooltipTrigger>
-                                                            <TooltipContent>Re-trigger stage forms</TooltipContent>
+                                                            <TooltipContent>Re-trigger stage actions</TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>
                                                 )}

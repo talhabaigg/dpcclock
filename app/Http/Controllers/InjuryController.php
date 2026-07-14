@@ -12,7 +12,7 @@ use App\Models\Location;
 use App\Models\User;
 use App\Notifications\InjuryCreatedNotification;
 use App\Services\GetCompanyCodeService;
-use App\Services\ModelTriggerFormService;
+use App\Services\ModelTriggerActionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
@@ -143,7 +143,7 @@ class InjuryController extends Controller
         ]);
     }
 
-    public function store(StoreInjuryRequest $request, ModelTriggerFormService $triggerFormService)
+    public function store(StoreInjuryRequest $request, ModelTriggerActionService $triggerActionService)
     {
         $data = $request->validated();
         $data['id_formal'] = Injury::generateFormalId();
@@ -191,7 +191,7 @@ class InjuryController extends Controller
             $recipient->notify(new InjuryCreatedNotification($injury));
         }
 
-        $triggerFormService->dispatchFormsFor($injury, 'created', $request->user());
+        $triggerActionService->dispatchActionsFor($injury, 'created', $request->user());
 
         return redirect()->route('injury-register.index')
             ->with('success', 'Injury report created successfully.');

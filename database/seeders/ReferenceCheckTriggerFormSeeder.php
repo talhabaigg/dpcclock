@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\EmploymentApplication;
 use App\Models\FormTemplate;
-use App\Models\ModelTriggerForm;
+use App\Models\ModelTriggerAction;
 use Illuminate\Database\Seeder;
 
 class ReferenceCheckTriggerFormSeeder extends Seeder
@@ -30,13 +30,14 @@ class ReferenceCheckTriggerFormSeeder extends Seeder
             return;
         }
 
-        ModelTriggerForm::updateOrCreate(
+        ModelTriggerAction::updateOrCreate(
             [
                 'model_type' => EmploymentApplication::class,
                 'trigger_key' => EmploymentApplication::STATUS_REFERENCE_CHECK,
                 'form_template_id' => $template->id,
             ],
             [
+                'action_type' => ModelTriggerAction::ACTION_ASSIGN_FORM,
                 'subject_source' => 'references',
                 'dispatch_mode' => 'on_demand',
                 'min_submissions' => 2,

@@ -491,8 +491,8 @@ const configuration = [
                 permission: 'document-templates.manage',
             },
             {
-                name: 'Trigger Forms',
-                url: '/trigger-form-mappings',
+                name: 'Trigger Actions',
+                url: '/trigger-actions',
                 icon: Workflow,
                 permission: 'document-templates.manage',
             },
