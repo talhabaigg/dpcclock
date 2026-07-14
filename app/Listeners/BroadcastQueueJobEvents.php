@@ -7,6 +7,7 @@ use App\Models\QueueJobLog;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class BroadcastQueueJobEvents
@@ -21,7 +22,7 @@ class BroadcastQueueJobEvents
             'attempts' => $event->job->attempts(),
         ]);
 
-        event(new QueueJobStatusUpdated(
+        $this->broadcast(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
             jobName: $jobName,
             status: 'processing',
@@ -59,7 +60,7 @@ class BroadcastQueueJobEvents
             'connection' => $event->connectionName,
         ]);
 
-        event(new QueueJobStatusUpdated(
+        $this->broadcast(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
             jobName: $jobName,
             status: 'completed',
@@ -81,7 +82,7 @@ class BroadcastQueueJobEvents
             'exception' => get_class($event->exception),
         ]);
 
-        event(new QueueJobStatusUpdated(
+        $this->broadcast(new QueueJobStatusUpdated(
             jobId: $event->job->getJobId(),
             jobName: $jobName,
             status: 'failed',
@@ -92,6 +93,21 @@ class BroadcastQueueJobEvents
                 'exception' => get_class($event->exception),
             ]
         ));
+    }
+
+    /**
+     * Status broadcasts are telemetry — QueueJobStatusUpdated is
+     * ShouldBroadcastNow, so a dead websocket server (e.g. Reverb not running
+     * locally) throws right here inside the worker and would fail the real
+     * job being processed. Never let that happen.
+     */
+    protected function broadcast(QueueJobStatusUpdated $event): void
+    {
+        try {
+            event($event);
+        } catch (\Throwable $e) {
+            Log::debug('Queue status broadcast skipped: ' . $e->getMessage());
+        }
     }
 
     protected function log(string $jobId, string $jobName, string $status, string $message, array $metadata): void
