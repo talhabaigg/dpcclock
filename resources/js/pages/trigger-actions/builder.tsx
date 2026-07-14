@@ -64,8 +64,8 @@ const ACTION_OPTIONS = [
     { value: 'send_notification', label: 'Send a notification', hint: 'Notify people in-app, by email or push', icon: Bell },
 ] as const;
 
-/** Which sheet is open. 'trigger' and 'action-picker' are pickers; 'action' is the detail config. */
-type Panel = 'trigger' | 'action-picker' | 'action' | 'settings';
+/** Which sheet is open. The action itself is picked on the canvas; the sheet only configures. */
+type Panel = 'trigger' | 'action' | 'settings';
 
 /**
  * Trigger events are derived from each model's trigger keys: plain workflow
@@ -428,7 +428,6 @@ export default function TriggerActionBuilder(props: PageProps) {
 
     const sheetTitles: Record<Panel, { title: string; description: string }> = {
         trigger: { title: 'Choose a trigger', description: 'The event that starts this flow.' },
-        'action-picker': { title: 'Choose an action', description: 'What happens when the trigger hits.' },
         action: { title: 'Set up the action', description: 'Configure the details and who it goes to.' },
         settings: { title: 'Settings', description: 'Ordering and other options.' },
     };
@@ -517,12 +516,30 @@ export default function TriggerActionBuilder(props: PageProps) {
                                         icon={isNotification ? Bell : FileText}
                                         label="Action"
                                         summary={actionSummary}
-                                        selected={openPanel === 'action' || openPanel === 'action-picker'}
+                                        selected={openPanel === 'action'}
                                         hasError={panelHasError('action')}
                                         onClick={() => setOpenPanel('action')}
                                     />
                                 ) : (
-                                    <PlaceholderCard label="New action" onClick={() => setOpenPanel('action-picker')} />
+                                    /* The action is picked right here on the canvas —
+                                       only its configuration opens the sheet. */
+                                    <div data-step-card className="bg-card w-full rounded-lg border p-3 shadow-sm">
+                                        <p className="text-muted-foreground mb-2 text-[11px] tracking-wide uppercase">
+                                            Then do this
+                                        </p>
+                                        <div className="grid gap-2">
+                                            {ACTION_OPTIONS.map((opt) => (
+                                                <PickerRow
+                                                    key={opt.value}
+                                                    icon={opt.icon}
+                                                    label={opt.label}
+                                                    hint={opt.hint}
+                                                    selected={false}
+                                                    onClick={() => pickAction(opt.value)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </>
                         )}
@@ -668,19 +685,6 @@ export default function TriggerActionBuilder(props: PageProps) {
                                     </>
                                 )}
 
-                                {/* Action picker */}
-                                {openPanel === 'action-picker' &&
-                                    ACTION_OPTIONS.map((opt) => (
-                                        <PickerRow
-                                            key={opt.value}
-                                            icon={opt.icon}
-                                            label={opt.label}
-                                            hint={opt.hint}
-                                            selected={actionChosen && form.action_type === opt.value}
-                                            onClick={() => pickAction(opt.value)}
-                                        />
-                                    ))}
-
                                 {/* Action detail config */}
                                 {openPanel === 'action' && (
                                     <>
@@ -690,7 +694,16 @@ export default function TriggerActionBuilder(props: PageProps) {
                                                 <chosenAction.icon className="h-4 w-4" />
                                             </div>
                                             <span className="min-w-0 flex-1 text-sm font-medium">{chosenAction.label}</span>
-                                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpenPanel('action-picker')}>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                onClick={() => {
+                                                    // Back to the canvas picker to swap the action type.
+                                                    setActionChosen(false);
+                                                    setOpenPanel(null);
+                                                }}
+                                            >
                                                 Change
                                             </Button>
                                         </div>
@@ -957,10 +970,7 @@ export default function TriggerActionBuilder(props: PageProps) {
 
                             {openPanel === 'trigger' && (
                                 <SheetFooter className="border-t">
-                                    <Button
-                                        disabled={!triggerConfigured}
-                                        onClick={() => setOpenPanel(actionChosen ? null : 'action-picker')}
-                                    >
+                                    <Button disabled={!triggerConfigured} onClick={() => setOpenPanel(null)}>
                                         Continue
                                     </Button>
                                 </SheetFooter>
