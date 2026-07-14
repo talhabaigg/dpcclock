@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
 import { Icon } from '@iconify/react';
+import { Check, Minus, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 const CATALOG_ICONS: Record<string, string> = {
     safety_glasses_clear: 'healthicons:ppe-goggles',
@@ -16,15 +16,6 @@ const CATALOG_ICONS: Record<string, string> = {
     other: 'mdi:dots-horizontal-circle-outline',
 };
 
-const REASON_PARENT_ICONS: Record<string, string> = {
-    new_starter: 'mdi:account-plus-outline',
-    replacement: 'mdi:swap-horizontal',
-    additional: 'mdi:plus-circle-outline',
-    project_specific: 'mdi:briefcase-outline',
-    visitor: 'mdi:account-question-outline',
-    other: 'mdi:dots-horizontal-circle-outline',
-};
-
 export type CatalogItem = {
     key: string;
     label: string;
@@ -36,6 +27,7 @@ export type CatalogItem = {
 export type IssuedItem = {
     key: string;
     qty: number;
+    reason: string;
     size?: string;
     make_model?: string;
 };
@@ -50,45 +42,6 @@ export type PpeFormOptions = {
 
 export type PpeFormEndpoints = {
     submit: string;
-};
-
-type ReasonParent = {
-    key: string;
-    label: string;
-    children?: { key: string; label: string }[];
-};
-
-/**
- * Two-step reason picker. Parent keys ending in a leaf (no `children`) submit
- * their own key directly; the `replacement` parent expands a second row of
- * sub-options that submit `replacement_*` keys. The backend accepts any of
- * the 9 leaf keys defined in PpeIssuance::REASON_OPTIONS.
- */
-const REASON_PARENTS: ReasonParent[] = [
-    { key: 'new_starter', label: 'New Starter' },
-    {
-        key: 'replacement',
-        label: 'Replacement',
-        children: [
-            { key: 'replacement_worn', label: 'Worn / Damaged' },
-            { key: 'replacement_lost', label: 'Lost' },
-            { key: 'replacement_stolen', label: 'Stolen' },
-            { key: 'replacement_expired', label: 'Expired' },
-        ],
-    },
-    { key: 'additional', label: 'Additional PPE required' },
-    { key: 'project_specific', label: 'Project specific requirement' },
-    { key: 'visitor', label: 'Visitor / Temporary Worker' },
-    { key: 'other', label: 'Other' },
-];
-
-const parentOfReason = (reason: string): string | null => {
-    if (!reason) return null;
-    for (const p of REASON_PARENTS) {
-        if (p.key === reason) return p.key;
-        if (p.children?.some((c) => c.key === reason)) return p.key;
-    }
-    return null;
 };
 
 type Props = {
@@ -120,8 +73,6 @@ const initialsOf = (name: string) =>
         .toUpperCase();
 
 export default function PpeForm({ employee, pin, options, managers, endpoints, onCancel, onSuccess, hideHeader = false }: Props) {
-    const [reason, setReason] = useState<string>('');
-    const [pendingParent, setPendingParent] = useState<string | null>(null);
     const [items, setItems] = useState<Record<string, IssuedItem>>({});
     const [fitTest, setFitTest] = useState<'yes' | 'no' | null>(null);
     const [authorisedBy, setAuthorisedBy] = useState<number | null>(null);
@@ -132,26 +83,21 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
 
     const rpeSelected = useMemo(() => !!items['rpe_half_face'], [items]);
 
-    const activeReasonParent = parentOfReason(reason) ?? pendingParent;
-    const replacementChildren = REASON_PARENTS.find((p) => p.key === 'replacement')?.children ?? [];
-
     const returnedList = useMemo(() => Object.entries(options.returned), [options.returned]);
 
     const canSubmit =
-        !!reason &&
         Object.keys(items).length > 0 &&
         !!authorisedBy &&
         !!returned &&
         acknowledged &&
         (!rpeSelected || fitTest !== null) &&
-        Object.values(items).every(
-            (it) => {
-                const cat = options.catalog.find((c) => c.key === it.key);
-                if (cat?.sizes && cat.sizes.length > 0 && !it.size) return false;
-                if (cat?.requires_make_model && !(it.make_model && it.make_model.trim())) return false;
-                return it.qty > 0;
-            },
-        );
+        Object.values(items).every((it) => {
+            const cat = options.catalog.find((c) => c.key === it.key);
+            if (!it.reason) return false;
+            if (cat?.sizes && cat.sizes.length > 0 && !it.size) return false;
+            if (cat?.requires_make_model && !(it.make_model && it.make_model.trim())) return false;
+            return it.qty > 0;
+        });
 
     const toggleItem = (item: CatalogItem) => {
         setItems((prev) => {
@@ -162,6 +108,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                 next[item.key] = {
                     key: item.key,
                     qty: 1,
+                    reason: '',
                     size: item.sizes?.[0],
                 };
             }
@@ -185,10 +132,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                     'X-CSRF-TOKEN': csrfToken(),
                 },
                 body: JSON.stringify({
-                    ...(pin !== null
-                        ? { employee_id: employee.id, pin }
-                        : {}),
-                    reason,
+                    ...(pin !== null ? { employee_id: employee.id, pin } : {}),
                     issued_items: Object.values(items),
                     fit_test_completed: rpeSelected ? fitTest === 'yes' : null,
                     authorised_by_user_id: authorisedBy,
@@ -216,7 +160,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                         Cancel
                     </button>
                     <div className="text-center">
-                        <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">Collecting as</p>
+                        <p className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">Collecting as</p>
                         <p className="text-foreground text-sm font-semibold">{employee.name}</p>
                     </div>
                     <div className="w-12" />
@@ -225,60 +169,11 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
 
             <div className="flex-1 overflow-y-auto">
                 <div className="mx-auto w-full max-w-3xl space-y-8 px-5 py-6">
-                    <Section number={1} title="Reason for issue">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                            {REASON_PARENTS.map((p) => {
-                                const active = activeReasonParent === p.key;
-                                const iconName = REASON_PARENT_ICONS[p.key];
-                                return (
-                                    <Pill
-                                        key={p.key}
-                                        active={active}
-                                        onClick={() => {
-                                            if (p.children) {
-                                                setPendingParent(p.key);
-                                                if (parentOfReason(reason) !== p.key) setReason('');
-                                            } else {
-                                                setReason(p.key);
-                                                setPendingParent(null);
-                                            }
-                                        }}
-                                    >
-                                        <span className="flex items-center gap-2.5">
-                                            {iconName && (
-                                                <span
-                                                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition ${
-                                                        active
-                                                            ? 'bg-background/15 text-background'
-                                                            : 'bg-muted text-muted-foreground'
-                                                    }`}
-                                                >
-                                                    <Icon icon={iconName} width={16} height={16} />
-                                                </span>
-                                            )}
-                                            <span>{p.label}</span>
-                                        </span>
-                                    </Pill>
-                                );
-                            })}
-                        </div>
-                        {activeReasonParent === 'replacement' && (
-                            <div className="bg-muted/40 mt-3 rounded-xl border p-3">
-                                <p className="text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-wider">
-                                    Replacement reason
-                                </p>
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                    {replacementChildren.map((c) => (
-                                        <Pill key={c.key} active={reason === c.key} onClick={() => setReason(c.key)}>
-                                            {c.label}
-                                        </Pill>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </Section>
-
-                    <Section number={2} title="PPE/RPE issued" subtitle="Tap each item being issued — set quantity, size, and details. Icons are illustrative only and do not represent the actual PPE supplied.">
+                    <Section
+                        number={1}
+                        title="PPE/RPE issued"
+                        subtitle="Tap each item being issued — set quantity, reason, size, and details. Icons are illustrative only and do not represent the actual PPE supplied."
+                    >
                         <div className="space-y-2">
                             {options.catalog.map((cat) => {
                                 const selected = items[cat.key];
@@ -305,18 +200,34 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                                                 <CatalogIcon catKey={cat.key} active={!!selected} />
                                                 <span className="text-foreground flex-1 text-[15px] font-medium">{cat.label}</span>
                                             </button>
-                                            {selected && (
-                                                <QtyStepper
-                                                    value={selected.qty}
-                                                    onChange={(v) => updateItem(cat.key, { qty: v })}
-                                                />
-                                            )}
+                                            {selected && <QtyStepper value={selected.qty} onChange={(v) => updateItem(cat.key, { qty: v })} />}
                                         </div>
-                                        {selected && ((cat.sizes && cat.sizes.length > 0) || cat.requires_make_model || cat.optional_make_model) && (
+                                        {selected && (
                                             <div className="bg-muted/30 flex flex-wrap items-end gap-3 border-t px-4 py-3">
+                                                <div className="flex min-w-full flex-1 flex-col gap-1 sm:min-w-[280px]">
+                                                    <label
+                                                        htmlFor={`reason-${cat.key}`}
+                                                        className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase"
+                                                    >
+                                                        Reason for issue
+                                                    </label>
+                                                    <select
+                                                        id={`reason-${cat.key}`}
+                                                        value={selected.reason}
+                                                        onChange={(e) => updateItem(cat.key, { reason: e.target.value })}
+                                                        className="bg-card text-foreground border-border focus:border-ring h-10 rounded-md border px-3 text-sm outline-none"
+                                                    >
+                                                        <option value="">Select a reason</option>
+                                                        {Object.entries(options.reasons).map(([key, label]) => (
+                                                            <option key={key} value={key}>
+                                                                {label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                                 {cat.sizes && cat.sizes.length > 0 && (
                                                     <div className="flex flex-col gap-1">
-                                                        <label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
+                                                        <label className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
                                                             Size
                                                         </label>
                                                         <div className="flex gap-1">
@@ -339,7 +250,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                                                 )}
                                                 {(cat.requires_make_model || cat.optional_make_model) && (
                                                     <div className="flex flex-1 flex-col gap-1 sm:min-w-[240px]">
-                                                        <label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
+                                                        <label className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
                                                             {cat.key === 'other'
                                                                 ? 'Please specify item'
                                                                 : `Make & model${cat.optional_make_model && !cat.requires_make_model ? ' (optional)' : ''}`}
@@ -362,7 +273,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                     </Section>
 
                     {rpeSelected && (
-                        <Section number={3} title="Quantitative fit test completed?">
+                        <Section number={2} title="Quantitative fit test completed?">
                             <div className="flex gap-2">
                                 <Pill active={fitTest === 'yes'} onClick={() => setFitTest('yes')}>
                                     Yes
@@ -374,7 +285,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                         </Section>
                     )}
 
-                    <Section number={rpeSelected ? 4 : 3} title="Authorised by">
+                    <Section number={rpeSelected ? 3 : 2} title="Authorised by">
                         {managers.length === 0 ? (
                             <p className="border-border bg-muted/40 text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm italic">
                                 No supervisors registered for this location.
@@ -409,7 +320,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                         )}
                     </Section>
 
-                    <Section number={rpeSelected ? 5 : 4} title="Damaged or worn PPE returned to supervisor?">
+                    <Section number={rpeSelected ? 4 : 3} title="Damaged or worn PPE returned to supervisor?">
                         <div className="flex flex-wrap gap-2">
                             {returnedList.map(([key, label]) => (
                                 <Pill key={key} active={returned === key} onClick={() => setReturned(key)}>
@@ -439,9 +350,7 @@ export default function PpeForm({ employee, pin, options, managers, endpoints, o
                         </div>
                         <p className="text-foreground/80 flex-1 text-[13px] leading-relaxed">{DISCLAIMER}</p>
                     </button>
-                    {error && (
-                        <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-center text-xs font-medium">{error}</p>
-                    )}
+                    {error && <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-center text-xs font-medium">{error}</p>}
                     <button
                         onClick={submit}
                         disabled={!canSubmit || submitting}

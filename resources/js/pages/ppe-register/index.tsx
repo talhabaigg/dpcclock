@@ -1,16 +1,24 @@
 import { SuccessAlertFlash } from '@/components/alert-flash';
-import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Label } from '@/components/ui/label';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, EllipsisVertical, QrCode } from 'lucide-react';
@@ -32,6 +40,7 @@ interface Issuance {
     authorised_by: { id: number; name: string } | null;
     reason: string;
     reason_label: string;
+    reason_labels: string[];
     items_count: number;
     ppe_returned: string;
     returned_label: string;
@@ -168,7 +177,9 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                                                             setLocationOpen(false);
                                                         }}
                                                     >
-                                                        <Check className={`mr-2 h-3.5 w-3.5 ${loc.id === location.id ? 'opacity-100' : 'opacity-0'}`} />
+                                                        <Check
+                                                            className={`mr-2 h-3.5 w-3.5 ${loc.id === location.id ? 'opacity-100' : 'opacity-0'}`}
+                                                        />
                                                         {loc.name}
                                                     </CommandItem>
                                                 ))}
@@ -226,7 +237,11 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                                 <Checkbox
                                     checked={showTrashed}
                                     onCheckedChange={(checked) =>
-                                        router.get(baseUrl, { ...queryFilters, trashed: checked ? 1 : undefined }, { preserveState: true, replace: true })
+                                        router.get(
+                                            baseUrl,
+                                            { ...queryFilters, trashed: checked ? 1 : undefined },
+                                            { preserveState: true, replace: true },
+                                        )
                                     }
                                 />
                                 Show trashed ({trashedCount})
@@ -241,7 +256,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                     </div>
                 </div>
 
-                <div className="rounded-md border bg-card">
+                <div className="bg-card rounded-md border">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -257,7 +272,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                         <TableBody>
                             {issuances.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center text-xs text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-muted-foreground text-center text-xs">
                                         No PPE issuances recorded yet for this project.
                                     </TableCell>
                                 </TableRow>
@@ -270,7 +285,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                                                 {i.employee?.name ?? '—'}
                                             </Link>
                                         </TableCell>
-                                        <TableCell className="text-xs">{i.reason_label}</TableCell>
+                                        <TableCell className="max-w-56 text-xs">{i.reason_labels.join(', ')}</TableCell>
                                         <TableCell className="text-xs tabular-nums">{i.items_count}</TableCell>
                                         <TableCell className="text-xs">{i.authorised_by?.name ?? '—'}</TableCell>
                                         <TableCell className="text-xs">
@@ -294,10 +309,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                                                               <DropdownMenuItem onClick={() => restoreIssuance(i)}>Restore</DropdownMenuItem>
                                                           )
                                                         : can('prestarts.delete') && (
-                                                              <DropdownMenuItem
-                                                                  className="text-red-600"
-                                                                  onClick={() => setDeleteTarget(i)}
-                                                              >
+                                                              <DropdownMenuItem className="text-red-600" onClick={() => setDeleteTarget(i)}>
                                                                   Delete
                                                               </DropdownMenuItem>
                                                           )}
@@ -311,7 +323,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                     </Table>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="text-muted-foreground flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                         <span>Per page</span>
                         <Select value={String(issuances.per_page)} onValueChange={(v) => navigate({ per_page: Number(v), page: 1 })}>
@@ -371,7 +383,7 @@ export default function PpeRegisterIndex({ location, issuances, filters, reasonO
                     <DialogHeader>
                         <DialogTitle>Delete PPE register entry?</DialogTitle>
                     </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         Entry recorded for <span className="font-medium">{deleteTarget?.employee?.name}</span> on{' '}
                         {deleteTarget?.submitted_at_formatted}. You can restore it from the trashed list.
                     </p>
