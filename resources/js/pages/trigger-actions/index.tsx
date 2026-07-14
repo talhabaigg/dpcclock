@@ -39,10 +39,7 @@ interface PageProps {
     users: { id: number; name: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Templates', href: '/form-templates' },
-    { title: 'Trigger Actions', href: '/trigger-actions' },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Trigger Actions', href: '/trigger-actions' }];
 
 const CHANNEL_LABELS: Record<string, string> = {
     database: 'In-app',
