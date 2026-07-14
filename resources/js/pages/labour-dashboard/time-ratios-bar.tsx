@@ -102,7 +102,7 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                 <CardHeader className="pb-0">
                     <div className="flex items-center gap-2">
                         <Hammer className="h-4 w-4 text-muted-foreground" />
-                        <CardTitle className="text-sm">Productive Hours</CardTitle>
+                        <CardTitle className="text-sm">Hours Worked</CardTitle>
                     </div>
                 </CardHeader>
                 <CardContent className="flex flex-1 items-center justify-center gap-6 pt-2">
@@ -126,11 +126,8 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                                         if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
                                             return (
                                                 <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                                    <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) - 4} className="fill-foreground text-lg font-bold">
+                                                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-lg font-bold">
                                                         {computed.effPct}%
-                                                    </tspan>
-                                                    <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 12} className="fill-muted-foreground text-[9px]">
-                                                        Efficiency
                                                     </tspan>
                                                 </text>
                                             );
@@ -166,7 +163,7 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <CardTitle className="text-sm">Non-Productive Hours</CardTitle>
+                            <CardTitle className="text-sm">Hours No Show</CardTitle>
                         </div>
                         <div className="rounded-md bg-muted px-2.5 py-1">
                             <span className="text-xs font-semibold tabular-nums">{computed.totalLostPct}</span>

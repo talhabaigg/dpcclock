@@ -227,7 +227,7 @@ const COLUMN_DESCRIPTIONS: Record<string, ColumnDescription> = {
         body: <>Number of unique employees who clocked any time at this project during the date range.</>,
     },
     efficiency: {
-        title: 'Efficiency %',
+        title: '%',
         body: (
             <>
                 <strong>Worked ÷ Available × 100.</strong> Share of paid hours spent on productive work.
@@ -445,7 +445,7 @@ export default function HoursMatrixTable({
             {
                 accessorKey: 'efficiency',
                 header: ({ column }) => (
-                    <ColumnHeading column={column} label="Eff%" description={COLUMN_DESCRIPTIONS.efficiency} align="center" />
+                    <ColumnHeading column={column} label="%" description={COLUMN_DESCRIPTIONS.efficiency} align="center" />
                 ),
                 cell: ({ row }) => {
                     const eff = row.original.efficiency;
