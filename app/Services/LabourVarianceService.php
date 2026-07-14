@@ -238,13 +238,28 @@ class LabourVarianceService
     }
 
     /**
+     * Start of the payroll week (Saturday) containing the 1st of the month.
+     * Weeks run Saturday to Friday; the month's first week usually starts in the
+     * previous month, so actuals queries must reach back to that Saturday.
+     * Days after the month's last Friday bucket into a next-month week_ending
+     * that this month's page never displays, so no hours are double counted.
+     */
+    private function payrollWeekStart(Carbon $targetMonth): Carbon
+    {
+        $startOfMonth = $targetMonth->copy()->startOfMonth();
+
+        // dayOfWeek: 0=Sunday .. 6=Saturday; days back to the preceding Saturday
+        return $startOfMonth->subDays(($startOfMonth->dayOfWeek + 1) % 7);
+    }
+
+    /**
      * Get leave hours from Clock records, grouped by week ending
      * These are hours where wages are paid from accruals (not job costed)
      * but oncosts ARE still job costed to the project
      */
     private function getLeaveHours(Location $location, Carbon $targetMonth): Collection
     {
-        $startOfMonth = $targetMonth->copy()->startOfMonth();
+        $queryStart = $this->payrollWeekStart($targetMonth);
         $endOfMonth = $targetMonth->copy()->endOfMonth();
 
         // Get all location IDs (main + sublocations)
@@ -256,7 +271,7 @@ class LabourVarianceService
             ->whereIn('clocks.eh_location_id', $locationIds)
             ->where('clocks.status', 'processed')
             ->whereNotNull('clocks.clock_out')
-            ->whereBetween('clocks.clock_out', [$startOfMonth, $endOfMonth]);
+            ->whereBetween('clocks.clock_out', [$queryStart, $endOfMonth]);
 
         // Only include leave worktypes (requires worktype to exist and match pattern)
         $query->where(function ($q) {
@@ -283,7 +298,7 @@ class LabourVarianceService
      */
     private function getActualHours(Location $location, Carbon $targetMonth): Collection
     {
-        $startOfMonth = $targetMonth->copy()->startOfMonth();
+        $queryStart = $this->payrollWeekStart($targetMonth);
         $endOfMonth = $targetMonth->copy()->endOfMonth();
 
         // Get all location IDs (main + sublocations)
@@ -298,7 +313,7 @@ class LabourVarianceService
             ->whereIn('clocks.eh_location_id', $locationIds)
             ->where('clocks.status', 'processed')
             ->whereNotNull('clocks.clock_out')
-            ->whereBetween('clocks.clock_out', [$startOfMonth, $endOfMonth]);
+            ->whereBetween('clocks.clock_out', [$queryStart, $endOfMonth]);
 
         // Exclude leave, RDO, public holiday worktypes (only if worktype exists)
         // Include clocks with no worktype match (NULL name) OR worktypes not matching excluded patterns
