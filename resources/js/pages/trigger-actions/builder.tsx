@@ -11,7 +11,22 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowDown, ArrowLeft, Bell, ChevronRight, FileText, Maximize, Save, Settings2, Users, Zap, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowLeft,
+    Bell,
+    Check,
+    ChevronRight,
+    FileText,
+    Maximize,
+    Plus,
+    Save,
+    Settings2,
+    Users,
+    Zap,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { triggerLabel, type ActionType, type NotificationChannel, type TriggerAction } from './types';
 
@@ -44,10 +59,16 @@ const CHANNEL_OPTIONS: { value: NotificationChannel; label: string; hint: string
     { value: 'webpush', label: 'Browser push', hint: 'Only recipients with push enabled' },
 ];
 
-type Panel = 'trigger' | 'action' | 'settings';
+const ACTION_OPTIONS = [
+    { value: 'assign_form', label: 'Assign a form', hint: 'Create a form request when the trigger hits', icon: FileText },
+    { value: 'send_notification', label: 'Send a notification', hint: 'Notify people in-app, by email or push', icon: Bell },
+] as const;
+
+/** Which sheet is open. 'trigger' and 'action-picker' are pickers; 'action' is the detail config. */
+type Panel = 'trigger' | 'action-picker' | 'action' | 'settings';
 
 /** Which validation error keys belong to which step card. */
-const PANEL_FIELDS: Record<Panel, string[]> = {
+const PANEL_FIELDS: Record<'trigger' | 'action' | 'settings', string[]> = {
     trigger: ['model_type', 'trigger_key'],
     action: [
         'action_type',
@@ -87,10 +108,9 @@ interface FormState {
 
 function initialForm(props: PageProps): FormState {
     const a = props.action;
-    const firstModel = props.modelTypes[0]?.value ?? '';
     return {
-        model_type: a?.model_type ?? firstModel,
-        trigger_key: a?.trigger_key ?? props.triggerKeysByModel[firstModel]?.[0] ?? '',
+        model_type: a?.model_type ?? '',
+        trigger_key: a?.trigger_key ?? '',
         action_type: a?.action_type ?? 'assign_form',
         form_template_id: a?.form_template_id ?? '',
         subject_source: a?.subject_source ?? '',
@@ -109,8 +129,8 @@ function initialForm(props: PageProps): FormState {
 }
 
 /**
- * Compact step card on the designer canvas, Power Automate style — the card
- * only shows what the step does; clicking it opens the config sheet.
+ * Compact configured-step card on the designer canvas, Power Automate style —
+ * the card only shows what the step does; clicking it opens the config sheet.
  */
 function StepCard({
     icon: Icon,
@@ -150,6 +170,21 @@ function StepCard({
     );
 }
 
+/** Dashed "+ add step" placeholder shown before a step has been picked. */
+function PlaceholderCard({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            data-step-card
+            onClick={onClick}
+            className="border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-foreground bg-card/60 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-3.5 text-sm font-medium transition-colors"
+        >
+            <Plus className="h-4 w-4" />
+            {label}
+        </button>
+    );
+}
+
 /** Vertical connector between step cards. */
 function Connector() {
     return (
@@ -160,6 +195,41 @@ function Connector() {
             </div>
             <div className="bg-border h-4 w-px" />
         </div>
+    );
+}
+
+/** Row in a picker sheet (trigger list / action list). */
+function PickerRow({
+    icon: Icon,
+    label,
+    hint,
+    selected,
+    onClick,
+}: {
+    icon: typeof Zap;
+    label: string;
+    hint?: string;
+    selected: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn(
+                'flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors',
+                selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50',
+            )}
+        >
+            <div className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md border">
+                <Icon className="h-4 w-4" />
+            </div>
+            <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{label}</span>
+                {hint && <span className="text-muted-foreground block truncate text-xs">{hint}</span>}
+            </span>
+            {selected && <Check className="text-primary h-4 w-4 shrink-0" />}
+        </button>
     );
 }
 
@@ -176,6 +246,11 @@ export default function TriggerActionBuilder(props: PageProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
     const [openPanel, setOpenPanel] = useState<Panel | null>(null);
+
+    // Progressive build-up: a new flow starts with an empty canvas, then the
+    // trigger gets picked, then the action. Editing starts fully configured.
+    const [triggerConfigured, setTriggerConfigured] = useState(isEdit);
+    const [actionChosen, setActionChosen] = useState(isEdit);
 
     // Canvas zoom + pan, Power Automate style: drag empty canvas to pan,
     // ctrl/cmd + wheel (or the toolbar) to zoom.
@@ -226,7 +301,6 @@ export default function TriggerActionBuilder(props: PageProps) {
         { title: isEdit ? 'Edit action' : 'New action', href: '#' },
     ];
 
-    const triggersForModel = triggerKeysByModel[form.model_type] ?? [];
     const subjectSourceOptions = subjectSourcesByModel[form.model_type] ?? {};
     const subjectSourceKeys = Object.keys(subjectSourceOptions);
     const placeholders = placeholdersByModel[form.model_type] ?? {};
@@ -243,8 +317,27 @@ export default function TriggerActionBuilder(props: PageProps) {
               eligibleTemplates.find((t) => t.id === form.form_template_id)?.name,
           );
 
-    function panelHasError(panel: Panel): boolean {
+    function panelHasError(panel: keyof typeof PANEL_FIELDS): boolean {
         return PANEL_FIELDS[panel].some((field) => Object.keys(errors).some((key) => key === field || key.startsWith(`${field}.`)));
+    }
+
+    function pickTrigger(modelType: string, triggerKey: string) {
+        setForm((f) => ({
+            ...f,
+            model_type: modelType,
+            trigger_key: triggerKey,
+            // Model-dependent picks reset when the model changes.
+            ...(modelType !== f.model_type ? { form_template_id: '' as const, subject_source: '', dispatch_mode: 'auto' as const, min_submissions: 1 } : {}),
+        }));
+        setTriggerConfigured(true);
+        // Progressive flow: straight on to picking the action if there is none yet.
+        setOpenPanel(actionChosen ? null : 'action-picker');
+    }
+
+    function pickAction(actionType: ActionType) {
+        setForm((f) => ({ ...f, action_type: actionType }));
+        setActionChosen(true);
+        setOpenPanel('action');
     }
 
     function toggleChannel(channel: NotificationChannel, checked: boolean) {
@@ -283,10 +376,9 @@ export default function TriggerActionBuilder(props: PageProps) {
             onError: (errs: Record<string, string>) => {
                 setErrors(errs);
                 // Surface the step whose config is invalid.
-                const firstBroken = (['trigger', 'action', 'settings'] as Panel[]).find((panel) =>
-                    PANEL_FIELDS[panel].some((field) => Object.keys(errs).some((key) => key === field || key.startsWith(`${field}.`))),
-                );
-                if (firstBroken) setOpenPanel(firstBroken);
+                if (PANEL_FIELDS.trigger.some((f) => f in errs)) setOpenPanel('trigger');
+                else if (PANEL_FIELDS.action.some((f) => Object.keys(errs).some((k) => k === f || k.startsWith(`${f}.`)))) setOpenPanel('action');
+                else if (PANEL_FIELDS.settings.some((f) => f in errs)) setOpenPanel('settings');
             },
             onFinish: () => setSaving(false),
         };
@@ -299,10 +391,13 @@ export default function TriggerActionBuilder(props: PageProps) {
     }
 
     const sheetTitles: Record<Panel, { title: string; description: string }> = {
-        trigger: { title: 'When this happens', description: 'Pick the model and the trigger that fires this action.' },
-        action: { title: 'Then do this', description: 'Configure what happens when the trigger hits.' },
+        trigger: { title: 'Choose a trigger', description: 'The event that starts this flow.' },
+        'action-picker': { title: 'Choose an action', description: 'What happens when the trigger hits.' },
+        action: { title: 'Set up the action', description: 'Configure the details and who it goes to.' },
         settings: { title: 'Settings', description: 'Ordering and other options.' },
     };
+
+    const chosenAction = ACTION_OPTIONS.find((o) => o.value === form.action_type)!;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -329,15 +424,15 @@ export default function TriggerActionBuilder(props: PageProps) {
                         <Button variant="outline" size="sm" asChild>
                             <Link href={route('model-trigger-actions.index')}>Cancel</Link>
                         </Button>
-                        <Button size="sm" onClick={handleSave} disabled={saving}>
+                        <Button size="sm" onClick={handleSave} disabled={saving || !triggerConfigured || !actionChosen}>
                             <Save className="mr-1.5 h-3.5 w-3.5" />
                             {saving ? 'Saving...' : 'Save'}
                         </Button>
                     </div>
                 </div>
 
-                {/* Designer canvas — compact cards; clicking one opens its config sheet.
-                    Drag empty space to pan, ctrl/cmd+wheel or the toolbar to zoom. */}
+                {/* Designer canvas — steps appear as they're picked; clicking a card
+                    opens its sheet. Drag empty space to pan, ctrl/cmd+wheel to zoom. */}
                 <div
                     ref={canvasRef}
                     onPointerDown={onCanvasPointerDown}
@@ -357,32 +452,50 @@ export default function TriggerActionBuilder(props: PageProps) {
                         className="mx-auto flex w-full max-w-sm flex-col items-center px-4 py-12"
                         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
                     >
-                        <StepCard
-                            icon={Zap}
-                            label="Trigger"
-                            summary={`${modelLabel} · ${triggerLabel(form.trigger_key)}`}
-                            selected={openPanel === 'trigger'}
-                            hasError={panelHasError('trigger')}
-                            onClick={() => setOpenPanel('trigger')}
-                        />
-                        <Connector />
-                        <StepCard
-                            icon={isNotification ? Bell : FileText}
-                            label="Action"
-                            summary={actionSummary}
-                            selected={openPanel === 'action'}
-                            hasError={panelHasError('action')}
-                            onClick={() => setOpenPanel('action')}
-                        />
-                        <Connector />
-                        <StepCard
-                            icon={Settings2}
-                            label="Settings"
-                            summary={`Sort order ${form.sort_order} · ${form.is_active ? 'Active' : 'Inactive'}`}
-                            selected={openPanel === 'settings'}
-                            hasError={panelHasError('settings')}
-                            onClick={() => setOpenPanel('settings')}
-                        />
+                        {triggerConfigured ? (
+                            <StepCard
+                                icon={Zap}
+                                label="Trigger"
+                                summary={`${modelLabel} · ${triggerLabel(form.trigger_key)}`}
+                                selected={openPanel === 'trigger'}
+                                hasError={panelHasError('trigger')}
+                                onClick={() => setOpenPanel('trigger')}
+                            />
+                        ) : (
+                            <PlaceholderCard label="Add a trigger" onClick={() => setOpenPanel('trigger')} />
+                        )}
+
+                        {triggerConfigured && (
+                            <>
+                                <Connector />
+                                {actionChosen ? (
+                                    <StepCard
+                                        icon={isNotification ? Bell : FileText}
+                                        label="Action"
+                                        summary={actionSummary}
+                                        selected={openPanel === 'action' || openPanel === 'action-picker'}
+                                        hasError={panelHasError('action')}
+                                        onClick={() => setOpenPanel('action')}
+                                    />
+                                ) : (
+                                    <PlaceholderCard label="New action" onClick={() => setOpenPanel('action-picker')} />
+                                )}
+                            </>
+                        )}
+
+                        {triggerConfigured && actionChosen && (
+                            <>
+                                <Connector />
+                                <StepCard
+                                    icon={Settings2}
+                                    label="Settings"
+                                    summary={`Sort order ${form.sort_order} · ${form.is_active ? 'Active' : 'Inactive'}`}
+                                    selected={openPanel === 'settings'}
+                                    hasError={panelHasError('settings')}
+                                    onClick={() => setOpenPanel('settings')}
+                                />
+                            </>
+                        )}
                     </div>
 
                     {/* Zoom toolbar */}
@@ -440,90 +553,60 @@ export default function TriggerActionBuilder(props: PageProps) {
                             </SheetHeader>
 
                             <div className="grid flex-1 content-start gap-4 overflow-y-auto px-4 py-4">
+                                {/* Trigger picker — every model × trigger combination */}
                                 {openPanel === 'trigger' && (
                                     <>
-                                        <div>
-                                            <Label className="text-muted-foreground mb-1 text-xs">Model type</Label>
-                                            <Select
-                                                value={form.model_type}
-                                                onValueChange={(v) =>
-                                                    setForm({
-                                                        ...form,
-                                                        model_type: v,
-                                                        trigger_key: triggerKeysByModel[v]?.[0] ?? '',
-                                                        form_template_id: '',
-                                                        subject_source: '',
-                                                        dispatch_mode: 'auto',
-                                                        min_submissions: 1,
-                                                    })
-                                                }
-                                            >
-                                                <SelectTrigger className="h-9">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {modelTypes.map((mt) => (
-                                                        <SelectItem key={mt.value} value={mt.value}>
-                                                            {mt.label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FieldError message={errors.model_type} />
-                                        </div>
-                                        <div>
-                                            <Label className="text-muted-foreground mb-1 text-xs">Trigger</Label>
-                                            <Select value={form.trigger_key} onValueChange={(v) => setForm({ ...form, trigger_key: v })}>
-                                                <SelectTrigger className="h-9">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {triggersForModel.map((t) => (
-                                                        <SelectItem key={t} value={t}>
-                                                            {triggerLabel(t)}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FieldError message={errors.trigger_key} />
-                                        </div>
+                                        {modelTypes.map((mt) => (
+                                            <div key={mt.value} className="grid gap-2">
+                                                <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                                    {mt.label}
+                                                </p>
+                                                {(triggerKeysByModel[mt.value] ?? []).map((key) => (
+                                                    <PickerRow
+                                                        key={key}
+                                                        icon={Zap}
+                                                        label={triggerLabel(key)}
+                                                        hint={
+                                                            key === 'created'
+                                                                ? `When a ${mt.label.toLowerCase()} is created`
+                                                                : `When a ${mt.label.toLowerCase()} enters ${triggerLabel(key)}`
+                                                        }
+                                                        selected={
+                                                            triggerConfigured && form.model_type === mt.value && form.trigger_key === key
+                                                        }
+                                                        onClick={() => pickTrigger(mt.value, key)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ))}
                                     </>
                                 )}
 
+                                {/* Action picker */}
+                                {openPanel === 'action-picker' &&
+                                    ACTION_OPTIONS.map((opt) => (
+                                        <PickerRow
+                                            key={opt.value}
+                                            icon={opt.icon}
+                                            label={opt.label}
+                                            hint={opt.hint}
+                                            selected={actionChosen && form.action_type === opt.value}
+                                            onClick={() => pickAction(opt.value)}
+                                        />
+                                    ))}
+
+                                {/* Action detail config */}
                                 {openPanel === 'action' && (
                                     <>
-                                        {/* Action type tiles */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {(
-                                                [
-                                                    { value: 'assign_form', label: 'Assign a form', hint: 'Create a form request', icon: FileText },
-                                                    {
-                                                        value: 'send_notification',
-                                                        label: 'Send a notification',
-                                                        hint: 'Notify people directly',
-                                                        icon: Bell,
-                                                    },
-                                                ] as const
-                                            ).map((opt) => (
-                                                <button
-                                                    key={opt.value}
-                                                    type="button"
-                                                    onClick={() => setForm({ ...form, action_type: opt.value })}
-                                                    className={cn(
-                                                        'flex items-start gap-2.5 rounded-lg border p-3 text-left transition-colors',
-                                                        form.action_type === opt.value
-                                                            ? 'border-primary bg-primary/5'
-                                                            : 'border-border hover:bg-muted/50',
-                                                    )}
-                                                    aria-pressed={form.action_type === opt.value}
-                                                >
-                                                    <opt.icon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
-                                                    <span>
-                                                        <span className="block text-sm font-medium">{opt.label}</span>
-                                                        <span className="text-muted-foreground block text-xs">{opt.hint}</span>
-                                                    </span>
-                                                </button>
-                                            ))}
+                                        {/* Chosen action header with the option to swap it */}
+                                        <div className="bg-muted/40 flex items-center gap-3 rounded-lg border p-3">
+                                            <div className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md border">
+                                                <chosenAction.icon className="h-4 w-4" />
+                                            </div>
+                                            <span className="min-w-0 flex-1 text-sm font-medium">{chosenAction.label}</span>
+                                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpenPanel('action-picker')}>
+                                                Change
+                                            </Button>
                                         </div>
 
                                         {isNotification ? (
@@ -786,11 +869,13 @@ export default function TriggerActionBuilder(props: PageProps) {
                                 )}
                             </div>
 
-                            <SheetFooter className="border-t">
-                                <Button variant="outline" onClick={() => setOpenPanel(null)}>
-                                    Done
-                                </Button>
-                            </SheetFooter>
+                            {(openPanel === 'action' || openPanel === 'settings') && (
+                                <SheetFooter className="border-t">
+                                    <Button variant="outline" onClick={() => setOpenPanel(null)}>
+                                        Done
+                                    </Button>
+                                </SheetFooter>
+                            )}
                         </>
                     )}
                 </SheetContent>
