@@ -300,8 +300,13 @@ export default function TriggerActionBuilder(props: PageProps) {
     }, []);
 
     function onCanvasPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+        const target = e.target as HTMLElement;
+        // Portaled popups (select dropdowns, popovers) bubble their pointer events
+        // through the React tree even though their DOM lives outside the canvas.
+        // Panning on those would capture the pointer and swallow their clicks.
+        if (!e.currentTarget.contains(target)) return;
         // Cards and toolbar buttons handle their own clicks — only empty canvas pans.
-        if ((e.target as HTMLElement).closest('[data-step-card], [data-canvas-toolbar]')) return;
+        if (target.closest('[data-step-card], [data-canvas-toolbar]')) return;
         dragStart.current = { pointerX: e.clientX, pointerY: e.clientY, panX: pan.x, panY: pan.y };
         setPanning(true);
         e.currentTarget.setPointerCapture(e.pointerId);
