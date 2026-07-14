@@ -9,6 +9,8 @@ use App\Models\Injury;
 use App\Models\ModelTriggerAction;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
 
@@ -88,6 +90,7 @@ class ModelTriggerActionController extends Controller
         $subjectSources = $this->subjectSourcesByModel();
 
         $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:120'],
             'model_type' => ['required', 'string', 'in:' . implode(',', $modelTypes)],
             'trigger_key' => ['required', 'string', 'in:' . implode(',', $allTriggerKeys)],
             'action_type' => ['required', 'in:assign_form,send_notification'],
@@ -116,6 +119,11 @@ class ModelTriggerActionController extends Controller
             'is_active' => ['boolean'],
         ]);
 
+        // No name given → generate one so the listing always reads well.
+        if (blank($validated['name'] ?? null)) {
+            $validated['name'] = $this->generateName($validated);
+        }
+
         // Blank out whichever half doesn't apply so switching action type on
         // edit can't leave stale config behind.
         if ($validated['action_type'] === ModelTriggerAction::ACTION_ASSIGN_FORM) {
@@ -136,6 +144,89 @@ class ModelTriggerActionController extends Controller
         }
 
         return $validated;
+    }
+
+    /**
+     * Short display name for the action: AI-written when the OpenAI key is
+     * configured, otherwise (or on any failure) a deterministic description
+     * built from the config. Never blocks a save.
+     */
+    private function generateName(array $config): string
+    {
+        return $this->aiName($config) ?? $this->fallbackName($config);
+    }
+
+    private function aiName(array $config): ?string
+    {
+        $apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY');
+        if (! $apiKey) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(8)->withToken($apiKey)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => 'gpt-4.1-mini',
+                    'max_tokens' => 30,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => 'You name workflow automations. Given a trigger/action config, reply with ONE short human-friendly name (3-8 words, plain text, no quotes, no trailing punctuation). Example: "Notify HR when application approved".',
+                        ],
+                        ['role' => 'user', 'content' => json_encode($this->nameContext($config))],
+                    ],
+                ]);
+
+            $name = trim((string) $response->json('choices.0.message.content'), " \t\n\"'.");
+
+            return ($name !== '' && mb_strlen($name) <= 120) ? $name : null;
+        } catch (\Throwable $e) {
+            Log::warning('Trigger action AI naming failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    private function fallbackName(array $config): string
+    {
+        $trigger = "{$this->modelLabelFor($config['model_type'])} · {$this->triggerLabelFor($config['trigger_key'])}";
+
+        if ($config['action_type'] === ModelTriggerAction::ACTION_SEND_NOTIFICATION) {
+            return "Notify — {$trigger}";
+        }
+
+        $template = FormTemplate::find($config['form_template_id'])?->name ?? 'form';
+
+        return "Assign {$template} — {$trigger}";
+    }
+
+    /** The config facts worth telling the naming model about. */
+    private function nameContext(array $config): array
+    {
+        return [
+            'trigger_model' => $this->modelLabelFor($config['model_type']),
+            'trigger' => $this->triggerLabelFor($config['trigger_key']),
+            'action' => $config['action_type'] === ModelTriggerAction::ACTION_SEND_NOTIFICATION
+                ? 'send a notification'
+                : 'assign a form',
+            'form_template' => isset($config['form_template_id'])
+                ? FormTemplate::find($config['form_template_id'])?->name
+                : null,
+            'notification_title' => $config['notification_title'] ?? null,
+            'recipient' => $config['assignee_strategy'] === 'permission'
+                ? "everyone with permission {$config['assignee_value']}"
+                : User::find($config['assignee_value'])?->name,
+        ];
+    }
+
+    private function modelLabelFor(string $modelType): string
+    {
+        return collect($this->modelTypeOptions())->firstWhere('value', $modelType)['label'] ?? class_basename($modelType);
+    }
+
+    private function triggerLabelFor(string $triggerKey): string
+    {
+        return \Illuminate\Support\Str::of($triggerKey)->replace('_', ' ')->title()->toString();
     }
 
     private function modelTypeOptions(): array

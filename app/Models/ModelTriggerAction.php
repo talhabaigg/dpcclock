@@ -25,6 +25,7 @@ class ModelTriggerAction extends Model
     public const ACTION_SEND_NOTIFICATION = 'send_notification';
 
     protected $fillable = [
+        'name',
         'model_type',
         'trigger_key',
         'action_type',

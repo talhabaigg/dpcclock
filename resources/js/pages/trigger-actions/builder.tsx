@@ -88,6 +88,7 @@ const PANEL_FIELDS: Record<'trigger' | 'action' | 'settings', string[]> = {
 };
 
 interface FormState {
+    name: string;
     model_type: string;
     trigger_key: string;
     action_type: ActionType;
@@ -109,6 +110,7 @@ interface FormState {
 function initialForm(props: PageProps): FormState {
     const a = props.action;
     return {
+        name: a?.name ?? '',
         model_type: a?.model_type ?? '',
         trigger_key: a?.trigger_key ?? '',
         action_type: a?.action_type ?? 'assign_form',
@@ -354,6 +356,7 @@ export default function TriggerActionBuilder(props: PageProps) {
         setErrors({});
 
         const payload = {
+            name: form.name.trim() || null,
             model_type: form.model_type,
             trigger_key: form.trigger_key,
             action_type: form.action_type,
@@ -406,13 +409,21 @@ export default function TriggerActionBuilder(props: PageProps) {
             <div className="flex h-full flex-col">
                 {/* Command bar */}
                 <div className="bg-background flex items-center justify-between gap-3 border-b px-4 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                         <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
                             <Link href={route('model-trigger-actions.index')} aria-label="Back to trigger actions">
                                 <ArrowLeft className="h-4 w-4" />
                             </Link>
                         </Button>
-                        <h1 className="truncate text-sm font-semibold">{isEdit ? 'Edit trigger action' : 'New trigger action'}</h1>
+                        {/* Editable flow name, Power Automate style. Left blank, AI names it on save. */}
+                        <Input
+                            value={form.name}
+                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                            placeholder="Untitled action — AI names it if left blank"
+                            maxLength={120}
+                            aria-label="Action name"
+                            className="h-8 w-full max-w-sm border-transparent text-sm font-medium shadow-none hover:border-input focus-visible:border-input"
+                        />
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="mr-2 flex items-center gap-2">

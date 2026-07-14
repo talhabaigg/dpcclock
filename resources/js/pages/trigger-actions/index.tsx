@@ -49,7 +49,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 export default function TriggerActionsIndex({ actions, modelTypes, subjectSourcesByModel, permissions, users }: PageProps) {
     function handleDelete(a: TriggerAction) {
-        const label = a.action_type === 'assign_form' ? a.form_template?.name : a.notification_title;
+        const label = a.name ?? (a.action_type === 'assign_form' ? a.form_template?.name : a.notification_title);
         if (!confirm(`Delete the "${label}" action for ${triggerLabel(a.trigger_key)}?`)) return;
         router.delete(route('model-trigger-actions.destroy', a.id));
     }
@@ -149,7 +149,8 @@ export default function TriggerActionsIndex({ actions, modelTypes, subjectSource
                             <Table className="text-xs">
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
-                                        <TableHead className="pl-4">Model</TableHead>
+                                        <TableHead className="pl-4">Name</TableHead>
+                                        <TableHead>Model</TableHead>
                                         <TableHead>Trigger</TableHead>
                                         <TableHead>Action</TableHead>
                                         <TableHead>Behavior</TableHead>
@@ -162,7 +163,11 @@ export default function TriggerActionsIndex({ actions, modelTypes, subjectSource
                                 <TableBody>
                                     {actions.map((a) => (
                                         <TableRow key={a.id}>
-                                            <TableCell className="text-muted-foreground pl-4">{modelLabel(a.model_type)}</TableCell>
+                                            <TableCell className="max-w-[200px] truncate pl-4 font-medium">
+                                                {a.name ??
+                                                    (a.action_type === 'send_notification' ? a.notification_title : a.form_template?.name)}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{modelLabel(a.model_type)}</TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="font-normal">
                                                     {triggerLabel(a.trigger_key)}

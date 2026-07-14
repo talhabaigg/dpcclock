@@ -4,6 +4,7 @@ export type NotificationChannel = 'database' | 'mail' | 'webpush';
 
 export interface TriggerAction {
     id: number;
+    name: string | null;
     model_type: string;
     trigger_key: string;
     action_type: ActionType;
