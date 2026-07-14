@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -23,6 +24,7 @@ import {
     Save,
     Settings2,
     Users,
+    X,
     Zap,
     ZoomIn,
     ZoomOut,
@@ -64,8 +66,8 @@ const ACTION_OPTIONS = [
     { value: 'send_notification', label: 'Send a notification', hint: 'Notify people in-app, by email or push', icon: Bell },
 ] as const;
 
-/** Which sheet is open. The action itself is picked on the canvas; the sheet only configures. */
-type Panel = 'trigger' | 'action' | 'settings';
+/** Which sheet is open. Trigger and action are picked on the canvas; the sheet only configures. */
+type Panel = 'action' | 'settings';
 
 /**
  * Trigger events are derived from each model's trigger keys: plain workflow
@@ -155,20 +157,19 @@ function StepCard({
     summary,
     selected,
     hasError,
-    onClick,
+    ...props
 }: {
     icon: typeof Zap;
     label: string;
     summary: string;
     selected: boolean;
     hasError: boolean;
-    onClick: () => void;
-}) {
+} & React.ComponentProps<'button'>) {
     return (
         <button
             type="button"
             data-step-card
-            onClick={onClick}
+            {...props}
             className={cn(
                 'bg-card group flex w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-left shadow-sm transition-[border-color,box-shadow]',
                 selected ? 'border-primary ring-primary/30 ring-2' : 'hover:border-primary/50',
@@ -188,14 +189,12 @@ function StepCard({
 }
 
 /** Dashed "+ add step" placeholder shown before a step has been picked. */
-function PlaceholderCard({ label, onClick }: { label: string; onClick: () => void }) {
+const placeholderCardClasses =
+    'border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-foreground bg-card/60 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-3.5 text-sm font-medium transition-colors';
+
+function PlaceholderCard({ label, ...props }: { label: string } & React.ComponentProps<'button'>) {
     return (
-        <button
-            type="button"
-            data-step-card
-            onClick={onClick}
-            className="border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-foreground bg-card/60 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-3.5 text-sm font-medium transition-colors"
-        >
+        <button type="button" data-step-card {...props} className={placeholderCardClasses}>
             <Plus className="h-4 w-4" />
             {label}
         </button>
@@ -271,6 +270,9 @@ export default function TriggerActionBuilder(props: PageProps) {
     const [triggerEvent, setTriggerEvent] = useState<TriggerEvent | ''>(
         isEdit ? (props.action!.trigger_key === 'created' ? 'created' : 'status_change') : '',
     );
+    // Trigger editor and action picker float over the canvas as popovers.
+    const [triggerOpen, setTriggerOpen] = useState(false);
+    const [actionPickerOpen, setActionPickerOpen] = useState(false);
 
     // Canvas zoom + pan, Power Automate style: drag empty canvas to pan,
     // ctrl/cmd + wheel (or the toolbar) to zoom.
@@ -412,7 +414,7 @@ export default function TriggerActionBuilder(props: PageProps) {
             onError: (errs: Record<string, string>) => {
                 setErrors(errs);
                 // Surface the step whose config is invalid.
-                if (PANEL_FIELDS.trigger.some((f) => f in errs)) setOpenPanel('trigger');
+                if (PANEL_FIELDS.trigger.some((f) => f in errs)) setTriggerOpen(true);
                 else if (PANEL_FIELDS.action.some((f) => Object.keys(errs).some((k) => k === f || k.startsWith(`${f}.`)))) setOpenPanel('action');
                 else if (PANEL_FIELDS.settings.some((f) => f in errs)) setOpenPanel('settings');
             },
@@ -427,7 +429,6 @@ export default function TriggerActionBuilder(props: PageProps) {
     }
 
     const sheetTitles: Record<Panel, { title: string; description: string }> = {
-        trigger: { title: 'Choose a trigger', description: 'The event that starts this flow.' },
         action: { title: 'Set up the action', description: 'Configure the details and who it goes to.' },
         settings: { title: 'Settings', description: 'Ordering and other options.' },
     };
@@ -495,18 +496,115 @@ export default function TriggerActionBuilder(props: PageProps) {
                         className="mx-auto flex w-full max-w-sm flex-col items-center px-4 py-12"
                         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
                     >
-                        {triggerConfigured ? (
-                            <StepCard
-                                icon={Zap}
-                                label="Trigger"
-                                summary={`${modelLabel} · ${triggerLabel(form.trigger_key)}`}
-                                selected={openPanel === 'trigger'}
-                                hasError={panelHasError('trigger')}
-                                onClick={() => setOpenPanel('trigger')}
-                            />
-                        ) : (
-                            <PlaceholderCard label="Add a trigger" onClick={() => setOpenPanel('trigger')} />
-                        )}
+                        {/* Trigger — defined in a floating editor card beside the step.
+                            Not a Popover: the selects inside portal their dropdowns
+                            outside a popover, which would count as an outside click
+                            and dismiss it. This card only closes via X / Continue. */}
+                        <div className="relative w-full">
+                            {triggerConfigured ? (
+                                <StepCard
+                                    icon={Zap}
+                                    label="Trigger"
+                                    summary={`${modelLabel} · ${triggerLabel(form.trigger_key)}`}
+                                    selected={triggerOpen}
+                                    hasError={panelHasError('trigger')}
+                                    onClick={() => setTriggerOpen((o) => !o)}
+                                />
+                            ) : (
+                                <PlaceholderCard label="Add a trigger" onClick={() => setTriggerOpen((o) => !o)} />
+                            )}
+
+                            {triggerOpen && (
+                                <div
+                                    data-step-card
+                                    className="bg-popover absolute top-0 left-full z-10 ml-3 w-80 cursor-default rounded-lg border p-3 text-left shadow-md"
+                                >
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <p className="text-sm font-medium">Choose a trigger</p>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6"
+                                            onClick={() => setTriggerOpen(false)}
+                                            aria-label="Close trigger editor"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                    <div className="grid gap-3">
+                                    <div>
+                                        <Label className="text-muted-foreground mb-1 text-xs">When</Label>
+                                        <Select value={form.model_type} onValueChange={pickTriggerModel}>
+                                            <SelectTrigger className="h-9 w-full">
+                                                <SelectValue placeholder="Select a model" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {modelTypes.map((mt) => (
+                                                    <SelectItem key={mt.value} value={mt.value}>
+                                                        {mt.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FieldError message={errors.model_type} />
+                                    </div>
+
+                                    {form.model_type && (
+                                        <div>
+                                            <Label className="text-muted-foreground mb-1 text-xs">Event</Label>
+                                            <Select value={triggerEvent} onValueChange={(v) => pickTriggerEvent(v as TriggerEvent)}>
+                                                <SelectTrigger className="h-9 w-full">
+                                                    <SelectValue placeholder="Select an event" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {eventsForKeys(triggerKeysByModel[form.model_type] ?? []).map((ev) => (
+                                                        <SelectItem key={ev.value} value={ev.value}>
+                                                            {ev.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+
+                                    {triggerEvent === 'status_change' && (
+                                        <div>
+                                            <Label className="text-muted-foreground mb-1 text-xs">Status changes to</Label>
+                                            <Select value={form.trigger_key} onValueChange={pickTriggerStatus}>
+                                                <SelectTrigger className="h-9 w-full">
+                                                    <SelectValue placeholder="Select a status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(triggerKeysByModel[form.model_type] ?? [])
+                                                        .filter((key) => key !== 'created')
+                                                        .map((key) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {triggerLabel(key)}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FieldError message={errors.trigger_key} />
+                                        </div>
+                                    )}
+
+                                    {triggerConfigured && (
+                                        <p className="bg-muted/40 text-muted-foreground rounded-md border p-2.5 text-xs">
+                                            When a {modelLabel.toLowerCase()}{' '}
+                                            {form.trigger_key === 'created'
+                                                ? 'is created'
+                                                : `status changes to ${triggerLabel(form.trigger_key)}`}
+                                            , run the action.
+                                        </p>
+                                    )}
+
+                                        <Button size="sm" disabled={!triggerConfigured} onClick={() => setTriggerOpen(false)}>
+                                            Continue
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {triggerConfigured && (
                             <>
@@ -521,25 +619,35 @@ export default function TriggerActionBuilder(props: PageProps) {
                                         onClick={() => setOpenPanel('action')}
                                     />
                                 ) : (
-                                    /* The action is picked right here on the canvas —
+                                    /* Action choice pops out of the placeholder as a menu —
                                        only its configuration opens the sheet. */
-                                    <div data-step-card className="bg-card w-full rounded-lg border p-3 shadow-sm">
-                                        <p className="text-muted-foreground mb-2 text-[11px] tracking-wide uppercase">
-                                            Then do this
-                                        </p>
-                                        <div className="grid gap-2">
-                                            {ACTION_OPTIONS.map((opt) => (
-                                                <PickerRow
-                                                    key={opt.value}
-                                                    icon={opt.icon}
-                                                    label={opt.label}
-                                                    hint={opt.hint}
-                                                    selected={false}
-                                                    onClick={() => pickAction(opt.value)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
+                                    <Popover open={actionPickerOpen} onOpenChange={setActionPickerOpen}>
+                                        {/* Literal <button> child: Base UI's trigger needs a native
+                                            button element to adopt, not a wrapper component. */}
+                                        <PopoverTrigger asChild>
+                                            <button type="button" data-step-card className={placeholderCardClasses}>
+                                                <Plus className="h-4 w-4" />
+                                                New action
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="center" side="bottom" className="w-80 p-2">
+                                            <div className="grid gap-1.5">
+                                                {ACTION_OPTIONS.map((opt) => (
+                                                    <PickerRow
+                                                        key={opt.value}
+                                                        icon={opt.icon}
+                                                        label={opt.label}
+                                                        hint={opt.hint}
+                                                        selected={false}
+                                                        onClick={() => {
+                                                            setActionPickerOpen(false);
+                                                            pickAction(opt.value);
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 )}
                             </>
                         )}
@@ -614,77 +722,6 @@ export default function TriggerActionBuilder(props: PageProps) {
                             </SheetHeader>
 
                             <div className="grid flex-1 content-start gap-4 overflow-y-auto px-4 py-4">
-                                {/* Trigger — cascading definition: model → event → status */}
-                                {openPanel === 'trigger' && (
-                                    <>
-                                        <div>
-                                            <Label className="text-muted-foreground mb-1 text-xs">When</Label>
-                                            <Select value={form.model_type} onValueChange={pickTriggerModel}>
-                                                <SelectTrigger className="h-9">
-                                                    <SelectValue placeholder="Select a model" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {modelTypes.map((mt) => (
-                                                        <SelectItem key={mt.value} value={mt.value}>
-                                                            {mt.label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FieldError message={errors.model_type} />
-                                        </div>
-
-                                        {form.model_type && (
-                                            <div>
-                                                <Label className="text-muted-foreground mb-1 text-xs">Event</Label>
-                                                <Select value={triggerEvent} onValueChange={(v) => pickTriggerEvent(v as TriggerEvent)}>
-                                                    <SelectTrigger className="h-9">
-                                                        <SelectValue placeholder="Select an event" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {eventsForKeys(triggerKeysByModel[form.model_type] ?? []).map((ev) => (
-                                                            <SelectItem key={ev.value} value={ev.value}>
-                                                                {ev.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
-
-                                        {triggerEvent === 'status_change' && (
-                                            <div>
-                                                <Label className="text-muted-foreground mb-1 text-xs">Status changes to</Label>
-                                                <Select value={form.trigger_key} onValueChange={pickTriggerStatus}>
-                                                    <SelectTrigger className="h-9">
-                                                        <SelectValue placeholder="Select a status" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {(triggerKeysByModel[form.model_type] ?? [])
-                                                            .filter((key) => key !== 'created')
-                                                            .map((key) => (
-                                                                <SelectItem key={key} value={key}>
-                                                                    {triggerLabel(key)}
-                                                                </SelectItem>
-                                                            ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FieldError message={errors.trigger_key} />
-                                            </div>
-                                        )}
-
-                                        {triggerConfigured && (
-                                            <p className="bg-muted/40 text-muted-foreground rounded-md border p-2.5 text-xs">
-                                                When a {modelLabel.toLowerCase()}{' '}
-                                                {form.trigger_key === 'created'
-                                                    ? 'is created'
-                                                    : `status changes to ${triggerLabel(form.trigger_key)}`}
-                                                , run the action.
-                                            </p>
-                                        )}
-                                    </>
-                                )}
-
                                 {/* Action detail config */}
                                 {openPanel === 'action' && (
                                     <>
@@ -968,13 +1005,6 @@ export default function TriggerActionBuilder(props: PageProps) {
                                 )}
                             </div>
 
-                            {openPanel === 'trigger' && (
-                                <SheetFooter className="border-t">
-                                    <Button disabled={!triggerConfigured} onClick={() => setOpenPanel(null)}>
-                                        Continue
-                                    </Button>
-                                </SheetFooter>
-                            )}
                             {(openPanel === 'action' || openPanel === 'settings') && (
                                 <SheetFooter className="border-t">
                                     <Button variant="outline" onClick={() => setOpenPanel(null)}>
