@@ -723,7 +723,7 @@ class EmploymentApplicationController extends Controller
         }
 
         $triggerActionService->startOnDemand(
-            mapping: $mapping,
+            action: $mapping,
             formable: $employmentApplication,
             subject: $reference,
             admin: $request->user(),
