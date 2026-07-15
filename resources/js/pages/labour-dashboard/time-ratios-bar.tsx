@@ -177,7 +177,7 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <CardTitle className="text-sm">Hours No Show</CardTitle>
+                            <CardTitle className="text-sm">Hours Absent</CardTitle>
                         </div>
                         <div className="rounded-md bg-muted px-2.5 py-1">
                             <span className="text-xs font-semibold tabular-nums">{computed.totalLostPct}</span>
