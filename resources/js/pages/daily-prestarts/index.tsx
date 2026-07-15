@@ -204,7 +204,11 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                 </TableRow>
                             )}
                             {prestarts.data.map((p) => (
-                                <TableRow key={p.id}>
+                                <TableRow
+                                    key={p.id}
+                                    className="cursor-pointer"
+                                    onClick={() => router.visit(`/daily-prestarts/${p.id}`)}
+                                >
                                     <TableCell>
                                         <span className="flex items-center gap-1.5">
                                             {p.is_locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -221,7 +225,7 @@ export default function DailyPrestartIndex({ prestarts, filters, locations, work
                                     <TableCell>
                                         <AvatarStack people={p.not_signed_employees ?? []} />
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon" aria-label="Row actions">
