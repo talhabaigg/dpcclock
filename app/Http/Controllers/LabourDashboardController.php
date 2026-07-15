@@ -1303,11 +1303,13 @@ class LabourDashboardController extends Controller
         $sqlInList = fn (array $ids) => $ids ? implode(',', array_map('intval', $ids)) : '0';
 
         // Hours from clocks: sick + annual + total absence (sick+annual+workcover).
+        // Weekend leave is excluded — absences are only comparable on scheduled weekdays.
         $clockTotals = Clock::query()
             ->join('employees', 'employees.eh_employee_id', '=', 'clocks.eh_employee_id')
             ->whereIn('clocks.eh_location_id', $allEhLocationIds)
             ->where('clocks.clock_in', '>=', $dateFrom)
             ->where('clocks.clock_in', '<=', $dateTo)
+            ->whereRaw('DAYOFWEEK(clocks.clock_in) NOT IN (1, 7)')
             ->where('clocks.status', 'Processed')
             ->whereNotNull('clocks.hours_worked')
             ->where('clocks.hours_worked', '>', 0)
@@ -1343,6 +1345,7 @@ class LabourDashboardController extends Controller
             ->join('daily_prestarts', 'daily_prestarts.id', '=', 'prestart_absentees.daily_prestart_id')
             ->whereIn('daily_prestarts.location_id', $locationIds)
             ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->whereRaw('DAYOFWEEK(daily_prestarts.work_date) NOT IN (1, 7)')
             ->where('prestart_absentees.employment_type', 'Casual')
             ->whereIn('prestart_absentees.reason', $casualAbsenceReasons)
             ->selectRaw("
@@ -1593,7 +1596,9 @@ class LabourDashboardController extends Controller
                     ->orderByDesc('hours')
                     ->get();
             } else {
+                // Match the summary widget: weekend leave clocks are excluded from absence buckets.
                 $rows = $query
+                    ->whereRaw('DAYOFWEEK(clocks.clock_in) NOT IN (1, 7)')
                     ->whereIn('clocks.eh_worktype_id', $workTypeIds ?: [0])
                     ->whereNotNull('clocks.hours_worked')
                     ->where('clocks.hours_worked', '>', 0)
@@ -1707,6 +1712,7 @@ class LabourDashboardController extends Controller
             ->leftJoin('employees', 'employees.id', '=', 'prestart_absentees.employee_id')
             ->whereIn('daily_prestarts.location_id', $locationIds)
             ->whereBetween('daily_prestarts.work_date', [$dateFrom->toDateString(), $dateTo->toDateString()])
+            ->whereRaw('DAYOFWEEK(daily_prestarts.work_date) NOT IN (1, 7)')
             ->where('prestart_absentees.employment_type', 'Casual')
             ->whereIn('prestart_absentees.reason', $reasons)
             ->whereNotNull('prestart_absentees.employee_id')

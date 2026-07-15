@@ -70,8 +70,8 @@ function BarRow({ label, avg, width, totalLabel, headcount, variant, onDrill }: 
     const isEmpty = avg === 0 && headcount > 0;
     const hasNoCohort = headcount === 0;
     const sourceTooltip = variant === 'ft'
-        ? 'From processed payroll clocks — counts only approved/paid leave that has flowed through payroll.'
-        : 'From prestart absentees — counts every reported absence (1 day = 8 hrs).';
+        ? 'From processed payroll clocks — counts only approved/paid leave that has flowed through payroll. Weekends excluded.'
+        : 'From prestart absentees — counts every reported absence (1 day = 8 hrs). Weekends excluded.';
 
     return (
         <button
@@ -781,6 +781,7 @@ export default function LeaveByEmploymentType({ data, dateFrom, dateTo, location
                         <Info className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         <span className="text-[11px] text-muted-foreground">
                             Casual figures are derived from prestart absentees (sick + annual + workcover only).
+                            Weekend absences are excluded for both cohorts.
                             {data.earliest_casual_absentee_date && (
                                 <> Earliest on file: <span className="font-mono">{format(new Date(data.earliest_casual_absentee_date), 'dd MMM yyyy')}</span>.</>
                             )}
