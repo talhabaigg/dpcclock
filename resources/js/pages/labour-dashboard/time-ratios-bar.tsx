@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Clock, Hammer } from 'lucide-react';
 import { useMemo } from 'react';
-import { Bar, BarChart, Cell, Label, Pie, PieChart, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, XAxis, YAxis } from 'recharts';
 import type { HoursMatrixRow } from './hours-matrix-table';
 
 interface TimeRatiosBarProps {
@@ -22,11 +22,49 @@ const NP_COLORS: Record<string, string> = {
     public_holiday: 'hsl(217, 91%, 60%)',
 };
 
-const donutConfig = {
-    normal_time: { label: 'Normal Time', color: NT_COLOR },
-    overtime: { label: 'Overtime', color: OT_COLOR },
-    lost: { label: 'Hours Lost', color: LOST_COLOR },
-} satisfies ChartConfig;
+// Same SVG donut treatment as the Workforce panel in leave-by-employment-type.tsx
+function DonutChart({ segments, centerValue, centerLabel }: { segments: { key: string; pct: number; color: string }[]; centerValue: string; centerLabel?: string }) {
+    const radius = 54;
+    const strokeWidth = 18;
+    const circ = 2 * Math.PI * radius;
+
+    // Each segment is an arc from 12 o'clock to its cumulative end, rendered in
+    // reverse order so earlier segments stack on top — every junction shows the
+    // upper segment's rounded cap tucking over the next, with no gap math needed.
+    let cum = 0;
+    const arcs = segments
+        .filter((s) => s.pct > 0)
+        .map((s) => {
+            cum += (s.pct / 100) * circ;
+            return { ...s, end: cum };
+        })
+        .reverse();
+
+    return (
+        <div className="relative h-32 w-32 flex-shrink-0">
+            <svg viewBox="0 0 132 132" className="-rotate-90">
+                <circle cx="66" cy="66" r={radius} fill="none" className="stroke-muted" strokeWidth={strokeWidth} />
+                {arcs.map((s) => (
+                    <circle
+                        key={s.key}
+                        cx="66"
+                        cy="66"
+                        r={radius}
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth={strokeWidth}
+                        strokeLinecap="round"
+                        strokeDasharray={`${s.end} ${circ}`}
+                    />
+                ))}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-px">
+                <span className="font-mono text-2xl font-semibold leading-none tracking-tight tabular-nums">{centerValue}</span>
+                {centerLabel && <span className="text-[10px] font-medium text-muted-foreground">{centerLabel}</span>}
+            </div>
+        </div>
+    );
+}
 
 const npConfig = {
     weather: { label: 'Weather', color: NP_COLORS.weather },
@@ -59,10 +97,10 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
         const effPct = totalAvailable > 0 ? ((totalWorked / totalAvailable) * 100).toFixed(1) : '0';
 
         return {
-            donut: [
-                { name: 'normal_time', value: nt, fill: NT_COLOR },
-                { name: 'overtime', value: ot, fill: OT_COLOR },
-                { name: 'lost', value: lost, fill: LOST_COLOR },
+            donutSegments: [
+                { key: 'normal_time', pct: rawPct(nt), color: NT_COLOR },
+                { key: 'overtime', pct: rawPct(ot), color: OT_COLOR },
+                { key: 'lost', pct: rawPct(lost), color: LOST_COLOR },
             ],
             effPct,
             ntPct: pct(nt),
@@ -105,53 +143,29 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                         <CardTitle className="text-sm">Hours Worked</CardTitle>
                     </div>
                 </CardHeader>
-                <CardContent className="flex flex-1 items-center justify-center gap-6 pt-2">
-                    <ChartContainer config={donutConfig} className="aspect-square w-[140px] shrink-0">
-                        <PieChart>
-                            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                            <Pie
-                                data={computed.donut}
-                                dataKey="value"
-                                nameKey="name"
-                                innerRadius={42}
-                                outerRadius={62}
-                                strokeWidth={2}
-                                stroke="hsl(var(--background))"
-                            >
-                                {computed.donut.map((entry) => (
-                                    <Cell key={entry.name} fill={entry.fill} />
-                                ))}
-                                <Label
-                                    content={({ viewBox }) => {
-                                        if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                                            return (
-                                                <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-lg font-bold">
-                                                        {computed.effPct}%
-                                                    </tspan>
-                                                </text>
-                                            );
-                                        }
-                                    }}
-                                />
-                            </Pie>
-                        </PieChart>
-                    </ChartContainer>
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                            <div className="h-3 w-3 rounded-full" style={{ background: NT_COLOR }} />
-                            <span className="text-sm text-muted-foreground">Normal Time</span>
-                            <span className="ml-auto text-sm font-semibold tabular-nums">{computed.ntPct}</span>
+                <CardContent className="flex flex-1 items-center gap-5 pt-2">
+                    <DonutChart segments={computed.donutSegments} centerValue={`${computed.effPct}%`} />
+                    <div className="flex flex-1 flex-col gap-2">
+                        <div className="-mx-2 flex items-center justify-between border-b px-2 pb-2">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: NT_COLOR }} />
+                                <span className="text-xs font-medium">Normal Time</span>
+                            </div>
+                            <span className="font-mono text-base font-semibold tabular-nums">{computed.ntPct}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="h-3 w-3 rounded-full" style={{ background: OT_COLOR }} />
-                            <span className="text-sm text-muted-foreground">Overtime</span>
-                            <span className="ml-auto text-sm font-semibold tabular-nums">{computed.otPct}</span>
+                        <div className="-mx-2 flex items-center justify-between border-b px-2 pb-2">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: OT_COLOR }} />
+                                <span className="text-xs font-medium">Overtime</span>
+                            </div>
+                            <span className="font-mono text-base font-semibold tabular-nums">{computed.otPct}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="h-3 w-3 rounded-full" style={{ background: LOST_COLOR }} />
-                            <span className="text-sm text-muted-foreground">Hours Lost</span>
-                            <span className="ml-auto text-sm font-semibold tabular-nums">{computed.lostPct}</span>
+                        <div className="-mx-2 flex items-center justify-between px-2 py-1">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: LOST_COLOR }} />
+                                <span className="text-xs font-medium">Hours Lost</span>
+                            </div>
+                            <span className="font-mono text-base font-semibold tabular-nums">{computed.lostPct}</span>
                         </div>
                     </div>
                 </CardContent>
@@ -175,9 +189,9 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                     {/* Stacked bar */}
                     <ChartContainer config={npConfig} className="aspect-auto w-full" style={{ height: 36 }}>
                         <BarChart data={computed.npBar} layout="vertical" barSize={28} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                            <XAxis type="number" hide />
+                            <XAxis type="number" hide domain={[0, 'dataMax']} />
                             <YAxis type="category" dataKey="name" hide />
-                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <ChartTooltip shared={false} content={<ChartTooltipContent hideLabel />} />
                             {npKeys.map((key, i) => (
                                 <Bar
                                     key={key}
@@ -191,10 +205,13 @@ export default function TimeRatiosBar({ data }: TimeRatiosBarProps) {
                     </ChartContainer>
 
                     {/* Legend */}
-                    <div className="mt-4 grid grid-cols-6">
+                    <div className="mt-4 grid grid-cols-3 gap-y-3 md:grid-cols-6 md:gap-y-0">
                         {computed.npItems.map((item) => (
-                            <div key={item.key} className="flex flex-col items-center gap-1 border-l border-border/40 first:border-l-0 py-1">
-                                <span className="text-lg font-bold tabular-nums leading-tight">{item.value}</span>
+                            <div
+                                key={item.key}
+                                className="flex flex-col items-center gap-1 border-border/40 py-1 [&:not(:nth-child(3n+1))]:border-l md:[&:not(:first-child)]:border-l"
+                            >
+                                <span className="text-base font-bold tabular-nums leading-tight md:text-lg">{item.value}</span>
                                 <div className="flex items-center gap-1">
                                     <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.color }} />
                                     <span className="text-[10px] text-muted-foreground">{item.label}</span>

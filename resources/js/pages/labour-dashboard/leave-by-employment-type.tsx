@@ -196,7 +196,7 @@ function WorkforcePanel({ ftCount, casualCount, totalStaff, ftPct, casualPct, on
                 <span className="text-sm font-semibold">Workforce</span>
             </div>
             <div className="flex items-center gap-5">
-                <div className="relative h-28 w-28 flex-shrink-0">
+                <div className="relative h-32 w-32 flex-shrink-0">
                     <svg viewBox="0 0 132 132" className="-rotate-90">
                         <circle cx="66" cy="66" r={radius} fill="none" className="stroke-muted" strokeWidth="18" />
                         <circle cx="66" cy="66" r={radius} fill="none" className="stroke-zinc-900 dark:stroke-zinc-50"

@@ -10,7 +10,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Info } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 export type DrillCategory =
@@ -53,38 +53,12 @@ const formatHours = (value: number) => {
     return value.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const SortableHeader = ({ column, children }: { column: any; children: React.ReactNode }) => (
-    <button className="flex items-center gap-1 hover:text-foreground" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        {children}
-        <ArrowUpDown className="h-3 w-3 shrink-0" />
-    </button>
-);
-
 type Align = 'left' | 'right' | 'center';
 
 interface ColumnDescription {
     title: string;
     body: React.ReactNode;
 }
-
-const ColumnHelp = ({ description }: { description: ColumnDescription }) => (
-    <HoverCard>
-        <HoverCardTrigger asChild delay={150} closeDelay={100}>
-            <button
-                type="button"
-                tabIndex={-1}
-                aria-label={`About ${description.title}`}
-                className="inline-flex shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-                <Info className="h-3 w-3" />
-            </button>
-        </HoverCardTrigger>
-        <HoverCardContent side="top" align="center" className="w-72 text-xs leading-relaxed">
-            <div className="mb-1 text-sm font-semibold">{description.title}</div>
-            <div className="text-muted-foreground">{description.body}</div>
-        </HoverCardContent>
-    </HoverCard>
-);
 
 const ColumnHeading = ({
     column,
@@ -99,9 +73,22 @@ const ColumnHeading = ({
 }) => {
     const justify = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
     return (
-        <div className={cn('flex items-center gap-1.5', justify)}>
-            <SortableHeader column={column}>{label}</SortableHeader>
-            <ColumnHelp description={description} />
+        <div className={cn('flex items-center', justify)}>
+            <HoverCard>
+                <HoverCardTrigger asChild delay={150} closeDelay={100}>
+                    <button
+                        className="flex items-center gap-1 hover:text-foreground"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    >
+                        {label}
+                        <ArrowUpDown className="h-3 w-3 shrink-0" />
+                    </button>
+                </HoverCardTrigger>
+                <HoverCardContent side="top" align="center" className="w-72 text-xs leading-relaxed">
+                    <div className="mb-1 text-sm font-semibold">{description.title}</div>
+                    <div className="text-muted-foreground">{description.body}</div>
+                </HoverCardContent>
+            </HoverCard>
         </div>
     );
 };

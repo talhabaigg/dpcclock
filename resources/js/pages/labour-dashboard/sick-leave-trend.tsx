@@ -36,6 +36,20 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
         return config;
     }, [projectNames]);
 
+    // Weeks with no sick leave for a project mean 0 hours, not missing data —
+    // fill them so lines sit at 0 instead of interpolating across the gap.
+    const filledProjectTrend = useMemo(
+        () =>
+            projectTrend.map((row) => {
+                const filled = { ...row };
+                projectNames.forEach((name) => {
+                    filled[name] = Number(row[name] ?? 0);
+                });
+                return filled;
+            }),
+        [projectTrend, projectNames],
+    );
+
     if (weeklyTrend.length === 0 && projectTrend.length === 0) return null;
 
     return (
@@ -93,7 +107,7 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                 {({ height, width }) =>
                     projectTrend.length > 0 ? (
                         <ChartContainer config={projectConfig} className="aspect-auto w-full" style={{ height }}>
-                            <LineChart data={projectTrend} margin={{ right: 30 }}>
+                            <LineChart data={filledProjectTrend} margin={{ right: 30 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis
                                     dataKey="week"
@@ -122,7 +136,6 @@ export default function SickLeaveTrend({ weeklyTrend, projectTrend, projectNames
                                         stroke={COLORS[i % COLORS.length]}
                                         strokeWidth={2}
                                         dot={false}
-                                        connectNulls
                                     />
                                 ))}
                             </LineChart>

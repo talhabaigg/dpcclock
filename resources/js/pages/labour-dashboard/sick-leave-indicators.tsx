@@ -73,40 +73,42 @@ function IndicatorTable({ data, height }: { data: SickLeaveIndicatorRow[]; heigh
     };
 
     return (
-        <div className="flex flex-col">
-            {/* Sticky Header */}
-            <div className={cn(COL_GRID, 'rounded-t-md border-b bg-muted/30 px-4 py-2 font-medium text-muted-foreground')}>
-                <div>Employee</div>
-                <div className="text-right">Sick Days</div>
-                <div className="text-right">Mon</div>
-                <div className="text-right">Fri</div>
-                <div className="text-right">Before RDO</div>
-                <div className="text-right">After RDO</div>
-                <div className="text-right">Before PH</div>
-                <div className="text-right">After PH</div>
-                <div className="text-right">Score</div>
-                <div className="pl-3">Notes</div>
-            </div>
+        <div className="overflow-x-auto">
+            <div className="flex min-w-[760px] flex-col">
+                {/* Sticky Header */}
+                <div className={cn(COL_GRID, 'rounded-t-md border-b bg-muted/30 px-4 py-2 font-medium text-muted-foreground')}>
+                    <div>Employee</div>
+                    <div className="text-right">Sick Days</div>
+                    <div className="text-right">Mon</div>
+                    <div className="text-right">Fri</div>
+                    <div className="text-right">Before RDO</div>
+                    <div className="text-right">After RDO</div>
+                    <div className="text-right">Before PH</div>
+                    <div className="text-right">After PH</div>
+                    <div className="text-right">Score</div>
+                    <div className="pl-3">Notes</div>
+                </div>
 
-            {/* Scrollable Body */}
-            <ScrollArea className={height ?? 'h-[350px]'}>
-                {data.map((row) => (
-                    <IndicatorRow key={row.employee_id} row={row} />
-                ))}
-            </ScrollArea>
+                {/* Scrollable Body */}
+                <ScrollArea className={height ?? 'h-[350px]'}>
+                    {data.map((row) => (
+                        <IndicatorRow key={row.employee_id} row={row} />
+                    ))}
+                </ScrollArea>
 
-            {/* Sticky Footer */}
-            <div className={cn(COL_GRID, 'rounded-b-md border-t bg-muted/50 px-4 py-2 font-semibold')}>
-                <div>Total</div>
-                <div className="text-right tabular-nums">{totals.sick_days_taken}</div>
-                <div className="text-right tabular-nums">{totals.sick_on_monday}</div>
-                <div className="text-right tabular-nums">{totals.sick_on_friday}</div>
-                <div className="text-right tabular-nums">{totals.sick_before_rdo}</div>
-                <div className="text-right tabular-nums">{totals.sick_after_rdo}</div>
-                <div className="text-right tabular-nums">{totals.sick_before_ph}</div>
-                <div className="text-right tabular-nums">{totals.sick_after_ph}</div>
-                <div className="text-right tabular-nums">{totals.sensitive_score}</div>
-                <div />
+                {/* Sticky Footer */}
+                <div className={cn(COL_GRID, 'rounded-b-md border-t bg-muted/50 px-4 py-2 font-semibold')}>
+                    <div>Total</div>
+                    <div className="text-right tabular-nums">{totals.sick_days_taken}</div>
+                    <div className="text-right tabular-nums">{totals.sick_on_monday}</div>
+                    <div className="text-right tabular-nums">{totals.sick_on_friday}</div>
+                    <div className="text-right tabular-nums">{totals.sick_before_rdo}</div>
+                    <div className="text-right tabular-nums">{totals.sick_after_rdo}</div>
+                    <div className="text-right tabular-nums">{totals.sick_before_ph}</div>
+                    <div className="text-right tabular-nums">{totals.sick_after_ph}</div>
+                    <div className="text-right tabular-nums">{totals.sensitive_score}</div>
+                    <div />
+                </div>
             </div>
         </div>
     );
@@ -156,7 +158,7 @@ export default function SickLeaveIndicators({ data }: SickLeaveIndicatorsProps) 
             </div>
 
             <Dialog open={fullscreen} onOpenChange={setFullscreen}>
-                <DialogContent className="min-w-full max-h-[85vh] flex flex-col">
+                <DialogContent className="w-[90vw] max-w-[90vw] sm:max-w-[90vw] max-h-[85vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Sick Leave Sensitive Indicators</DialogTitle>
                         <p className="text-xs text-muted-foreground">
