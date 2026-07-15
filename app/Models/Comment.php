@@ -121,6 +121,61 @@ class Comment extends Model implements HasMedia
         return trim(preg_replace("/\n{2,}/", "\n\n", implode('', $parts)));
     }
 
+    /**
+     * Like plainTextFromDoc, but keeps block structure — blank lines between
+     * paragraphs, bullet/number markers on list items — so the complete
+     * comment can be reproduced outside the app (e.g. notification emails).
+     */
+    public static function formattedTextFromDoc(?array $doc): string
+    {
+        if (! $doc) {
+            return '';
+        }
+
+        $inline = function ($node) use (&$inline): string {
+            if (! is_array($node)) {
+                return '';
+            }
+
+            return match ($node['type'] ?? null) {
+                'text' => $node['text'] ?? '',
+                'mention' => '@'.($node['attrs']['label'] ?? ''),
+                'hardBreak' => "  \n",
+                default => implode('', array_map($inline, $node['content'] ?? [])),
+            };
+        };
+
+        $render = function (array $nodes, string $indent = '') use (&$render, $inline): array {
+            $lines = [];
+            foreach ($nodes as $node) {
+                $type = $node['type'] ?? null;
+                if (in_array($type, ['bulletList', 'orderedList'], true)) {
+                    $number = (int) ($node['attrs']['start'] ?? 1);
+                    foreach ($node['content'] ?? [] as $item) {
+                        $marker = $type === 'orderedList' ? $number++.'. ' : '• ';
+                        $children = $item['content'] ?? [];
+                        $first = array_shift($children);
+                        $lines[] = $indent.$marker.trim($inline($first));
+                        if ($children) {
+                            $lines = array_merge($lines, $render($children, $indent.'   '));
+                        }
+                    }
+                    $lines[] = '';
+                } elseif ($type !== null) {
+                    $text = trim($inline($node));
+                    if ($text !== '') {
+                        $lines[] = $indent.$text;
+                        $lines[] = '';
+                    }
+                }
+            }
+
+            return $lines;
+        };
+
+        return trim(preg_replace("/\n{3,}/", "\n\n", implode("\n", $render($doc['content'] ?? []))));
+    }
+
     public function isSystem(): bool
     {
         return ! empty($this->metadata);

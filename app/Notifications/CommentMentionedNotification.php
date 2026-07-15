@@ -5,13 +5,10 @@ namespace App\Notifications;
 use App\Models\Comment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 
-/**
- * Mentions only write to the in-app database channel for now. If we later add
- * a "mark as important" affordance on a comment, we can route important
- * mentions to mail (and SMS) by checking that flag inside via().
- */
 class CommentMentionedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -24,7 +21,49 @@ class CommentMentionedNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return $notifiable->routeNotificationFor('mail', $this)
+            ? ['database', 'mail']
+            : ['database'];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $authorName = $this->comment->user?->name ?? 'Someone';
+        $label = $this->resourceLabel ?? 'a record';
+        $prefix = app()->environment('production') ? '' : 'TEST - ';
+
+        $mail = (new MailMessage)
+            ->subject("{$prefix}{$authorName} mentioned you on {$label}")
+            ->greeting("Hi {$notifiable->name},")
+            ->line("**{$authorName}** mentioned you in a comment on **{$label}**:")
+            ->line(new HtmlString($this->quotedBody()));
+
+        $attachments = $this->comment->getMedia('attachments')->count();
+        if ($attachments > 0) {
+            $noun = $attachments === 1 ? 'attachment' : 'attachments';
+            $mail->line("This comment has {$attachments} {$noun} — view them in the app.");
+        }
+
+        if ($this->resourceUrl) {
+            $mail->action('View Comment', $this->resourceUrl);
+        }
+
+        return $mail;
+    }
+
+    /**
+     * The complete comment body as a markdown blockquote. User text is
+     * escaped so it renders literally instead of as markdown/HTML inside
+     * the mail template.
+     */
+    private function quotedBody(): string
+    {
+        $text = Comment::formattedTextFromDoc($this->comment->body_json)
+            ?: trim((string) $this->comment->body);
+
+        $text = preg_replace('/([\\\\`*_\[\]#<>|])/', '\\\\$1', $text);
+
+        return '> '.str_replace("\n", "\n> ", $text);
     }
 
     public function toArray(object $notifiable): array

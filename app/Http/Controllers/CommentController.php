@@ -3,24 +3,33 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comment;
+use App\Models\DailyPrestart;
+use App\Models\Employee;
+use App\Models\EmploymentApplication;
+use App\Models\ForecastProject;
+use App\Models\Injury;
+use App\Models\ToolboxTalk;
 use App\Models\User;
+use App\Models\WhsDeliverable;
 use App\Notifications\CommentMentionedNotification;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use League\Flysystem\UnableToReadFile;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CommentController extends Controller
 {
     private const ALLOWED_MODELS = [
-        'employment_application' => \App\Models\EmploymentApplication::class,
-        'injury' => \App\Models\Injury::class,
-        'employee' => \App\Models\Employee::class,
-        'forecast_project' => \App\Models\ForecastProject::class,
-        'App\\Models\\ForecastProject' => \App\Models\ForecastProject::class,
-        'daily_prestart' => \App\Models\DailyPrestart::class,
-        'toolbox_talk' => \App\Models\ToolboxTalk::class,
-        'whs_deliverable' => \App\Models\WhsDeliverable::class,
+        'employment_application' => EmploymentApplication::class,
+        'injury' => Injury::class,
+        'employee' => Employee::class,
+        'forecast_project' => ForecastProject::class,
+        'App\\Models\\ForecastProject' => ForecastProject::class,
+        'daily_prestart' => DailyPrestart::class,
+        'toolbox_talk' => ToolboxTalk::class,
+        'whs_deliverable' => WhsDeliverable::class,
     ];
 
     /**
@@ -122,7 +131,7 @@ class CommentController extends Controller
 
         try {
             $stream = $mediaItem->stream();
-        } catch (\League\Flysystem\UnableToReadFile) {
+        } catch (UnableToReadFile) {
             abort(404, 'Attachment is missing from storage.');
         }
 
@@ -145,7 +154,7 @@ class CommentController extends Controller
      * photo client-side, so individual annotations stay deletable — the image
      * file itself is never modified.
      */
-    public function updateAttachmentAnnotations(Request $request, Comment $comment, int $media): \Illuminate\Http\JsonResponse
+    public function updateAttachmentAnnotations(Request $request, Comment $comment, int $media): JsonResponse
     {
         $mediaItem = $comment->getMedia('attachments')->firstWhere('id', $media);
         abort_unless($mediaItem, 404);
@@ -253,7 +262,7 @@ class CommentController extends Controller
             return;
         }
 
-        [$url, $label] = $this->resourceLinkFor($commentable);
+        [$url, $label] = self::resourceLinkFor($commentable);
 
         Notification::send($users, new CommentMentionedNotification($comment, $url, $label));
     }
@@ -262,38 +271,38 @@ class CommentController extends Controller
      * Build a (url, label) pair for the resource the comment belongs to so the
      * notification can deep-link the recipient back to it.
      */
-    private function resourceLinkFor($commentable): array
+    public static function resourceLinkFor($commentable): array
     {
         if (! $commentable) {
             return [null, null];
         }
 
         return match (true) {
-            $commentable instanceof \App\Models\ForecastProject => [
+            $commentable instanceof ForecastProject => [
                 url(route('forecastProjects.show', $commentable->id)),
                 "forecast project {$commentable->project_number}",
             ],
-            $commentable instanceof \App\Models\Injury => [
+            $commentable instanceof Injury => [
                 url(route('injury-register.show', $commentable)),
                 "injury report {$commentable->id_formal}",
             ],
-            $commentable instanceof \App\Models\Employee => [
+            $commentable instanceof Employee => [
                 url(route('employees.show', $commentable)),
                 "employee {$commentable->name}",
             ],
-            $commentable instanceof \App\Models\EmploymentApplication => [
+            $commentable instanceof EmploymentApplication => [
                 url(route('employment-applications.show', $commentable)),
                 'an employment application',
             ],
-            $commentable instanceof \App\Models\DailyPrestart => [
+            $commentable instanceof DailyPrestart => [
                 url(route('daily-prestarts.show', $commentable)),
                 'a daily prestart',
             ],
-            $commentable instanceof \App\Models\ToolboxTalk => [
+            $commentable instanceof ToolboxTalk => [
                 url(route('toolbox-talks.show', $commentable)),
                 'a toolbox talk',
             ],
-            $commentable instanceof \App\Models\WhsDeliverable => [
+            $commentable instanceof WhsDeliverable => [
                 url(route('locations.whs-deliverables.show', [$commentable->location_id, $commentable->id])),
                 "WHS deliverable {$commentable->name}",
             ],
