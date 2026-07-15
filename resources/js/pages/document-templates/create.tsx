@@ -18,6 +18,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const CATEGORIES: Record<string, string> = {
+    employment: 'Employment',
     employment_contract: 'Employment Contract',
     policies: 'Policies',
 };
@@ -75,7 +76,7 @@ export default function CreateDocumentTemplate() {
                     {/* Right side controls */}
                     <div className="flex items-center gap-2">
                         <Select value={data.category} onValueChange={(v) => setData('category', v)}>
-                            <SelectTrigger className="h-8 w-[140px] text-xs">
+                            <SelectTrigger className="h-8 w-[155px] text-xs">
                                 <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
