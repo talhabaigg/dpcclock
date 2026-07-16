@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { format, isSameMonth } from 'date-fns';
 import { Info, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export interface LeaveByEmploymentTypeData {
     sick_ft_hours: number;
@@ -55,82 +55,140 @@ function periodLabel(dateFrom: Date, dateTo: Date) {
     return `${format(dateFrom, 'MMM yyyy')} – ${format(dateTo, 'MMM yyyy')}`;
 }
 
-interface BarRowProps {
+const FT_SOURCE_NOTE = 'From processed payroll clocks — counts only approved/paid leave that has flowed through payroll. Weekends excluded.';
+const CASUAL_SOURCE_NOTE = 'From prestart absentees — counts every reported absence (1 day = 8 hrs). Weekends excluded.';
+
+const BUTTERFLY_GRID = 'grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_168px_minmax(0,1fr)]';
+
+// ---- Stat cards (Workforce / Casual conversion) ----
+
+interface StatBlockProps {
+    value: string;
+    pctText: string;
     label: string;
-    avg: number;
-    width: number;
-    totalLabel: string;
-    headcount: number;
-    variant: 'ft' | 'casual';
+    swatchClass: string;
+    valueClass?: string;
+    disabled?: boolean;
     onDrill: () => void;
 }
 
-function BarRow({ label, avg, width, totalLabel, headcount, variant, onDrill }: BarRowProps) {
-    const barColor = variant === 'ft' ? 'bg-zinc-900 dark:bg-zinc-50' : 'bg-zinc-400 dark:bg-zinc-500';
-    const isEmpty = avg === 0 && headcount > 0;
+function StatBlock({ value, pctText, label, swatchClass, valueClass, disabled, onDrill }: StatBlockProps) {
+    return (
+        <button
+            type="button"
+            onClick={onDrill}
+            disabled={disabled}
+            className="group/stat -mx-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+        >
+            <div className="flex items-baseline gap-2">
+                <span className={cn('font-mono text-3xl font-semibold leading-none tracking-tight tabular-nums', valueClass)}>{value}</span>
+                <span className="font-mono text-[13px] tabular-nums text-muted-foreground">{pctText}</span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5">
+                <span className={cn('h-[9px] w-[9px] rounded-[2px]', swatchClass)} />
+                <span className="text-[13px] text-muted-foreground">{label}</span>
+                <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/stat:opacity-100 group-focus-visible/stat:opacity-100">↗</span>
+            </div>
+        </button>
+    );
+}
+
+interface StatCardProps {
+    title: string;
+    meta: string;
+    titleTooltip?: ReactNode;
+    children: ReactNode;
+}
+
+function StatCard({ title, meta, titleTooltip, children }: StatCardProps) {
+    return (
+        <Card className="flex-1 justify-center gap-0 px-[22px] py-5">
+            <div className="mb-5 flex items-baseline justify-between gap-4">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+                    {titleTooltip}
+                </div>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">{meta}</span>
+            </div>
+            {children}
+        </Card>
+    );
+}
+
+// ---- Butterfly chart (Leave taken, per employee) ----
+
+function AxisLabel({ side }: { side: 'ft' | 'casual' }) {
+    const isFt = side === 'ft';
+    return (
+        <div className={cn('text-base font-semibold uppercase tracking-[0.06em] text-muted-foreground', isFt && 'text-right')}>
+            <TooltipProvider delay={150}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span className="cursor-help">{isFt ? '◀ Full-time' : 'Casual ▶'}</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">{isFt ? FT_SOURCE_NOTE : CASUAL_SOURCE_NOTE}</TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        </div>
+    );
+}
+
+interface ButterflySideProps {
+    variant: 'ft' | 'casual';
+    avg: number;
+    width: number;
+    hours: number;
+    headcount: number;
+    onDrill: () => void;
+}
+
+function ButterflySide({ variant, avg, width, hours, headcount, onDrill }: ButterflySideProps) {
+    const isFt = variant === 'ft';
     const hasNoCohort = headcount === 0;
-    const sourceTooltip = variant === 'ft'
-        ? 'From processed payroll clocks — counts only approved/paid leave that has flowed through payroll. Weekends excluded.'
-        : 'From prestart absentees — counts every reported absence (1 day = 8 hrs). Weekends excluded.';
+
+    const valueBlock = (
+        <div className={isFt ? 'text-right' : 'text-left'}>
+            <div
+                className={cn(
+                    'font-mono text-2xl font-semibold leading-tight tracking-tight tabular-nums',
+                    !isFt && 'text-zinc-500 dark:text-zinc-400',
+                    hasNoCohort && 'text-muted-foreground/60',
+                )}
+            >
+                {hasNoCohort ? '—' : avg.toFixed(1)}
+            </div>
+            <div className="font-mono text-[11px] tabular-nums text-muted-foreground">{fmtHrs(hours)} hrs total</div>
+        </div>
+    );
 
     return (
         <button
             type="button"
             onClick={onDrill}
             disabled={hasNoCohort}
-            className="group/bar -mx-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+            title={hasNoCohort ? `No ${isFt ? 'full-time' : 'casual'} workers in this filter` : undefined}
+            className={cn(
+                'group/side flex min-w-0 items-center gap-3 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent sm:gap-4',
+                isFt && 'justify-end',
+            )}
         >
-            <div className="mb-2 flex items-baseline justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                    {label}
-                    <TooltipProvider delay={150}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Info className="h-3 w-3 cursor-help text-muted-foreground/70" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">{sourceTooltip}</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </span>
-                <div className="flex items-baseline gap-1">
-                    {isEmpty || hasNoCohort ? (
-                        <TooltipProvider delay={150}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <span className="cursor-help font-mono text-lg font-semibold tabular-nums tracking-tight text-muted-foreground/60">—</span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {hasNoCohort
-                                        ? `No ${variant === 'ft' ? 'full-time' : 'casual'} workers in this filter`
-                                        : `No ${variant === 'ft' ? 'full-time' : 'casual'} absences recorded for this period`}
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    ) : (
-                        <span className="font-mono text-lg font-semibold tabular-nums tracking-tight">{avg.toFixed(1)}</span>
-                    )}
-                    <span className="text-[11px] text-muted-foreground">hrs/emp</span>
-                </div>
-            </div>
-            <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+            {isFt && valueBlock}
+            <div className="relative h-7 min-w-0 flex-1 overflow-hidden rounded-md bg-muted">
                 <div
-                    className={cn('absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out', barColor)}
+                    className={cn(
+                        'absolute inset-y-0 rounded-md transition-[width] duration-300 ease-out motion-reduce:transition-none',
+                        isFt ? 'right-0 bg-zinc-900 dark:bg-zinc-100' : 'left-0 bg-zinc-500 dark:bg-zinc-400',
+                    )}
                     style={{ width: `${Math.min(100, Math.max(0, width))}%` }}
                 />
             </div>
-            <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-                <span>{totalLabel} hrs across {headcount} staff</span>
-                {!hasNoCohort && (
-                    <span className="opacity-0 transition-opacity group-hover/bar:opacity-100 group-focus-visible/bar:opacity-100">view ↗</span>
-                )}
-            </div>
+            {!isFt && valueBlock}
         </button>
     );
 }
 
-interface LeavePanelProps {
-    title: string;
-    totalHours: number;
+interface ButterflyRowProps {
+    label: string;
     ftHours: number;
     ftAvg: number;
     ftWidth: number;
@@ -141,204 +199,22 @@ interface LeavePanelProps {
     casualCount: number;
     bucketFt: Bucket;
     bucketCasual: Bucket;
-    rightBorder?: boolean;
     onDrill: (bucket: Bucket) => void;
 }
 
-function LeavePanel({
-    title, totalHours, ftHours, ftAvg, ftWidth, ftCount,
+function ButterflyRow({
+    label, ftHours, ftAvg, ftWidth, ftCount,
     casualHours, casualAvg, casualWidth, casualCount,
-    bucketFt, bucketCasual, rightBorder, onDrill,
-}: LeavePanelProps) {
+    bucketFt, bucketCasual, onDrill,
+}: ButterflyRowProps) {
     return (
-        <div className={cn('px-6 py-6', rightBorder && 'border-b lg:border-b-0 lg:border-r')}>
-            <div className="mb-5 flex items-baseline justify-between">
-                <span className="text-sm font-semibold">{title}</span>
-                <span className="font-mono text-xs text-muted-foreground">{fmtHrs(totalHours)} hrs total</span>
+        <div className={cn('grid items-center py-[18px]', BUTTERFLY_GRID)}>
+            <ButterflySide variant="ft" avg={ftAvg} width={ftWidth} hours={ftHours} headcount={ftCount} onDrill={() => onDrill(bucketFt)} />
+            <div className="px-2 text-center sm:px-4">
+                <div className="text-[13px] font-semibold">{label}</div>
+                <div className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">{fmtHrs(ftHours + casualHours)} hrs total</div>
             </div>
-            <div className="flex flex-col gap-3">
-                <BarRow
-                    label="Full-time" avg={ftAvg} width={ftWidth}
-                    totalLabel={fmtHrs(ftHours)} headcount={ftCount}
-                    variant="ft" onDrill={() => onDrill(bucketFt)}
-                />
-                <BarRow
-                    label="Casual" avg={casualAvg} width={casualWidth}
-                    totalLabel={fmtHrs(casualHours)} headcount={casualCount}
-                    variant="casual"
-                    onDrill={() => onDrill(bucketCasual)}
-                />
-            </div>
-        </div>
-    );
-}
-
-interface WorkforcePanelProps {
-    ftCount: number;
-    casualCount: number;
-    totalStaff: number;
-    ftPct: number;
-    casualPct: number;
-    onDrill: (bucket: Bucket) => void;
-}
-
-function WorkforcePanel({ ftCount, casualCount, totalStaff, ftPct, casualPct, onDrill }: WorkforcePanelProps) {
-    const radius = 54;
-    const circ = 2 * Math.PI * radius;
-    const gap = totalStaff > 0 && ftCount > 0 && casualCount > 0 ? 6 : 0;
-    const ftArc = Math.max(0, (ftPct / 100) * circ - gap);
-    const casualArc = Math.max(0, (casualPct / 100) * circ - gap);
-    const casualOffset = -((ftPct / 100) * circ);
-
-    return (
-        <div className="px-6 py-6">
-            <div className="mb-4">
-                <span className="text-sm font-semibold">Workforce</span>
-            </div>
-            <div className="flex items-center gap-5">
-                <div className="relative h-32 w-32 flex-shrink-0">
-                    <svg viewBox="0 0 132 132" className="-rotate-90">
-                        <circle cx="66" cy="66" r={radius} fill="none" className="stroke-muted" strokeWidth="18" />
-                        <circle cx="66" cy="66" r={radius} fill="none" className="stroke-zinc-900 dark:stroke-zinc-50"
-                            strokeWidth="18" strokeLinecap="round" strokeDasharray={`${ftArc} ${circ}`} />
-                        <circle cx="66" cy="66" r={radius} fill="none" className="stroke-zinc-400 dark:stroke-zinc-500"
-                            strokeWidth="18" strokeLinecap="round" strokeDasharray={`${casualArc} ${circ}`} strokeDashoffset={casualOffset} />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-px">
-                        <span className="font-mono text-2xl font-semibold leading-none tracking-tight tabular-nums">{totalStaff}</span>
-                        <span className="text-[10px] font-medium text-muted-foreground">headcount</span>
-                    </div>
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                    <button type="button" onClick={() => onDrill('headcount_ft')}
-                        className="group/row -mx-2 flex items-center justify-between rounded-md border-b px-2 pb-2 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-[3px] bg-zinc-900 dark:bg-zinc-50" />
-                            <span className="text-xs font-medium">Full-time</span>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="font-mono text-base font-semibold tabular-nums">{ftCount}</span>
-                            <span className="min-w-[34px] text-right text-xs text-muted-foreground">{Math.round(ftPct)}%</span>
-                            <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100">↗</span>
-                        </div>
-                    </button>
-                    <button type="button" onClick={() => onDrill('headcount_casual')}
-                        className="group/row -mx-2 flex items-center justify-between rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-[3px] bg-zinc-400 dark:bg-zinc-500" />
-                            <span className="text-xs font-medium">Casual</span>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="font-mono text-base font-semibold tabular-nums">{casualCount}</span>
-                            <span className="min-w-[34px] text-right text-xs text-muted-foreground">{Math.round(casualPct)}%</span>
-                            <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100">↗</span>
-                        </div>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-interface ConversionPanelProps {
-    converted: number;
-    retained: number;
-    eligible: number;
-    conversionPct: number;
-    retentionPct: number;
-    weeks: number;
-    startWindow: { from: string; to: string };
-    onDrill: (bucket: Bucket) => void;
-}
-
-function ConversionPanel({
-    converted, retained, eligible, conversionPct, retentionPct, weeks, startWindow, onDrill,
-}: ConversionPanelProps) {
-    const radius = 54;
-    const circ = 2 * Math.PI * radius;
-    const gap = eligible > 0 && converted > 0 && retained > 0 ? 6 : 0;
-    const convertedArc = Math.max(0, (conversionPct / 100) * circ - gap);
-    const retainedArc = Math.max(0, (retentionPct / 100) * circ - gap);
-    const retainedOffset = -((conversionPct / 100) * circ);
-    const hasData = eligible > 0;
-
-    return (
-        <div className="px-6 py-6">
-            <div className="mb-4 flex items-baseline justify-between">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">Casual conversion</span>
-                    <TooltipProvider delay={150}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Info className="h-3 w-3 cursor-help text-muted-foreground/70" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                                Employees whose {weeks}-week-from-start-date conversion review fell within the selected
-                                period. Split by whether they're currently Full Time (converted) or still Casual (retained).
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-                <span className="font-mono text-xs text-muted-foreground">{eligible} due in period</span>
-            </div>
-
-            {!hasData ? (
-                <div className="flex h-32 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
-                    No casuals were due to be converted in this period.
-                </div>
-            ) : (
-                <div className="flex flex-wrap items-center gap-8">
-                    <div className="relative h-32 w-32 flex-shrink-0">
-                        <svg viewBox="0 0 132 132" className="-rotate-90">
-                            <circle cx="66" cy="66" r={radius} fill="none" className="stroke-muted" strokeWidth="18" />
-                            <circle cx="66" cy="66" r={radius} fill="none" className="stroke-emerald-500"
-                                strokeWidth="18" strokeLinecap="round" strokeDasharray={`${convertedArc} ${circ}`} />
-                            <circle cx="66" cy="66" r={radius} fill="none" className="stroke-amber-500"
-                                strokeWidth="18" strokeLinecap="round" strokeDasharray={`${retainedArc} ${circ}`} strokeDashoffset={retainedOffset} />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-px">
-                            <span className="font-mono text-2xl font-semibold leading-none tracking-tight tabular-nums">{eligible}</span>
-                            <span className="text-[10px] font-medium text-muted-foreground">due</span>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-1 flex-col gap-2 min-w-[260px]">
-                        <button type="button" onClick={() => onDrill('conversion_converted')}
-                            className="group/row -mx-2 flex items-center justify-between rounded-md border-b px-2 pb-2 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-500" />
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-medium">Converted to Full Time</span>
-                                    <span className="text-[10px] text-muted-foreground">conversion rate</span>
-                                </div>
-                            </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="font-mono text-base font-semibold tabular-nums">{converted}</span>
-                                <span className="min-w-[44px] text-right font-mono text-xs text-emerald-600 dark:text-emerald-400">{conversionPct.toFixed(1)}%</span>
-                                <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100">↗</span>
-                            </div>
-                        </button>
-                        <button type="button" onClick={() => onDrill('conversion_retained')}
-                            className="group/row -mx-2 flex items-center justify-between rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2.5 w-2.5 rounded-[3px] bg-amber-500" />
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-medium">Retained as Casual</span>
-                                    <span className="text-[10px] text-muted-foreground">retention rate</span>
-                                </div>
-                            </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="font-mono text-base font-semibold tabular-nums">{retained}</span>
-                                <span className="min-w-[44px] text-right font-mono text-xs text-amber-600 dark:text-amber-400">{retentionPct.toFixed(1)}%</span>
-                                <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-visible/row:opacity-100">↗</span>
-                            </div>
-                        </button>
-                        <div className="mt-1 text-[10px] text-muted-foreground">
-                            Start dates: {format(new Date(startWindow.from), 'dd MMM yy')} – {format(new Date(startWindow.to), 'dd MMM yy')}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ButterflySide variant="casual" avg={casualAvg} width={casualWidth} hours={casualHours} headcount={casualCount} onDrill={() => onDrill(bucketCasual)} />
         </div>
     );
 }
@@ -474,7 +350,7 @@ function DrillDialog({
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="max-h-[85vh] min-w-[700px] max-w-[920px] flex flex-col">
+            <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-[920px] sm:min-w-[700px] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>{BUCKET_TITLES[bucket]}</DialogTitle>
                     <p className="text-xs text-muted-foreground">{periodLabel(dateFrom, dateTo)}</p>
@@ -639,7 +515,7 @@ function DrillTable({ response }: { response: DrillResponse }) {
                 isAllBucket ? 'grid-cols-[2fr_0.7fr_0.7fr_0.7fr_0.7fr_2fr]' : 'grid-cols-[2fr_0.8fr_0.8fr_2fr]')}>
                 <div>Total ({rows.length})</div>
                 <div className="text-right tabular-nums">{totalDays}</div>
-                <div className="text-right font-mono tabular-nums">{(totalDays * 8).toFixed(0)}</div>
+                <div className="text-right font-mono tabular-nums">{rows.reduce((s, r) => s + r.hours, 0).toFixed(0)}</div>
                 {isAllBucket && <div />}
                 {isAllBucket && <div />}
                 <div />
@@ -702,93 +578,131 @@ export default function LeaveByEmploymentType({ data, dateFrom, dateTo, location
 
     if (!data || !computed) return null;
 
+    const { conversion } = data;
+
+    const leaveRows: Omit<ButterflyRowProps, 'onDrill'>[] = [
+        {
+            label: 'Sick leave',
+            ftHours: data.sick_ft_hours, ftAvg: computed.sickFtAvg, ftWidth: computed.widthOf(computed.sickFtAvg), ftCount: data.ft_count,
+            casualHours: data.sick_casual_hours, casualAvg: computed.sickCasualAvg, casualWidth: computed.widthOf(computed.sickCasualAvg), casualCount: data.casual_count,
+            bucketFt: 'sick_ft', bucketCasual: 'sick_casual',
+        },
+        {
+            label: 'Annual leave',
+            ftHours: data.annual_ft_hours, ftAvg: computed.annualFtAvg, ftWidth: computed.widthOf(computed.annualFtAvg), ftCount: data.ft_count,
+            casualHours: data.annual_casual_hours, casualAvg: computed.annualCasualAvg, casualWidth: computed.widthOf(computed.annualCasualAvg), casualCount: data.casual_count,
+            bucketFt: 'annual_ft', bucketCasual: 'annual_casual',
+        },
+        {
+            label: 'All absences',
+            ftHours: data.all_ft_hours, ftAvg: computed.allFtAvg, ftWidth: computed.widthOf(computed.allFtAvg), ftCount: data.ft_count,
+            casualHours: data.all_casual_hours, casualAvg: computed.allCasualAvg, casualWidth: computed.widthOf(computed.allCasualAvg), casualCount: data.casual_count,
+            bucketFt: 'all_ft', bucketCasual: 'all_casual',
+        },
+    ];
+
     return (
         <>
-            <Card className="gap-0 py-0">
-                <div className="flex flex-wrap items-center justify-between gap-4 px-7 py-5">
-                    <div>
-                        <h2 className="text-[17px] font-semibold leading-tight tracking-tight">Casual performance</h2>
-                        <p className="mt-0.5 text-xs text-muted-foreground">Hours per employee · selected range · click any row for detail</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="hidden items-center gap-4 sm:flex">
-                            <div className="flex items-center gap-1.5">
-                                <span className="h-2.5 w-2.5 rounded-[3px] bg-zinc-900 dark:bg-zinc-50" />
-                                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Full-time</span>
+            <section className="flex flex-col gap-5">
+                <div>
+                    <h2 className="text-2xl font-semibold leading-tight tracking-tight">Casual performance</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Hours per employee · {periodLabel(dateFrom, dateTo)}</p>
+                </div>
+
+                <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.9fr)]">
+                    <div className="flex flex-col gap-5">
+                        <StatCard title="Workforce" meta={`${computed.totalStaff} headcount`}>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-6">
+                                <StatBlock
+                                    value={String(data.ft_count)}
+                                    pctText={`${Math.round(computed.ftPct)}%`}
+                                    label="Full-time"
+                                    swatchClass="bg-zinc-900 dark:bg-zinc-100"
+                                    disabled={data.ft_count === 0}
+                                    onDrill={() => setDrillBucket('headcount_ft')}
+                                />
+                                <StatBlock
+                                    value={String(data.casual_count)}
+                                    pctText={`${Math.round(computed.casualPct)}%`}
+                                    label="Casual"
+                                    swatchClass="bg-zinc-500 dark:bg-zinc-400"
+                                    valueClass="text-zinc-500 dark:text-zinc-400"
+                                    disabled={data.casual_count === 0}
+                                    onDrill={() => setDrillBucket('headcount_casual')}
+                                />
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                <span className="h-2.5 w-2.5 rounded-[3px] bg-zinc-400 dark:bg-zinc-500" />
-                                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Casual</span>
-                            </div>
-                        </div>
-                        <div className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            {periodLabel(dateFrom, dateTo)}
-                        </div>
-                    </div>
-                </div>
+                        </StatCard>
 
-                <div className="border-t" />
-
-                <div className="grid grid-cols-1 md:grid-cols-3">
-                    <LeavePanel
-                        title="Sick leave"
-                        totalHours={data.sick_ft_hours + data.sick_casual_hours}
-                        ftHours={data.sick_ft_hours} ftAvg={computed.sickFtAvg} ftWidth={computed.widthOf(computed.sickFtAvg)} ftCount={data.ft_count}
-                        casualHours={data.sick_casual_hours} casualAvg={computed.sickCasualAvg} casualWidth={computed.widthOf(computed.sickCasualAvg)} casualCount={data.casual_count}
-                        bucketFt="sick_ft" bucketCasual="sick_casual" rightBorder onDrill={setDrillBucket}
-                    />
-                    <LeavePanel
-                        title="Annual leave"
-                        totalHours={data.annual_ft_hours + data.annual_casual_hours}
-                        ftHours={data.annual_ft_hours} ftAvg={computed.annualFtAvg} ftWidth={computed.widthOf(computed.annualFtAvg)} ftCount={data.ft_count}
-                        casualHours={data.annual_casual_hours} casualAvg={computed.annualCasualAvg} casualWidth={computed.widthOf(computed.annualCasualAvg)} casualCount={data.casual_count}
-                        bucketFt="annual_ft" bucketCasual="annual_casual" rightBorder onDrill={setDrillBucket}
-                    />
-                    <LeavePanel
-                        title="All absences"
-                        totalHours={data.all_ft_hours + data.all_casual_hours}
-                        ftHours={data.all_ft_hours} ftAvg={computed.allFtAvg} ftWidth={computed.widthOf(computed.allFtAvg)} ftCount={data.ft_count}
-                        casualHours={data.all_casual_hours} casualAvg={computed.allCasualAvg} casualWidth={computed.widthOf(computed.allCasualAvg)} casualCount={data.casual_count}
-                        bucketFt="all_ft" bucketCasual="all_casual" onDrill={setDrillBucket}
-                    />
-                </div>
-
-                <div className="border-t" />
-                <div className="grid grid-cols-1 lg:grid-cols-2">
-                    <div className="lg:border-r">
-                        <WorkforcePanel
-                            ftCount={data.ft_count} casualCount={data.casual_count}
-                            totalStaff={computed.totalStaff} ftPct={computed.ftPct} casualPct={computed.casualPct}
-                            onDrill={setDrillBucket}
-                        />
-                    </div>
-                    <ConversionPanel
-                        converted={data.conversion.converted_count}
-                        retained={data.conversion.retained_count}
-                        eligible={data.conversion.eligible_count}
-                        conversionPct={data.conversion.conversion_pct}
-                        retentionPct={data.conversion.retention_pct}
-                        weeks={data.conversion.conversion_weeks}
-                        startWindow={data.conversion.start_date_window}
-                        onDrill={setDrillBucket}
-                    />
-                </div>
-
-                <div className="border-t" />
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-7 py-3">
-                    <div className="flex items-center gap-1.5">
-                        <Info className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                        <span className="text-[11px] text-muted-foreground">
-                            Casual figures are derived from prestart absentees (sick + annual + workcover only).
-                            Weekend absences are excluded for both cohorts.
-                            {data.earliest_casual_absentee_date && (
-                                <> Earliest on file: <span className="font-mono">{format(new Date(data.earliest_casual_absentee_date), 'dd MMM yyyy')}</span>.</>
+                        <StatCard
+                            title="Casual conversion"
+                            meta={`${conversion.eligible_count} due in period`}
+                            titleTooltip={
+                                <TooltipProvider delay={150}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Info className="h-3 w-3 cursor-help text-muted-foreground/70" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs">
+                                            Employees whose {conversion.conversion_weeks}-week-from-start-date conversion review fell within the
+                                            selected period. Split by whether they're currently Full Time (converted) or still Casual (retained).
+                                            Start dates {format(new Date(conversion.start_date_window.from), 'dd MMM yy')} –{' '}
+                                            {format(new Date(conversion.start_date_window.to), 'dd MMM yy')}.
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            }
+                        >
+                            {conversion.eligible_count === 0 ? (
+                                <div className="flex h-[72px] items-center justify-center rounded-md border border-dashed px-4 text-center text-xs text-muted-foreground">
+                                    No casuals were due to be converted in this period.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-6">
+                                    <StatBlock
+                                        value={String(conversion.converted_count)}
+                                        pctText={`${conversion.conversion_pct.toFixed(1)}%`}
+                                        label="Converted to full-time"
+                                        swatchClass="bg-green-600 dark:bg-green-500"
+                                        valueClass="text-green-600 dark:text-green-500"
+                                        onDrill={() => setDrillBucket('conversion_converted')}
+                                    />
+                                    <StatBlock
+                                        value={String(conversion.retained_count)}
+                                        pctText={`${conversion.retention_pct.toFixed(1)}%`}
+                                        label="Retained as casual"
+                                        swatchClass="bg-zinc-400 dark:bg-zinc-500"
+                                        onDrill={() => setDrillBucket('conversion_retained')}
+                                    />
+                                </div>
                             )}
-                        </span>
+                        </StatCard>
                     </div>
+
+                    <Card className="gap-0 px-7 py-6">
+                        <div className="flex items-baseline justify-between gap-4">
+                            <h3 className="text-base font-semibold tracking-tight">Leave taken, per employee</h3>
+                            <span className="font-mono text-xs text-muted-foreground">hrs/emp</span>
+                        </div>
+
+                        <div className={cn('grid items-center pb-3 pt-3.5', BUTTERFLY_GRID)}>
+                            <AxisLabel side="ft" />
+                            <div />
+                            <AxisLabel side="casual" />
+                        </div>
+
+                        {leaveRows.map((row) => (
+                            <ButterflyRow key={row.label} {...row} onDrill={setDrillBucket} />
+                        ))}
+                    </Card>
                 </div>
-            </Card>
+
+                <p className="max-w-[820px] text-xs leading-relaxed text-muted-foreground">
+                    Casual figures derived from prestart absentees (sick + annual + workcover only). Weekend absences excluded for both cohorts.
+                    {data.earliest_casual_absentee_date && (
+                        <> Earliest record on file: <span className="font-mono">{format(new Date(data.earliest_casual_absentee_date), 'dd MMM yyyy')}</span>.</>
+                    )}
+                </p>
+            </section>
 
             <DrillDialog
                 bucket={drillBucket} open={drillBucket !== null} onClose={() => setDrillBucket(null)}
