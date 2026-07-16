@@ -1282,19 +1282,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Core drawing access (index, file serving, revisions)
     Route::middleware('permission:drawings.view')->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
+        // Opening a drawing always lands on the basic plan viewer; the
+        // takeoff/DPC/budget workspaces are reached via their own routes.
         Route::get('/drawings/{drawing}', function (\App\Models\Drawing $drawing) {
-            $user = auth()->user();
-            if ($user && $user->can('takeoff.view')) {
-                return redirect()->route('drawings.takeoff', $drawing);
-            }
-            if ($user && $user->can('production.view')) {
-                return redirect()->route('drawings.production', $drawing);
-            }
-            if ($user && $user->can('budget.view')) {
-                return redirect()->route('drawings.budget', $drawing);
-            }
-            return redirect()->route('drawings.takeoff', $drawing);
+            return redirect()->route('drawings.plan', $drawing);
         })->name('drawings.show');
+        Route::get('/drawings/{drawing}/plan', [DrawingController::class, 'plan'])->name('drawings.plan');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');

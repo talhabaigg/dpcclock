@@ -84,7 +84,18 @@ type Props = {
      *  can render a stylus-friendly floating panel. Called whenever state changes;
      *  null when not actively drawing. */
     onDrawingControlsChange?: (state: DrawingControls | null) => void;
+    /** Receives zoom/fit functions so the parent can render its own toolbar
+     *  (e.g. the plan viewer's vertical tool rail). */
+    onViewControlsChange?: (controls: ViewControls) => void;
+    /** Hide the built-in floating zoom stack + zoom/mode chip — for pages
+     *  that render their own controls via onViewControlsChange. */
+    showBuiltInControls?: boolean;
     className?: string;
+};
+
+export type ViewControls = {
+    zoomBy: (factor: number) => void;
+    fitToScreen: () => void;
 };
 
 export type DrawingControls = {
@@ -295,6 +306,8 @@ export function PixiDrawingViewer({
     onPdfDimsLoaded,
     onZoomChange,
     onDrawingControlsChange,
+    onViewControlsChange,
+    showBuiltInControls = true,
     className,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -1276,6 +1289,11 @@ export function PixiDrawingViewer({
         onZoomChange?.(fit);
         window.setTimeout(() => maybeRerasterize(), 100);
     }, [pdfDims, computeFitScale, onZoomChange, maybeRerasterize]);
+
+    // Hand zoom/fit controls to the parent so it can render its own toolbar.
+    useEffect(() => {
+        onViewControlsChange?.({ zoomBy: zoomByFactor, fitToScreen });
+    }, [onViewControlsChange, zoomByFactor, fitToScreen]);
 
     // Keep minScaleRef in sync with the current viewport. If a resize would
     // make the current zoom smaller than the new minimum, snap up to fit.
@@ -2622,47 +2640,51 @@ export function PixiDrawingViewer({
                 </div>
             )}
 
-            <div className="pointer-events-none absolute right-2 bottom-32 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">
-                {Math.round(zoomDisplay * 100)}% · {viewMode}
-            </div>
+            {showBuiltInControls && (
+                <div className="pointer-events-none absolute right-2 bottom-32 rounded bg-black/60 px-2 py-1 font-mono text-[10px] text-white">
+                    {Math.round(zoomDisplay * 100)}% · {viewMode}
+                </div>
+            )}
 
             {/* Floating zoom controls — bottom-right of the viewer. Mirrors the
                 Leaflet viewer's control stack so users see the same affordance
                 regardless of which renderer is active. */}
-            <div className="bg-background/90 absolute right-2 bottom-2 z-10 flex flex-col rounded-md border shadow-sm backdrop-blur">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-none rounded-t-md p-0"
-                    onClick={() => zoomByFactor(1.25)}
-                    title="Zoom in"
-                >
-                    <Plus className="h-3.5 w-3.5" />
-                </Button>
-                <div className="bg-border h-px" />
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-none p-0"
-                    onClick={() => zoomByFactor(0.8)}
-                    title="Zoom out"
-                >
-                    <Minus className="h-3.5 w-3.5" />
-                </Button>
-                <div className="bg-border h-px" />
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-none rounded-b-md p-0"
-                    onClick={fitToScreen}
-                    title="Fit to screen"
-                >
-                    <Maximize className="h-3.5 w-3.5" />
-                </Button>
-            </div>
+            {showBuiltInControls && (
+                <div className="bg-background/90 absolute right-2 bottom-2 z-10 flex flex-col rounded-md border shadow-sm backdrop-blur">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none rounded-t-md p-0"
+                        onClick={() => zoomByFactor(1.25)}
+                        title="Zoom in"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                    <div className="bg-border h-px" />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none p-0"
+                        onClick={() => zoomByFactor(0.8)}
+                        title="Zoom out"
+                    >
+                        <Minus className="h-3.5 w-3.5" />
+                    </Button>
+                    <div className="bg-border h-px" />
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-none rounded-b-md p-0"
+                        onClick={fitToScreen}
+                        title="Fit to screen"
+                    >
+                        <Maximize className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+            )}
 
             {showInProgressBanner && (
                 <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/70 px-3 py-1 text-[11px] text-white">

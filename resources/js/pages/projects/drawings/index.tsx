@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowUpDown, CheckCircle, Clock, Download, Eye, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, Trash2, Upload, X } from 'lucide-react';
+import { ArrowUpDown, CheckCircle, Clock, Download, Eye, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, PencilRuler, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -100,6 +100,7 @@ export default function DrawingsIndex() {
     const canCreate = permissions.includes('drawings.create');
     const canDelete = permissions.includes('drawings.delete');
     const canEditTakeoff = permissions.includes('takeoff.edit');
+    const canViewTakeoff = permissions.includes('takeoff.view');
 
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -517,6 +518,14 @@ export default function DrawingsIndex() {
                                                         View
                                                     </Button>
                                                 </Link>
+                                                {canViewTakeoff && (
+                                                    <Link href={`/drawings/${drawing.id}/takeoff`}>
+                                                        <Button size="sm" variant="outline" className="gap-1.5">
+                                                            <PencilRuler className="h-3.5 w-3.5" />
+                                                            Takeoff
+                                                        </Button>
+                                                    </Link>
+                                                )}
                                                 {canDelete && (
                                                     <Button
                                                         size="sm"

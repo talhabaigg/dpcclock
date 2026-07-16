@@ -189,6 +189,20 @@ class DrawingController extends Controller
     }
 
     /**
+     * Basic plan viewer — standalone read-only page, no takeoff tooling.
+     * Only needs drawings.view.
+     */
+    public function plan(Drawing $drawing): Response
+    {
+        $drawing->load('project:id,name');
+
+        return Inertia::render('drawings/plan', [
+            'drawing' => $drawing,
+            'project' => $drawing->project,
+        ]);
+    }
+
+    /**
      * Takeoff workspace — measuring and conditions on a drawing.
      */
     public function takeoff(Drawing $drawing): Response
