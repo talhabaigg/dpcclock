@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowUpDown, CheckCircle, Clock, Download, Eye, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, PencilRuler, Trash2, Upload, X } from 'lucide-react';
+import { ArrowUpDown, CheckCircle, ClipboardList, Clock, Download, Eye, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, PencilRuler, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -101,6 +101,7 @@ export default function DrawingsIndex() {
     const canDelete = permissions.includes('drawings.delete');
     const canEditTakeoff = permissions.includes('takeoff.edit');
     const canViewTakeoff = permissions.includes('takeoff.view');
+    const canViewSiteTasks = permissions.includes('site-tasks.view');
 
     const breadcrumbs: BreadcrumbItem[] = [
         {
@@ -369,6 +370,14 @@ export default function DrawingsIndex() {
                                 <Grid3X3 className="h-4 w-4" />
                             </Button>
                         </div>
+                        {canViewSiteTasks && (
+                            <Link href={`/projects/${project.id}/tasks`}>
+                                <Button size="sm" variant="outline" className="gap-2">
+                                    <ClipboardList className="h-4 w-4" />
+                                    Tasks
+                                </Button>
+                            </Link>
+                        )}
                         {canEditTakeoff && (
                             <>
                                 <Button

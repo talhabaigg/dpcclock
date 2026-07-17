@@ -442,12 +442,6 @@ function RaiseRectificationDialog({
 
 // ── Links (child tasks grouped by type) ───────────────────────
 
-const LINK_GROUPS: { type: SiteTaskDto['type']; label: string }[] = [
-    { type: 'rectification', label: 'Rectifications' },
-    { type: 'work_tracker', label: 'Work Tracker' },
-    { type: 'general', label: 'General' },
-];
-
 /**
  * Read-only list of the unit's linked (child) tasks grouped by type —
  * title, status badge, assignee avatars. Managing a linked task happens
@@ -466,7 +460,11 @@ export function LinksSection({
 }) {
     const [importing, setImporting] = useState(false);
     const children = unit.children ?? [];
-    const hasPhases = children.some((c) => c.type === 'work_tracker');
+    const hasPhases = children.some((c) => c.category?.code === 'WT');
+
+    // Item-raised rectifications render under their checklist item, not here.
+    const linkable = children.filter((c) => c.checklist_item_id === null);
+    const groups = [...new Map(linkable.map((c) => [c.category?.name ?? 'Other', true])).keys()];
 
     const importPhases = async () => {
         setImporting(true);
@@ -498,17 +496,11 @@ export function LinksSection({
             {children.length === 0 && <p className="text-muted-foreground text-[11px]">No linked tasks yet.</p>}
 
             <div className="space-y-3 pl-1">
-                {LINK_GROUPS.map(({ type, label }) => {
-                    // Item-raised rectifications render under their checklist item, not here.
-                    const items = children.filter(
-                        (c) =>
-                            (c.type === type && !(type === 'rectification' && c.checklist_item_id !== null)) ||
-                            (type === 'general' && c.type === 'unit'),
-                    );
-                    if (items.length === 0) return null;
+                {groups.map((groupName) => {
+                    const items = linkable.filter((c) => (c.category?.name ?? 'Other') === groupName);
                     return (
-                        <div key={type}>
-                            <h4 className="text-muted-foreground mb-1 text-[11px] font-semibold">{label}</h4>
+                        <div key={groupName}>
+                            <h4 className="text-muted-foreground mb-1 text-[11px] font-semibold">{groupName}</h4>
                             <ul className="divide-y rounded-md border">
                                 {items.map((t) => (
                                     <LinkRow key={t.id} task={t} onOpen={onOpenTask} />
@@ -537,6 +529,18 @@ function LinkRow({ task, onOpen }: { task: SiteTaskDto; onOpen?: (taskId: number
                 <TaskStatusControl task={task} canEdit={false} onChanged={() => {}} />
             </Button>
         </li>
+    );
+}
+
+/** Category initials in the category's colour — outlined circle, Fieldwire-style. */
+export function CategoryCode({ category, className }: { category: { code: string; color: string }; className?: string }) {
+    return (
+        <span
+            className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[8px] font-bold', className)}
+            style={{ borderColor: category.color, color: category.color }}
+        >
+            {category.code}
+        </span>
     );
 }
 

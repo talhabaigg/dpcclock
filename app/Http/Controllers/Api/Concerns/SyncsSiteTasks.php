@@ -12,6 +12,7 @@ use App\Models\Employee;
 use App\Models\Location;
 use App\Models\SiteTask;
 use App\Models\SiteTaskAssignee;
+use App\Models\SiteTaskCategory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -81,6 +82,12 @@ trait SyncsSiteTasks
                 fn ($record) => $this->formatChecklistTemplateItem($record),
                 softDeletes: false
             ),
+            'site_task_categories' => $this->pullTable(
+                SiteTaskCategory::active(),
+                $since,
+                fn ($record) => $this->formatSiteTaskCategory($record),
+                softDeletes: false
+            ),
             'employees' => $this->pullTable(
                 Employee::query()->select(['id', 'name', 'created_at', 'updated_at', 'deleted_at']),
                 $since,
@@ -133,7 +140,7 @@ trait SyncsSiteTasks
             'server_id' => $task->id,
             'project_id' => $projectWatermelonId,
             'parent_id' => $task->parent ? $this->ensureWatermelonId($task->parent) : null,
-            'type' => $task->type,
+            'category_id' => $task->category_id,
             'title' => $task->title,
             'description' => $task->description,
             'drawing_id' => $task->drawing ? $this->ensureWatermelonId($task->drawing) : null,
@@ -293,7 +300,7 @@ trait SyncsSiteTasks
                 'watermelon_id' => $record['id'],
                 'location_id' => $project->id,
                 'parent_id' => $parent?->id,
-                'type' => in_array($record['type'] ?? '', SiteTask::TYPES, true) ? $record['type'] : SiteTask::TYPE_GENERAL,
+                'category_id' => $this->resolveCategoryId($record['category_id'] ?? null),
                 'title' => (string) ($record['title'] ?? ''),
                 'description' => $record['description'] ?? null,
                 'drawing_id' => $drawing?->id,
@@ -324,6 +331,9 @@ trait SyncsSiteTasks
 
             $task->update([
                 'title' => $record['title'] ?? $task->title,
+                'category_id' => array_key_exists('category_id', $record)
+                    ? $this->resolveCategoryId($record['category_id'])
+                    : $task->category_id,
                 'description' => array_key_exists('description', $record) ? $record['description'] : $task->description,
                 'status' => in_array($record['status'] ?? '', SiteTask::STATUSES, true) ? $record['status'] : $task->status,
                 'due_date' => array_key_exists('due_date', $record) ? $record['due_date'] : $task->due_date,
@@ -542,6 +552,30 @@ trait SyncsSiteTasks
                 $comment->delete();
             }
         }
+    }
+
+    private function formatSiteTaskCategory(SiteTaskCategory $category): array
+    {
+        // Reference data: numeric server id doubles as the watermelon id.
+        return [
+            'id' => (string) $category->id,
+            'server_id' => $category->id,
+            'name' => $category->name,
+            'code' => $category->code,
+            'color' => $category->color,
+            'sort_order' => $category->sort_order,
+            'created_at' => $category->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $category->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
+    private function resolveCategoryId($categoryId): ?int
+    {
+        if (! $categoryId) {
+            return null;
+        }
+
+        return SiteTaskCategory::whereKey((int) $categoryId)->value('id');
     }
 
     private function msToCarbon($ms): ?Carbon

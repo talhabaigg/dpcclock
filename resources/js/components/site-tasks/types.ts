@@ -2,6 +2,9 @@ export type EmployeeOption = { id: number; name: string };
 
 export type ChecklistTemplateOption = { id: number; name: string; items_count: number };
 
+/** User-facing classification ("Builder Concerns", "Works Tracker", ...). */
+export type CategoryOption = { id: number; name: string; code: string; color: string };
+
 export type SiteTaskAssignee = {
     id: number;
     employee_id: number;
@@ -38,7 +41,8 @@ export type ChecklistDto = {
 export type SiteTaskDto = {
     id: number;
     parent_id: number | null;
-    type: 'unit' | 'rectification' | 'work_tracker' | 'general';
+    category_id: number | null;
+    category?: CategoryOption | null;
     title: string;
     description: string | null;
     status: 'open' | 'in_progress' | 'completed' | 'closed' | 'cancelled';
@@ -53,7 +57,7 @@ export type SiteTaskDto = {
     assignees?: SiteTaskAssignee[];
     children?: SiteTaskDto[];
     checklists?: ChecklistDto[];
-    parent?: { id: number; title: string; type: string } | null;
+    parent?: { id: number; title: string } | null;
 };
 
 export const SITE_TASK_STATUSES: SiteTaskDto['status'][] = ['open', 'in_progress', 'completed', 'closed', 'cancelled'];
@@ -66,10 +70,7 @@ export const STATUS_LABELS: Record<SiteTaskDto['status'], string> = {
     cancelled: 'Cancelled',
 };
 
-/** Pin-head code + colour per task type (rendered inside the map pin). */
-export const PIN_TYPE_META: Record<SiteTaskDto['type'], { label: string; color: string }> = {
-    unit: { label: 'UN', color: '#3b82f6' },
-    rectification: { label: 'RE', color: '#f59e0b' },
-    work_tracker: { label: 'WT', color: '#f97316' },
-    general: { label: 'GN', color: '#6b7280' },
-};
+/** Pin-head code + colour for a task — its category, or a neutral fallback. */
+export function pinMetaFor(task: Pick<SiteTaskDto, 'category'>): { label: string; color: string } {
+    return task.category ? { label: task.category.code, color: task.category.color } : { label: '?', color: '#6b7280' };
+}

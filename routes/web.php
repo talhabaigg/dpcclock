@@ -1307,9 +1307,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // SITE TASKS (plan pins: units, QA rectifications, work-tracker phases)
     // --------------------------------------------
     Route::middleware('permission:site-tasks.view')->group(function () {
+        Route::get('/projects/{project}/tasks', [SiteTaskController::class, 'board'])->name('site-tasks.board');
         Route::get('/projects/{project}/site-tasks', [SiteTaskController::class, 'index'])->name('site-tasks.index');
         Route::get('/site-task-employees', [SiteTaskController::class, 'employees'])->name('site-tasks.employees');
         Route::get('/site-task-checklist-templates', [SiteTaskController::class, 'checklistTemplates'])->name('site-tasks.checklist-templates');
+        Route::get('/site-task-categories', [SiteTaskController::class, 'categories'])->name('site-tasks.categories');
         Route::get('/site-tasks/{siteTask}', [SiteTaskController::class, 'show'])->name('site-tasks.show');
     });
     Route::middleware('permission:site-tasks.edit')->group(function () {

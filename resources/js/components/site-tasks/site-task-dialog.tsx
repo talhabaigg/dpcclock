@@ -1,6 +1,8 @@
+import { PhotoAnnotationOverlay, type PhotoAnnotationData } from '@/components/annotations/photo-annotations';
 import { CommentBody, type MentionedUser } from '@/components/comments/comment-body';
 import { DatePickerDemo } from '@/components/date-picker';
 import {
+    CategoryCode,
     ChecklistSection,
     describeError,
     EmployeeMultiPicker,
@@ -8,7 +10,7 @@ import {
     LinksSection,
     TaskStatusControl,
 } from '@/components/site-tasks/task-sections';
-import { type ChecklistTemplateOption, type EmployeeOption, PIN_TYPE_META, type SiteTaskDto } from '@/components/site-tasks/types';
+import { pinMetaFor, type CategoryOption, type ChecklistTemplateOption, type EmployeeOption, type SiteTaskDto } from '@/components/site-tasks/types';
 import AiRichTextEditor from '@/components/ui/ai-rich-text-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,17 +18,30 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { api } from '@/lib/api';
 import { router } from '@inertiajs/react';
 import type { JSONContent } from '@tiptap/core';
 import { format } from 'date-fns';
-import { MapPin, MessageSquare, Paperclip, Send, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Download, MapPin, MessageSquare, Paperclip, PenLine, Send, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-type CommentAttachment = { id: number; file_name: string; url: string; mime_type: string };
+const PhotoAnnotationEditor = lazy(() => import('@/components/annotations/photo-annotation-editor'));
+
+type CommentAttachment = {
+    id: number;
+    file_name: string;
+    url: string;
+    mime_type: string;
+    annotations?: PhotoAnnotationData | null;
+    annotations_url?: string;
+};
+
+/** An attachment opened in the preview/annotation dialog. */
+type AttachmentPreview = { attachment: CommentAttachment; streamUrl: string };
 
 type CommentData = {
     id: number;
@@ -72,8 +87,13 @@ export function SiteTaskDialog({
 }) {
     const [detail, setDetail] = useState<TaskDetail | null>(null);
     const [loading, setLoading] = useState(false);
+    // Annotations saved this session, keyed by media id — thumbnails and the
+    // preview reflect edits without waiting for a refetch.
+    const [annotationOverrides, setAnnotationOverrides] = useState<Record<number, PhotoAnnotationData>>({});
+    const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
     const [employees, setEmployees] = useState<EmployeeOption[]>([]);
     const [templates, setTemplates] = useState<ChecklistTemplateOption[]>([]);
+    const [categories, setCategories] = useState<CategoryOption[]>([]);
 
     const loadDetail = useCallback(async () => {
         if (!taskId) return;
@@ -104,6 +124,9 @@ export function SiteTaskDialog({
         api.get<{ templates: ChecklistTemplateOption[] }>('/site-task-checklist-templates')
             .then((res) => setTemplates(res.templates))
             .catch((e) => toast.error(describeError(e)));
+        api.get<{ categories: CategoryOption[] }>('/site-task-categories')
+            .then((res) => setCategories(res.categories))
+            .catch(() => {});
     }, [open]);
 
     const refresh = useCallback(() => {
@@ -120,11 +143,11 @@ export function SiteTaskDialog({
                 <DialogHeader className="shrink-0 border-b px-4 py-2.5">
                     <div className="flex items-center gap-2">
                         {task && (
-                            <span
-                                className="flex h-5 w-7 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
-                                style={{ backgroundColor: PIN_TYPE_META[task.type].color }}
-                            >
-                                {PIN_TYPE_META[task.type].label}
+                            <span title={task.category?.name}>
+                                <CategoryCode
+                                    category={{ code: pinMetaFor(task).label, color: pinMetaFor(task).color }}
+                                    className="h-6 w-6 text-[9px]"
+                                />
                             </span>
                         )}
                         <div className="min-w-0 flex-1">
@@ -160,7 +183,7 @@ export function SiteTaskDialog({
                                 <div className="space-y-4 p-4">
                                     {task.description && <p className="text-muted-foreground text-xs whitespace-pre-wrap">{task.description}</p>}
 
-                                    {task.type === 'unit' && (
+                                    {task.parent_id === null && (
                                         <>
                                             <ChecklistSection
                                                 task={task}
@@ -176,7 +199,11 @@ export function SiteTaskDialog({
                                         </>
                                     )}
 
-                                    <CommentsThread comments={detail?.comments ?? []} />
+                                    <CommentsThread
+                                        comments={detail?.comments ?? []}
+                                        annotationOverrides={annotationOverrides}
+                                        onPreview={setAttachmentPreview}
+                                    />
                                 </div>
                             </ScrollArea>
 
@@ -194,7 +221,7 @@ export function SiteTaskDialog({
                                     {(task.assignees ?? []).map((a) => (
                                         <div key={a.id} className="flex items-center gap-1.5 text-xs">
                                             {/* Work-tracker phases complete person by person. */}
-                                            {task.type === 'work_tracker' && canEdit && (
+                                            {task.category?.code === 'WT' && canEdit && (
                                                 <span title={`Mark ${a.employee?.name ?? 'worker'} as done`} className="flex items-center">
                                                     <Checkbox
                                                         checked={a.completed_at !== null}
@@ -216,7 +243,7 @@ export function SiteTaskDialog({
                                             <span className={a.completed_at ? 'text-muted-foreground' : undefined}>
                                                 {a.employee?.name ?? `Employee #${a.employee_id}`}
                                             </span>
-                                            {a.completed_at && task.type === 'work_tracker' && (
+                                            {a.completed_at && task.category?.code === 'WT' && (
                                                 <span className="text-muted-foreground text-[9px]">{format(new Date(a.completed_at), 'dd MMM')}</span>
                                             )}
                                         </div>
@@ -259,10 +286,38 @@ export function SiteTaskDialog({
                                 )}
                             </DetailRow>
 
-                            <DetailRow label="Type">
-                                <Badge variant="outline" className="text-[10px] capitalize">
-                                    {task.type.replace('_', ' ')}
-                                </Badge>
+                            <DetailRow label="Category">
+                                {canEdit ? (
+                                    <Select
+                                        value={task.category_id ? String(task.category_id) : ''}
+                                        onValueChange={async (categoryId) => {
+                                            try {
+                                                await api.patch(`/site-tasks/${task.id}`, { category_id: Number(categoryId) });
+                                                refresh();
+                                            } catch (e) {
+                                                toast.error(describeError(e));
+                                            }
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-7 w-full rounded-sm text-[11px]">
+                                            <SelectValue placeholder="Pick category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {categories.map((c) => (
+                                                <SelectItem key={c.id} value={String(c.id)} className="text-xs">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <CategoryCode category={c} />
+                                                        {c.name}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Badge variant="outline" className="text-[10px]">
+                                        {task.category?.name ?? '—'}
+                                    </Badge>
+                                )}
                             </DetailRow>
 
                             {detail?.pin?.drawing?.thumbnail_url && (
@@ -279,7 +334,7 @@ export function SiteTaskDialog({
                                             style={{
                                                 left: `${detail.pin.x * 100}%`,
                                                 top: `${detail.pin.y * 100}%`,
-                                                color: PIN_TYPE_META[task.type].color,
+                                                color: pinMetaFor(task).color,
                                                 fill: 'currentColor',
                                             }}
                                         />
@@ -295,6 +350,123 @@ export function SiteTaskDialog({
                         </div>
                     </div>
                 )}
+            </DialogContent>
+
+            <AttachmentPreviewDialog
+                preview={attachmentPreview}
+                canEdit={canEdit}
+                annotations={
+                    attachmentPreview
+                        ? attachmentPreview.attachment.id in annotationOverrides
+                            ? annotationOverrides[attachmentPreview.attachment.id]
+                            : (attachmentPreview.attachment.annotations ?? null)
+                        : null
+                }
+                onClose={() => setAttachmentPreview(null)}
+                onSaved={(mediaId, data) => setAnnotationOverrides((prev) => ({ ...prev, [mediaId]: data }))}
+            />
+        </Dialog>
+    );
+}
+
+/** Image preview with markup: arrows, freehand, text — saved onto the attachment. */
+function AttachmentPreviewDialog({
+    preview,
+    canEdit,
+    annotations,
+    onClose,
+    onSaved,
+}: {
+    preview: AttachmentPreview | null;
+    canEdit: boolean;
+    annotations: PhotoAnnotationData | null;
+    onClose: () => void;
+    onSaved: (mediaId: number, data: PhotoAnnotationData) => void;
+}) {
+    const [annotating, setAnnotating] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        setAnnotating(false);
+    }, [preview?.attachment.id]);
+
+    const save = (data: PhotoAnnotationData) => {
+        const url = preview?.attachment.annotations_url;
+        const mediaId = preview?.attachment.id;
+        if (!url || mediaId === undefined) return;
+        setSaving(true);
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(data),
+        })
+            .then(async (res) => {
+                if (!res.ok) {
+                    const err = await res.json().catch(() => null);
+                    throw new Error((err as { message?: string } | null)?.message ?? 'Failed to save annotations.');
+                }
+                onSaved(mediaId, data);
+                setAnnotating(false);
+            })
+            .catch((e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed to save annotations.'))
+            .finally(() => setSaving(false));
+    };
+
+    return (
+        <Dialog open={preview !== null} onOpenChange={(o) => !o && onClose()}>
+            <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl" showCloseButton={false}>
+                <DialogHeader className="shrink-0 border-b px-3 py-2">
+                    <div className="flex items-center gap-2">
+                        <DialogTitle className="min-w-0 flex-1 truncate text-xs">{preview?.attachment.file_name}</DialogTitle>
+                        {canEdit && preview?.attachment.annotations_url && !annotating && (
+                            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setAnnotating(true)}>
+                                <PenLine className="h-3.5 w-3.5" />
+                                Annotate
+                            </Button>
+                        )}
+                        {preview && (
+                            <Button asChild variant="ghost" size="sm" className="h-7 w-7 p-0" title="Download">
+                                <a href={preview.streamUrl} download={preview.attachment.file_name} target="_blank" rel="noreferrer">
+                                    <Download className="h-3.5 w-3.5" />
+                                </a>
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose} aria-label="Close preview">
+                            <X className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                </DialogHeader>
+
+                {preview &&
+                    (annotating ? (
+                        <Suspense
+                            fallback={
+                                <div className="flex h-[60vh] items-center justify-center">
+                                    <Spinner className="h-5 w-5" />
+                                </div>
+                            }
+                        >
+                            <PhotoAnnotationEditor
+                                key={preview.attachment.id}
+                                src={preview.streamUrl}
+                                initial={annotations}
+                                saving={saving}
+                                onSave={save}
+                                onCancel={() => setAnnotating(false)}
+                            />
+                        </Suspense>
+                    ) : (
+                        <div className="min-h-0 flex-1 overflow-auto bg-neutral-950/5 p-2 dark:bg-neutral-50/5">
+                            <div className="relative mx-auto w-fit">
+                                <img src={preview.streamUrl} alt={preview.attachment.file_name} className="max-h-[70vh] rounded" />
+                                <span className="pointer-events-none absolute inset-0">
+                                    <PhotoAnnotationOverlay data={annotations} />
+                                </span>
+                            </div>
+                        </div>
+                    ))}
             </DialogContent>
         </Dialog>
     );
@@ -378,7 +550,15 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 // ── Comments ──────────────────────────────────────────────────
 
-function CommentsThread({ comments }: { comments: CommentData[] }) {
+function CommentsThread({
+    comments,
+    annotationOverrides,
+    onPreview,
+}: {
+    comments: CommentData[];
+    annotationOverrides: Record<number, PhotoAnnotationData>;
+    onPreview: (preview: AttachmentPreview) => void;
+}) {
     return (
         <section>
             <div className="mb-2 flex items-center gap-1.5">
@@ -392,11 +572,11 @@ function CommentsThread({ comments }: { comments: CommentData[] }) {
             <div className="space-y-3">
                 {comments.map((comment) => (
                     <div key={comment.id}>
-                        <CommentItem comment={comment} />
+                        <CommentItem comment={comment} annotationOverrides={annotationOverrides} onPreview={onPreview} />
                         {(comment.replies ?? []).length > 0 && (
                             <div className="border-muted mt-2 space-y-2 border-l-2 pl-3">
                                 {comment.replies!.map((reply) => (
-                                    <CommentItem key={reply.id} comment={reply} />
+                                    <CommentItem key={reply.id} comment={reply} annotationOverrides={annotationOverrides} onPreview={onPreview} />
                                 ))}
                             </div>
                         )}
@@ -407,7 +587,15 @@ function CommentsThread({ comments }: { comments: CommentData[] }) {
     );
 }
 
-function CommentItem({ comment }: { comment: CommentData }) {
+function CommentItem({
+    comment,
+    annotationOverrides,
+    onPreview,
+}: {
+    comment: CommentData;
+    annotationOverrides: Record<number, PhotoAnnotationData>;
+    onPreview: (preview: AttachmentPreview) => void;
+}) {
     const images = comment.attachments.filter((a) => a.mime_type?.startsWith('image/'));
     const files = comment.attachments.filter((a) => !a.mime_type?.startsWith('image/'));
 
@@ -428,15 +616,25 @@ function CommentItem({ comment }: { comment: CommentData }) {
                 <CommentBody doc={comment.body_json} fallback={comment.body ?? ''} mentionedUsers={comment.mentioned_users} className="text-xs" />
                 {images.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {images.map((img) => (
-                            <a key={img.id} href={`/comments/${comment.id}/attachments/${img.id}`} target="_blank" rel="noreferrer">
-                                <img
-                                    src={`/comments/${comment.id}/attachments/${img.id}`}
-                                    alt={img.file_name}
-                                    className="h-20 w-20 rounded border object-cover"
-                                />
-                            </a>
-                        ))}
+                        {images.map((img) => {
+                            const streamUrl = `/comments/${comment.id}/attachments/${img.id}`;
+                            const annotations = img.id in annotationOverrides ? annotationOverrides[img.id] : (img.annotations ?? null);
+                            return (
+                                <Button
+                                    key={img.id}
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => onPreview({ attachment: img, streamUrl })}
+                                    title={`Open ${img.file_name}`}
+                                    className="coarse:h-24 coarse:w-24 relative h-20 w-20 overflow-hidden rounded border p-0"
+                                >
+                                    <img src={streamUrl} alt={img.file_name} className="absolute inset-0 h-full w-full object-cover" />
+                                    <span className="pointer-events-none absolute inset-0">
+                                        <PhotoAnnotationOverlay data={annotations} fit="cover" />
+                                    </span>
+                                </Button>
+                            );
+                        })}
                     </div>
                 )}
                 {files.map((f) => (

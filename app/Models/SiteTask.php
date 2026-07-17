@@ -13,28 +13,14 @@ use Illuminate\Support\Str;
 /**
  * Field task pinned on a plan. NOT the scheduler task (see ProjectTask).
  *
- * A `unit` task is the pin anchor ("Unit 1203"); its children are
- * `rectification` tasks (raised from QA checklist items or ad-hoc) and
- * `work_tracker` phase tasks. Nesting is one level deep only.
+ * A top-level task is the pin anchor ("Unit 1203"); its children are
+ * rectifications (raised from QA checklist items) and work-tracker phase
+ * tasks. Classification is data (SiteTaskCategory); structure derives from
+ * parent_id / checklist_item_id. Nesting is one level deep only.
  */
 class SiteTask extends Model
 {
     use HasChecklists, HasComments, SoftDeletes;
-
-    public const TYPE_UNIT = 'unit';
-
-    public const TYPE_RECTIFICATION = 'rectification';
-
-    public const TYPE_WORK_TRACKER = 'work_tracker';
-
-    public const TYPE_GENERAL = 'general';
-
-    public const TYPES = [
-        self::TYPE_UNIT,
-        self::TYPE_RECTIFICATION,
-        self::TYPE_WORK_TRACKER,
-        self::TYPE_GENERAL,
-    ];
 
     public const STATUSES = ['open', 'in_progress', 'completed', 'closed', 'cancelled'];
 
@@ -52,7 +38,7 @@ class SiteTask extends Model
         'watermelon_id',
         'location_id',
         'parent_id',
-        'type',
+        'category_id',
         'title',
         'description',
         'drawing_id',
@@ -110,6 +96,11 @@ class SiteTask extends Model
         return $this->belongsTo(Drawing::class);
     }
 
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(SiteTaskCategory::class, 'category_id');
+    }
+
     public function checklistItem(): BelongsTo
     {
         return $this->belongsTo(ChecklistItem::class);
@@ -165,15 +156,14 @@ class SiteTask extends Model
     }
 
     /**
-     * Stamp the standard work-tracker phases onto this unit as child tasks.
-     * Idempotent: phases that already exist (by title) are skipped.
+     * Stamp the standard work-tracker phases onto this unit as child tasks
+     * (Works Tracker category). Idempotent: existing titles are skipped.
      */
     public function importWorkTrackerPhases(): int
     {
-        $existing = $this->children()
-            ->where('type', self::TYPE_WORK_TRACKER)
-            ->pluck('title')
-            ->all();
+        $categoryId = SiteTaskCategory::where('code', 'WT')->value('id');
+
+        $existing = $this->children()->pluck('title')->all();
 
         $created = 0;
         foreach (self::WORK_TRACKER_PHASES as $i => $phase) {
@@ -183,7 +173,7 @@ class SiteTask extends Model
 
             $this->children()->create([
                 'location_id' => $this->location_id,
-                'type' => self::TYPE_WORK_TRACKER,
+                'category_id' => $categoryId,
                 'title' => $phase,
                 'sort_order' => $i,
                 'status' => 'open',

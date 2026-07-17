@@ -8,20 +8,26 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('checklists', function (Blueprint $table) {
-            $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
-        });
+        if (! Schema::hasColumn('checklists', 'watermelon_id')) {
+            Schema::table('checklists', function (Blueprint $table) {
+                $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
+            });
+        }
 
-        Schema::table('checklist_items', function (Blueprint $table) {
-            $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
-            // QA outcome per item: ok | problem | na. Null = not yet inspected.
-            // Nullable so employment-application checklists are unaffected.
-            $table->string('status', 10)->nullable()->after('is_required');
-        });
+        if (! Schema::hasColumn('checklist_items', 'watermelon_id')) {
+            Schema::table('checklist_items', function (Blueprint $table) {
+                $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
+                // QA outcome per item: ok | problem | na. Null = not yet inspected.
+                // Nullable so employment-application checklists are unaffected.
+                $table->string('status', 10)->nullable()->after('is_required');
+            });
+        }
 
-        Schema::table('comments', function (Blueprint $table) {
-            $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
-        });
+        if (! Schema::hasColumn('comments', 'watermelon_id')) {
+            Schema::table('comments', function (Blueprint $table) {
+                $table->string('watermelon_id', 36)->nullable()->unique()->after('id');
+            });
+        }
     }
 
     public function down(): void

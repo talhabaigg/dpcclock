@@ -10,10 +10,13 @@ use App\Models\Employee;
 use App\Models\Location;
 use App\Models\SiteTask;
 use App\Models\SiteTaskAssignee;
+use App\Models\SiteTaskCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Field tasks pinned on plans: unit pins, QA rectifications, work-tracker
@@ -22,6 +25,16 @@ use Illuminate\Validation\Rule;
 class SiteTaskController extends Controller
 {
     /**
+     * Kanban board page — all tasks for a project across its drawings.
+     */
+    public function board(Location $project): Response
+    {
+        return Inertia::render('site-tasks/board', [
+            'project' => ['id' => $project->id, 'name' => $project->name],
+        ]);
+    }
+
+    /**
      * All site tasks for a project. Children are nested under their parents.
      */
     public function index(Request $request, Location $project): JsonResponse
@@ -29,6 +42,8 @@ class SiteTaskController extends Controller
         $query = SiteTask::where('location_id', $project->id)
             ->whereNull('parent_id')
             ->with([
+                'category:id,name,code,color',
+                'children.category:id,name,code,color',
                 'children.assignees.employee:id,name',
                 'children.checklistItem:id,label',
                 'assignees.employee:id,name',
@@ -42,8 +57,8 @@ class SiteTaskController extends Controller
         if ($request->filled('drawing_id')) {
             $query->where('drawing_id', $request->integer('drawing_id'));
         }
-        if ($request->filled('type')) {
-            $query->where('type', $request->string('type'));
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->integer('category_id'));
         }
 
         return response()->json(['tasks' => $query->get()]);
@@ -73,9 +88,23 @@ class SiteTaskController extends Controller
         ]);
     }
 
+    /**
+     * Category options for the pin/category pickers.
+     */
+    public function categories(): JsonResponse
+    {
+        return response()->json([
+            'categories' => SiteTaskCategory::active()
+                ->orderBy('sort_order')
+                ->get(['id', 'name', 'code', 'color']),
+        ]);
+    }
+
     public function show(SiteTask $siteTask): JsonResponse
     {
         $siteTask->load([
+            'category:id,name,code,color',
+            'children.category:id,name,code,color',
             'children.assignees.employee:id,name',
             'children.checklistItem:id,label',
             'assignees.employee:id,name',
@@ -83,7 +112,7 @@ class SiteTaskController extends Controller
             'checklists.items.rectificationTasks.assignees.employee:id,name',
             'checklists.items.completedByUser:id,name',
             'checklistItem:id,label,checklist_id',
-            'parent:id,title,type,drawing_id,page_number,x,y',
+            'parent:id,title,drawing_id,page_number,x,y',
             'creator:id,name',
         ]);
 
@@ -106,6 +135,8 @@ class SiteTaskController extends Controller
                 'file_name' => $m->file_name,
                 'url' => $m->getUrl(),
                 'mime_type' => $m->mime_type,
+                'annotations' => $m->getCustomProperty('annotations'),
+                'annotations_url' => route('comments.attachment.annotations', ['comment' => $c->id, 'media' => $m->id]),
             ]),
         ];
 
@@ -137,7 +168,7 @@ class SiteTaskController extends Controller
     public function store(Request $request, Location $project): JsonResponse
     {
         $validated = $request->validate([
-            'type' => ['required', Rule::in(SiteTask::TYPES)],
+            'category_id' => ['required', 'integer', 'exists:site_task_categories,id'],
             'title' => ['required', 'string', 'max:500'],
             'description' => ['nullable', 'string', 'max:5000'],
             'parent_id' => ['nullable', 'integer', 'exists:site_tasks,id'],
@@ -174,13 +205,14 @@ class SiteTaskController extends Controller
             return $task;
         });
 
-        return response()->json(['task' => $task->load('assignees.employee:id,name')], 201);
+        return response()->json(['task' => $task->load('assignees.employee:id,name', 'category:id,name,code,color')], 201);
     }
 
     public function update(Request $request, SiteTask $siteTask): JsonResponse
     {
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:500'],
+            'category_id' => ['sometimes', 'integer', 'exists:site_task_categories,id'],
             'description' => ['nullable', 'string', 'max:5000'],
             'status' => ['sometimes', Rule::in(SiteTask::STATUSES)],
             'due_date' => ['nullable', 'date'],
@@ -197,7 +229,7 @@ class SiteTaskController extends Controller
 
         $siteTask->update($validated);
 
-        return response()->json(['task' => $siteTask->fresh()->load('assignees.employee:id,name')]);
+        return response()->json(['task' => $siteTask->fresh()->load('assignees.employee:id,name', 'category:id,name,code,color')]);
     }
 
     /**
@@ -238,7 +270,7 @@ class SiteTaskController extends Controller
             }
         });
 
-        return response()->json(['task' => $siteTask->fresh()->load('assignees.employee:id,name')]);
+        return response()->json(['task' => $siteTask->fresh()->load('assignees.employee:id,name', 'category:id,name,code,color')]);
     }
 
     /**
@@ -347,7 +379,7 @@ class SiteTaskController extends Controller
             $task = SiteTask::create([
                 'location_id' => $unit->location_id,
                 'parent_id' => $unit->id,
-                'type' => SiteTask::TYPE_RECTIFICATION,
+                'category_id' => SiteTaskCategory::where('code', 'RE')->value('id'),
                 'title' => $validated['title'] ?? $checklistItem->label,
                 'description' => $validated['description'],
                 'checklist_item_id' => $checklistItem->id,

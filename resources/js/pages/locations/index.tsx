@@ -55,6 +55,7 @@ function getActions(location: Location, canClose: boolean): ActionItem[] {
         { kind: 'separator' },
         { kind: 'link', href: `/location/${location.id}/job-forecast`, label: 'Job Forecast' },
         { kind: 'link', href: `/projects/${location.id}/drawings`, label: 'Drawings' },
+        { kind: 'link', href: `/projects/${location.id}/tasks`, label: 'Tasks' },
         { kind: 'link', href: `/locations/${location.id}/variations`, label: 'Variations' },
         { kind: 'link', href: `/locations/${location.id}/schedule`, label: 'Schedule' },
         { kind: 'separator' },

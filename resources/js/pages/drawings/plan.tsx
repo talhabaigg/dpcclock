@@ -2,7 +2,10 @@ import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
 import { PlanViewerToolbar } from '@/components/plan-viewer-toolbar';
 import { SiteTaskDialog } from '@/components/site-tasks/site-task-dialog';
-import { PIN_TYPE_META, type SiteTaskDto } from '@/components/site-tasks/types';
+import { CategoryCode } from '@/components/site-tasks/task-sections';
+import { type CategoryOption, pinMetaFor, type SiteTaskDto } from '@/components/site-tasks/types';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { api } from '@/lib/api';
 import { type BreadcrumbItem } from '@/types';
@@ -31,6 +34,7 @@ export default function DrawingPlan() {
     const [viewControls, setViewControls] = useState<ViewControls | null>(null);
 
     const [tasks, setTasks] = useState<SiteTaskDto[]>([]);
+    const [categories, setCategories] = useState<CategoryOption[]>([]);
     // ?task=123 deep-links straight into a task dialog (mention emails).
     const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
         if (typeof window === 'undefined') return null;
@@ -59,6 +63,13 @@ export default function DrawingPlan() {
         void loadTasks();
     }, [loadTasks]);
 
+    useEffect(() => {
+        if (!canViewTasks) return;
+        api.get<{ categories: CategoryOption[] }>('/site-task-categories')
+            .then((res) => setCategories(res.categories))
+            .catch(() => {});
+    }, [canViewTasks]);
+
     // Esc cancels pin-drop mode.
     useEffect(() => {
         if (!pinMode) return;
@@ -76,8 +87,8 @@ export default function DrawingPlan() {
         id: t.id,
         x: t.x!,
         y: t.y!,
-        label: PIN_TYPE_META[t.type].label,
-        color: PIN_TYPE_META[t.type].color,
+        label: pinMetaFor(t).label,
+        color: pinMetaFor(t).color,
     }));
 
     // Clicking a child's pin opens its parent unit's panel.
@@ -88,12 +99,15 @@ export default function DrawingPlan() {
         return parent?.id ?? null;
     };
 
-    // Dropping a pin creates the task immediately and opens its dialog —
-    // the title is renamed inline there.
-    const createPin = async (point: Point) => {
+    // Dropping a pin asks for a category, creates the task, and opens its
+    // dialog — the title is renamed inline there.
+    const [pendingPin, setPendingPin] = useState<Point | null>(null);
+
+    const createPin = async (point: Point, category: CategoryOption) => {
+        setPendingPin(null);
         try {
             const res = await api.post<{ task: SiteTaskDto }>(`/projects/${projectId}/site-tasks`, {
-                type: 'unit',
+                category_id: category.id,
                 title: 'New pin',
                 drawing_id: drawing.id,
                 page_number: 1,
@@ -132,7 +146,7 @@ export default function DrawingPlan() {
                     pinDropMode={pinMode && canEditTasks}
                     onCanvasClick={(point) => {
                         setPinMode(false);
-                        void createPin(point);
+                        setPendingPin(point);
                     }}
                 />
                 <PlanViewerToolbar controls={viewControls} pinMode={pinMode} onTogglePinMode={() => setPinMode((v) => !v)} canEdit={canEditTasks} />
@@ -155,6 +169,31 @@ export default function DrawingPlan() {
                 onChanged={() => void loadTasks()}
                 onOpenTask={(id) => setSelectedTaskId(id)}
             />
+
+            {/* Category picker for a freshly dropped pin */}
+            <Dialog open={pendingPin !== null} onOpenChange={(open) => !open && setPendingPin(null)}>
+                <DialogContent className="sm:max-w-xs">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm">New pin — pick a category</DialogTitle>
+                    </DialogHeader>
+                    <ul className="space-y-1">
+                        {categories.map((c) => (
+                            <li key={c.id}>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="coarse:h-12 h-10 w-full justify-start gap-2.5 text-sm"
+                                    onClick={() => pendingPin && void createPin(pendingPin, c)}
+                                >
+                                    <CategoryCode category={c} className="h-7 w-7 text-[10px]" />
+                                    {c.name}
+                                </Button>
+                            </li>
+                        ))}
+                        {categories.length === 0 && <li className="text-muted-foreground text-xs">No categories configured.</li>}
+                    </ul>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('site_tasks')) {
+            return;
+        }
+
         Schema::create('site_tasks', function (Blueprint $table) {
             $table->id();
             $table->string('watermelon_id', 36)->nullable()->unique();
