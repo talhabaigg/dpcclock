@@ -934,6 +934,121 @@ Content-Type: application/json
 
 ---
 
+## Site Tasks (Offline Sync — schema v2)
+
+Field tasks pinned on drawings: category-classified pins ("Unit 1203 — QA frame Fr WALL"), checklists imported from templates, rectification tasks raised from failed checklist items, work-tracker phases with per-person completion, and task comments. Everything here syncs through the existing WatermelonDB endpoints:
+
+```
+GET  /api/sync/pull?last_pulled_at={ms}&schema_version=2
+POST /api/sync/push
+GET  /api/sync/active-ids
+```
+
+**`schema_version=2` is required to receive the site-task tables.** Clients that omit it (or send `1`) get only the original tables (projects, drawings, observations, measurements, statuses) — existing app builds are unaffected until they opt in.
+
+### Concepts
+
+- A **top-level task** (`parent_id = null`) is a pin anchor on a drawing. Its children (max one level) are rectifications and work-tracker phases.
+- **Category** (`category_id` → `site_task_categories`) is the user-facing classification and drives the pin code/colour (BC, PV, QF, PR, QS, WT, RE). There is no `type` enum.
+- **Checklists** attach to tasks, materialised from `checklist_templates`. Each template may be imported **once per task** (server skips duplicates on push).
+- **Flagging a problem is a client-side atomic dual-write**: set the checklist item `status = "problem"` AND create a rectification task (`checklist_item_id` = the item, `parent_id` = the item's task, category `RE`) in the same push. Never one without the other.
+- **Work tracker**: importing phases creates six child tasks titled `Frame firewall`, `Sheet firewall`, `Close firewall`, `Sheet unit`, `Frame unit`, `Set and sand` (category `WT`, `sort_order` 0-5). Skip titles that already exist under the parent. Per-person completion lives on the assignee row, not the task.
+
+### Synced tables
+
+**Pull + push** (record `id` = watermelon UUID; `server_id` provided on pull; timestamps are epoch ms):
+
+`site_tasks`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | Watermelon id |
+| `project_id` | uuid | FK → projects (watermelon id) |
+| `parent_id` | uuid\|null | FK → site_tasks; one level max (deeper pushes are re-attached to the grandparent) |
+| `category_id` | int\|null | **Numeric server id** → `site_task_categories` |
+| `title` / `description` | string / string\|null | |
+| `drawing_id` | uuid\|null | FK → drawings; pin drawing (children may be null → render at parent pin) |
+| `page_number`, `x`, `y` | int, float 0-1 | Pin position, normalized like observations |
+| `checklist_item_id` | uuid\|null | Provenance: the QA item this rectification was raised from |
+| `status` | string | `open` \| `in_progress` \| `completed` \| `closed` \| `cancelled` |
+| `due_date` | `YYYY-MM-DD`\|null | |
+| `sort_order` | int | Phase ordering |
+| `completed_at` | ms\|null | |
+
+`site_task_assignees` — one row per employee per task; this is where "who did the phase" lives.
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | |
+| `site_task_id` | uuid | FK → site_tasks |
+| `employee_id` | int | **Numeric server id** → employees |
+| `employee_name` | string | Denormalized for display (pull only) |
+| `completed_at` | ms\|null | Per-person completion; set/clear on push (server stamps `marked_by` from the token) |
+
+`checklists`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | |
+| `site_task_id` | uuid | The task it belongs to |
+| `checklist_template_id` | int\|null | Numeric server id; server rejects a second import of the same template per task (silently skipped on push) |
+| `name` | string | Copied from the template at import |
+| `sort_order` | int | |
+
+`checklist_items`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | |
+| `checklist_id` | uuid | |
+| `label` | string | |
+| `sort_order` | int | |
+| `is_required` | bool | |
+| `status` | string\|null | `ok` \| `problem` \| `na`; null = not yet inspected. Setting any status stamps `completed_at`/`completed_by` server-side |
+| `notes` | string\|null | |
+| `completed_at` | ms\|null | |
+| `completed_by_name` | string\|null | Pull only |
+
+`comments` — task discussion (plain text from mobile; web may add rich text and mentions).
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | |
+| `site_task_id` | uuid | |
+| `user_id` | int | Pull only; on push the author is always the token user |
+| `user_name` | string | Pull only |
+| `body` | string | Plain text; required on create |
+| `attachments` | array | Pull only: `[{ name, url }]` — short-lived S3 URLs, refresh on every pull. Photos are uploaded separately (below) |
+
+Update/delete of a comment is **author-only**; pushes from other users are ignored.
+
+**Pull-only reference tables** (numeric server ids as the record `id`; never push):
+
+- `site_task_categories` — `{ id, server_id, name, code, color, sort_order }`. Use for the category picker and pin rendering.
+- `checklist_templates` — `{ id: "ct-{n}", server_id, name }` and `checklist_template_items` — `{ id: "cti-{n}", server_id, checklist_template_id, label, sort_order, is_required }`. Offline checklist import = client materialises a `checklists` row (+ items) from these with fresh UUIDs, carrying `checklist_template_id = server_id`.
+- `employees` — `{ id: "{n}", server_id, name }` for the assignee picker.
+
+### Push semantics
+
+- Order within one push doesn't matter — the server processes `site_tasks` → `checklists` → `checklist_items` → `site_task_assignees` → `comments`.
+- Creates are idempotent (existing watermelon id ⇒ skipped). Unresolvable FKs are skipped and logged, not fatal.
+- Updates hit a **409 conflict** if the server record changed after your `last_pulled_at` — pull, rebase, re-push (standard Watermelon flow).
+- `created_by` is always taken from the auth token, never from the payload.
+- Deletes are soft (tombstoned); reconcile hard-deleted strays with `/api/sync/active-ids`, which now also returns `site_tasks`, `site_task_assignees`, `checklists`, `checklist_items`, `comments`.
+
+### Comment photo upload (deferred binary)
+
+```
+POST /api/comments/{comment_watermelon_id}/attachments
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+file: (binary, max 25MB)
+```
+
+Push the comment row first, then upload each queued photo once connectivity allows. Author-only (403 otherwise); 404 until the comment row has been pushed. Response:
+
+```json
+{ "success": true, "attachment": { "name": "IMG_1234.jpg", "url": "https://..." } }
+```
+
+---
+
 ## Data Models Reference
 
 ### Drawing Properties
@@ -1414,6 +1529,11 @@ Returns the high-resolution page preview image. Redirects to a signed S3 URL.
 | PUT | `/api/site-walk-photos/{id}` | Update a photo (caption, position) |
 | DELETE | `/api/site-walk-photos/{id}` | Delete a photo |
 | GET | `/api/site-walk-photos/{id}/file` | Stream a photo file |
+| **Site Tasks / Sync (schema v2)** | | |
+| GET | `/api/sync/pull?schema_version=2` | Watermelon pull incl. site_tasks, assignees, checklists, checklist_items, comments + reference tables |
+| POST | `/api/sync/push` | Watermelon push for the same tables |
+| GET | `/api/sync/active-ids` | Active watermelon ids per table (tombstone reconciliation) |
+| POST | `/api/comments/{watermelon_id}/attachments` | Deferred photo upload for offline-created task comments |
 | **Worker Screening** | | |
 | GET | `/api/worker-screening` | List screening entries (filter by `search`, `status`; paginated) |
 | POST | `/api/worker-screening` | Create a screening entry |

@@ -51,14 +51,20 @@ return new class extends Migration
         DB::table('site_tasks')->where('type', 'rectification')->update(['category_id' => $categories['RE']]);
 
         Schema::table('site_tasks', function (Blueprint $table) {
+            // The composite index must go before the column (SQLite refuses
+            // to drop a column that an index still references).
+            $table->dropIndex('site_tasks_location_id_type_index');
             $table->dropColumn('type');
+            $table->index(['location_id', 'category_id']);
         });
     }
 
     public function down(): void
     {
         Schema::table('site_tasks', function (Blueprint $table) {
+            $table->dropIndex(['location_id', 'category_id']);
             $table->string('type', 20)->default('general')->after('parent_id');
+            $table->index(['location_id', 'type']);
         });
 
         $categories = DB::table('site_task_categories')->pluck('id', 'code');
