@@ -1308,6 +1308,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------
     Route::middleware('permission:site-tasks.view')->group(function () {
         Route::get('/projects/{project}/tasks', [SiteTaskController::class, 'board'])->name('site-tasks.board');
+        Route::post('/projects/{project}/site-tasks/report', [\App\Http\Controllers\SiteTaskReportController::class, 'generate'])->name('site-tasks.report');
         Route::get('/projects/{project}/site-tasks', [SiteTaskController::class, 'index'])->name('site-tasks.index');
         Route::get('/site-task-employees', [SiteTaskController::class, 'employees'])->name('site-tasks.employees');
         Route::get('/site-task-checklist-templates', [SiteTaskController::class, 'checklistTemplates'])->name('site-tasks.checklist-templates');

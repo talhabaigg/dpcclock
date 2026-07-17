@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { Plus } from 'lucide-react';
+import { Check, FileText, Plus, SquareDashedMousePointer } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -60,6 +60,58 @@ export default function SiteTaskBoard() {
     const [groupBy, setGroupBy] = useState<GroupBy>('status');
     const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
+
+    // Report selection mode
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [reportOpen, setReportOpen] = useState(false);
+    const [reportTitle, setReportTitle] = useState('');
+    const [generating, setGenerating] = useState(false);
+
+    const toggleSelected = (id: number) =>
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+
+    const generateReport = async () => {
+        if (!reportTitle.trim()) {
+            toast.error('Give the report a title.');
+            return;
+        }
+        setGenerating(true);
+        try {
+            const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+            const res = await fetch(`/projects/${project.id}/site-tasks/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, Accept: 'application/pdf' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ title: reportTitle.trim(), task_ids: [...selectedIds] }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => null);
+                throw new Error((err as { message?: string } | null)?.message ?? 'Report generation failed');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'task-report.pdf';
+            link.click();
+            URL.revokeObjectURL(url);
+            setReportOpen(false);
+            setSelectMode(false);
+            setSelectedIds(new Set());
+            setReportTitle('');
+            toast.success('Report downloaded');
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Report generation failed');
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     const loadTasks = useCallback(async () => {
         try {
@@ -156,11 +208,49 @@ export default function SiteTaskBoard() {
                     <span className="text-sm font-semibold">Tasks</span>
                     <span className="text-muted-foreground text-xs tabular-nums">{flat.length}</span>
                     <div className="flex-1" />
-                    {canEdit && (
-                        <Button size="sm" className="coarse:h-9 h-7 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
-                            <Plus className="h-3.5 w-3.5" />
-                            Create Task
-                        </Button>
+                    {selectMode ? (
+                        <>
+                            <span className="text-muted-foreground text-xs tabular-nums">{selectedIds.size} selected</span>
+                            <Button
+                                size="sm"
+                                className="coarse:h-9 h-7 gap-1.5 text-xs"
+                                disabled={selectedIds.size === 0}
+                                onClick={() => setReportOpen(true)}
+                            >
+                                <FileText className="h-3.5 w-3.5" />
+                                Generate Report
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="coarse:h-9 h-7 text-xs"
+                                onClick={() => {
+                                    setSelectMode(false);
+                                    setSelectedIds(new Set());
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="coarse:h-9 h-7 gap-1.5 text-xs"
+                                onClick={() => setSelectMode(true)}
+                                title="Select tasks to build a PDF report"
+                            >
+                                <SquareDashedMousePointer className="h-3.5 w-3.5" />
+                                Report
+                            </Button>
+                            {canEdit && (
+                                <Button size="sm" className="coarse:h-9 h-7 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Create Task
+                                </Button>
+                            )}
+                        </>
                     )}
                     <div className="bg-muted flex items-center rounded-md p-0.5">
                         {(
@@ -207,7 +297,14 @@ export default function SiteTaskBoard() {
                                 </div>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
                                     {col.tasks.map((t) => (
-                                        <TaskCard key={t.id} task={t} groupBy={groupBy} onOpen={() => setSelectedTaskId(t.id)} />
+                                        <TaskCard
+                                            key={t.id}
+                                            task={t}
+                                            groupBy={groupBy}
+                                            selectMode={selectMode}
+                                            selected={selectedIds.has(t.id)}
+                                            onOpen={() => (selectMode ? toggleSelected(t.id) : setSelectedTaskId(t.id))}
+                                        />
                                     ))}
                                     {col.tasks.length === 0 && <p className="text-muted-foreground px-1 py-2 text-[11px] italic">No tasks.</p>}
                                 </div>
@@ -226,6 +323,37 @@ export default function SiteTaskBoard() {
                 onChanged={() => void loadTasks()}
                 onOpenTask={(id) => setSelectedTaskId(id)}
             />
+
+            <Dialog open={reportOpen} onOpenChange={(o) => !generating && setReportOpen(o)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm">Generate Report</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <p className="text-muted-foreground text-xs">
+                            {selectedIds.size} task{selectedIds.size === 1 ? '' : 's'} selected — grouped by category in the PDF.
+                        </p>
+                        <Field>
+                            <FieldLabel className="text-xs">Report title</FieldLabel>
+                            <Input
+                                value={reportTitle}
+                                onChange={(e) => setReportTitle(e.target.value)}
+                                placeholder="e.g. Rectification L21 FR Wall Frame"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && void generateReport()}
+                            />
+                        </Field>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" size="sm" onClick={() => setReportOpen(false)} disabled={generating}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" onClick={generateReport} disabled={generating}>
+                            {generating ? <Spinner className="h-3.5 w-3.5" /> : 'Generate PDF'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <CreateTaskDialog
                 projectId={project.id}
@@ -359,7 +487,19 @@ function CreateTaskDialog({
     );
 }
 
-function TaskCard({ task, groupBy, onOpen }: { task: BoardTask; groupBy: GroupBy; onOpen: () => void }) {
+function TaskCard({
+    task,
+    groupBy,
+    selectMode = false,
+    selected = false,
+    onOpen,
+}: {
+    task: BoardTask;
+    groupBy: GroupBy;
+    selectMode?: boolean;
+    selected?: boolean;
+    onOpen: () => void;
+}) {
     const meta = pinMetaFor(task);
     const overdue =
         task.due_date && task.status !== 'completed' && task.status !== 'closed' && task.status !== 'cancelled'
@@ -371,9 +511,22 @@ function TaskCard({ task, groupBy, onOpen }: { task: BoardTask; groupBy: GroupBy
             type="button"
             variant="ghost"
             onClick={onOpen}
-            className="bg-background hover:border-primary/50 block h-auto w-full space-y-1 rounded-md border p-2.5 text-left font-normal shadow-xs"
+            className={cn(
+                'bg-background hover:border-primary/50 block h-auto w-full space-y-1 rounded-md border p-2.5 text-left font-normal shadow-xs',
+                selected && 'border-primary ring-primary/40 ring-2',
+            )}
         >
             <div className="flex w-full items-center gap-1.5">
+                {selectMode && (
+                    <span
+                        className={cn(
+                            'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                            selected ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40',
+                        )}
+                    >
+                        {selected && <Check className="h-3 w-3" />}
+                    </span>
+                )}
                 {groupBy !== 'category' && (
                     <span title={task.category?.name}>
                         <CategoryCode category={{ code: meta.label, color: meta.color }} />

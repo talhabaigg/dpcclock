@@ -75,6 +75,8 @@ class Drawing extends Model implements HasMedia
     {
         $this->addMediaCollection('source')->singleFile();
         $this->addMediaCollection('thumbnail')->singleFile();
+        // Full-resolution render for PDF reports; generated lazily on first use.
+        $this->addMediaCollection('hires')->singleFile();
     }
 
     public function registerMediaConversions(?Media $media = null): void

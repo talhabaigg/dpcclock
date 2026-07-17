@@ -209,6 +209,46 @@ class DrawingProcessingService
         return $info ? [$info[0], $info[1]] : null;
     }
 
+    /**
+     * Return (generating on first use) a full-resolution render of the
+     * drawing for PDF reports. Cached in the `hires` media collection.
+     */
+    public function ensureHiResRender(Drawing $drawing, int $maxWidth = 3000): ?\Spatie\MediaLibrary\MediaCollections\Models\Media
+    {
+        $existing = $drawing->getFirstMedia('hires');
+        if ($existing) {
+            return $existing;
+        }
+
+        $source = $drawing->getFirstMedia('source');
+        if (! $source) {
+            return null;
+        }
+
+        $sourcePath = $this->resolveLocalSourcePath($source);
+        if (! $sourcePath) {
+            return null;
+        }
+
+        $temp = sys_get_temp_dir().'/drawing_hires_'.$drawing->id.'_'.uniqid().'.png';
+        $ext = Str::lower(pathinfo($source->file_name, PATHINFO_EXTENSION));
+        $isPdf = $ext === 'pdf' || str_contains(strtolower($source->mime_type ?? ''), 'pdf');
+
+        $success = $isPdf
+            ? $this->pdfToImage($sourcePath, $temp, $maxWidth)
+            : $this->resizeImage($sourcePath, $temp, $maxWidth);
+
+        if (! $success || ! file_exists($temp)) {
+            @unlink($temp);
+
+            return null;
+        }
+
+        return $drawing->addMedia($temp)
+            ->usingFileName("drawing_{$drawing->id}_hires.png")
+            ->toMediaCollection('hires');
+    }
+
     protected function generateThumbnail(Drawing $drawing): void
     {
         $source = $drawing->getFirstMedia('source');
