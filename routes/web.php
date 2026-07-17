@@ -56,6 +56,7 @@ use App\Http\Controllers\PendingPurchaseOrderController;
 use App\Http\Controllers\ProductionUploadController;
 use App\Http\Controllers\ProjectCalendarController;
 use App\Http\Controllers\ProjectTaskController;
+use App\Http\Controllers\SiteTaskController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
@@ -1301,6 +1302,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:drawings.delete');
     Route::delete('/drawings', [DrawingController::class, 'bulkDestroy'])->name('drawings.bulk-destroy')
         ->middleware('permission:drawings.delete');
+
+    // --------------------------------------------
+    // SITE TASKS (plan pins: units, QA rectifications, work-tracker phases)
+    // --------------------------------------------
+    Route::middleware('permission:site-tasks.view')->group(function () {
+        Route::get('/projects/{project}/site-tasks', [SiteTaskController::class, 'index'])->name('site-tasks.index');
+        Route::get('/site-task-employees', [SiteTaskController::class, 'employees'])->name('site-tasks.employees');
+        Route::get('/site-task-checklist-templates', [SiteTaskController::class, 'checklistTemplates'])->name('site-tasks.checklist-templates');
+        Route::get('/site-tasks/{siteTask}', [SiteTaskController::class, 'show'])->name('site-tasks.show');
+    });
+    Route::middleware('permission:site-tasks.edit')->group(function () {
+        Route::post('/projects/{project}/site-tasks', [SiteTaskController::class, 'store'])->name('site-tasks.store');
+        Route::patch('/site-tasks/{siteTask}', [SiteTaskController::class, 'update'])->name('site-tasks.update');
+        Route::post('/site-tasks/{siteTask}/assignees', [SiteTaskController::class, 'syncAssignees'])->name('site-tasks.assignees');
+        Route::patch('/site-tasks/{siteTask}/assignees/{assignee}/completion', [SiteTaskController::class, 'setAssigneeCompletion'])->name('site-tasks.assignee-completion');
+        Route::post('/site-tasks/{siteTask}/import-phases', [SiteTaskController::class, 'importPhases'])->name('site-tasks.import-phases');
+        Route::post('/site-tasks/{siteTask}/checklists', [SiteTaskController::class, 'attachChecklist'])->name('site-tasks.attach-checklist');
+        Route::patch('/site-task-checklist-items/{checklistItem}/status', [SiteTaskController::class, 'updateChecklistItemStatus'])->name('site-tasks.item-status');
+        Route::post('/site-task-checklist-items/{checklistItem}/rectification', [SiteTaskController::class, 'raiseRectification'])->name('site-tasks.raise-rectification');
+    });
+    Route::delete('/site-tasks/{siteTask}', [SiteTaskController::class, 'destroy'])->name('site-tasks.destroy')
+        ->middleware('permission:site-tasks.delete');
 
     // --------------------------------------------
     // TAKEOFF (view: read measurements; edit: create/modify measurements, conditions, bid areas)

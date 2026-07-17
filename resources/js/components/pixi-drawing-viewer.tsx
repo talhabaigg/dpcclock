@@ -90,7 +90,26 @@ type Props = {
     /** Hide the built-in floating zoom stack + zoom/mode chip — for pages
      *  that render their own controls via onViewControlsChange. */
     showBuiltInControls?: boolean;
+    /** Map-pin markers (site tasks). Coordinates normalized 0-1 like points. */
+    pins?: ViewerPin[];
+    selectedPinId?: number | null;
+    onPinClick?: (pin: ViewerPin, event?: { clientX: number; clientY: number }) => void;
+    /** When true, a plain click (pan mode) fires onCanvasClick with the
+     *  normalized point instead of hit-testing measurements — pin dropping. */
+    pinDropMode?: boolean;
+    onCanvasClick?: (point: Point) => void;
     className?: string;
+};
+
+export type ViewerPin = {
+    id: number;
+    x: number;
+    y: number;
+    color?: string;
+    /** Short type code rendered inside the pin head (e.g. "WT", "QA"). */
+    label?: string;
+    /** Badge count rendered inside the pin head when no label is set. */
+    count?: number;
 };
 
 export type ViewControls = {
@@ -308,6 +327,11 @@ export function PixiDrawingViewer({
     onDrawingControlsChange,
     onViewControlsChange,
     showBuiltInControls = true,
+    pins,
+    selectedPinId,
+    onPinClick,
+    pinDropMode = false,
+    onCanvasClick,
     className,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -321,6 +345,11 @@ export function PixiDrawingViewer({
     // Transient effects (click bursts, creation pulses). Lives above
     // measurements so animations sit on top.
     const fxLayerRef = useRef<Container | null>(null);
+    // Site-task pins. Held in a ref too so pointer handlers can hit-test
+    // without re-binding listeners on every pins change.
+    const pinsLayerRef = useRef<Container | null>(null);
+    const pinsRef = useRef<ViewerPin[]>([]);
+    pinsRef.current = pins ?? [];
     const docRef = useRef<PDFDocumentProxy | null>(null);
     const pageRef = useRef<PDFPageProxy | null>(null);
     const renderTaskRef = useRef<RenderTask | null>(null);
@@ -400,10 +429,12 @@ export function PixiDrawingViewer({
             const pageLayer = new Container();    // PDF tiles + fallback live here
             const measurementsLayer = new Container();
             const drawingLayer = new Container();
+            const pinsLayer = new Container();
             const fxLayer = new Container();
             world.addChild(pageLayer);
             world.addChild(measurementsLayer);
             world.addChild(drawingLayer);
+            world.addChild(pinsLayer);
             world.addChild(fxLayer);
             app.stage.addChild(world);
 
@@ -412,6 +443,7 @@ export function PixiDrawingViewer({
             pageLayerRef.current = pageLayer;
             measurementsLayerRef.current = measurementsLayer;
             drawingLayerRef.current = drawingLayer;
+            pinsLayerRef.current = pinsLayer;
             fxLayerRef.current = fxLayer;
             setAppReady(true);
 
@@ -449,6 +481,7 @@ export function PixiDrawingViewer({
             fallbackSpriteRef.current = null;
             measurementsLayerRef.current = null;
             drawingLayerRef.current = null;
+            pinsLayerRef.current = null;
             fxLayerRef.current = null;
         };
     }, []);
@@ -1758,7 +1791,35 @@ export function PixiDrawingViewer({
                 uv = snapAngleFromRef(last, uv);
             }
 
+            // Pin dropping takes priority over any other click action.
+            if (pinDropMode) {
+                fireClickBurst(uv, '#ef4444');
+                onCanvasClick?.(uv);
+                return;
+            }
+
             if (viewMode === 'pan') {
+                // Pins render above measurements, so hit-test them first.
+                // Distance measured in screen px to the pin HEAD (which sits
+                // ~26px above the anchor point).
+                if (onPinClick && pdfDims && pinsRef.current.length > 0) {
+                    const s = world.scale.x;
+                    let best: ViewerPin | null = null;
+                    let bestDist = Infinity;
+                    for (const pin of pinsRef.current) {
+                        const dx = (uv.x - pin.x) * pdfDims.width * s;
+                        const dy = (uv.y - pin.y) * pdfDims.height * s + 26;
+                        const d = Math.hypot(dx, dy);
+                        if (d < bestDist) {
+                            bestDist = d;
+                            best = pin;
+                        }
+                    }
+                    if (best && bestDist <= 18) {
+                        onPinClick(best, { clientX: e.clientX, clientY: e.clientY });
+                        return;
+                    }
+                }
                 const hit = findMeasurementAtUv(uv);
                 if (hit) {
                     // If onSegmentClick is provided (production tab) and the
@@ -1890,6 +1951,10 @@ export function PixiDrawingViewer({
         onVertexDragEnd,
         onVertexDelete,
         onSegmentClick,
+        pdfDims,
+        pinDropMode,
+        onCanvasClick,
+        onPinClick,
     ]);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2235,6 +2300,56 @@ export function PixiDrawingViewer({
         hiddenSegments,
         selectedSegments,
     ]);
+
+    // Draw site-task pins — classic map markers, screen-constant size via
+    // invScale (mirrors how vertex handles stay fixed-size under zoom).
+    useEffect(() => {
+        const layer = pinsLayerRef.current;
+        const world = worldRef.current;
+        if (!layer || !world || !pdfDims || !appReady) return;
+
+        layer.removeChildren().forEach((c) => c.destroy({ children: true }));
+        if (!pins || pins.length === 0) return;
+
+        const W = pdfDims.width;
+        const H = pdfDims.height;
+        const invScale = 1 / world.scale.x;
+
+        for (const pin of pins) {
+            const px = pin.x * W;
+            const py = pin.y * H;
+            const isSelected = selectedPinId != null && pin.id === selectedPinId;
+            const color = hexFromCss(pin.color ?? '#ef4444');
+            const headR = (isSelected ? 13 : 11) * invScale;
+            const headCy = py - 26 * invScale;
+
+            const g = new Graphics();
+            if (isSelected) {
+                g.circle(px, headCy, headR + 4 * invScale).stroke({ color: 0xfacc15, width: 3 * invScale, alpha: 0.9 });
+            }
+            // Tail triangle from the head down to the anchor point, then head.
+            g.poly([px, py, px - headR * 0.72, headCy + headR * 0.45, px + headR * 0.72, headCy + headR * 0.45]).fill(color);
+            g.circle(px, headCy, headR).fill(color);
+            g.circle(px, headCy, headR).stroke({ color: 0xffffff, width: 2 * invScale });
+            layer.addChild(g);
+
+            const headText = pin.label || (pin.count && pin.count > 0 ? String(pin.count) : null);
+            if (headText) {
+                const label = new Text({
+                    text: headText,
+                    style: { fontSize: pin.label ? 10 : 13, fontWeight: 'bold', fill: 0xffffff },
+                });
+                label.anchor.set(0.5);
+                label.scale.set(invScale);
+                label.position.set(px, headCy);
+                layer.addChild(label);
+            } else {
+                const dot = new Graphics();
+                dot.circle(px, headCy, headR * 0.32).fill(0xffffff);
+                layer.addChild(dot);
+            }
+        }
+    }, [pins, selectedPinId, pdfDims, appReady, zoomDisplay]);
 
     // Auto-pan to selected measurement. Only pans if the measurement's center
     // is outside the inner 60% of the viewport — avoids tiny pans on adjacent

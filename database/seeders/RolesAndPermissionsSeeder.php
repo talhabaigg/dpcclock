@@ -280,6 +280,15 @@ class RolesAndPermissionsSeeder extends Seeder
         ],
 
         // ============================================
+        // SITE TASKS (plan pins: units, QA, rectifications, work tracker)
+        // ============================================
+        'Site Tasks' => [
+            'site-tasks.view' => 'View site tasks and QA checklists on plans',
+            'site-tasks.edit' => 'Create/edit site tasks, tick QA items, raise rectifications',
+            'site-tasks.delete' => 'Delete site tasks',
+        ],
+
+        // ============================================
         // DRAWING VIEWER (per-tab granular access)
         // ============================================
         'Drawing Viewer' => [

@@ -17,6 +17,7 @@ class Comment extends Model implements HasMedia
     use SoftDeletes;
 
     protected $fillable = [
+        'watermelon_id',
         'commentable_type',
         'commentable_id',
         'user_id',

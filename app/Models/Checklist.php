@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class Checklist extends Model
 {
     protected $fillable = [
+        'watermelon_id',
         'checklist_template_id',
         'checkable_type',
         'checkable_id',
@@ -40,5 +41,14 @@ class Checklist extends Model
     public function allRequiredComplete(): bool
     {
         return $this->requiredItems()->whereNull('completed_at')->doesntExist();
+    }
+
+    /**
+     * QA completion: every item has an outcome (ok / problem / na).
+     * Distinct from allRequiredComplete(), which only checks ticked-off items.
+     */
+    public function allItemsResolved(): bool
+    {
+        return $this->items()->whereNull('status')->doesntExist();
     }
 }

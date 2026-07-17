@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ScheduleSyncController;
 use App\Http\Controllers\Api\DrawingObservationController;
 use App\Http\Controllers\Api\ProjectDrawingController;
 use App\Http\Controllers\Api\SiteWalkController;
+use App\Http\Controllers\Api\CommentAttachmentController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\WorkerScreeningController;
 use App\Http\Controllers\ChatController;
@@ -120,6 +121,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('sync/pull', [SyncController::class, 'pull'])->name('api.sync.pull');
     Route::post('sync/push', [SyncController::class, 'push'])->name('api.sync.push');
     Route::get('sync/active-ids', [SyncController::class, 'activeIds'])->name('api.sync.active-ids');
+
+    // Deferred photo upload for offline-created site-task comments
+    Route::post('comments/{watermelonId}/attachments', [CommentAttachmentController::class, 'store'])
+        ->name('api.comments.attachments.store');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])

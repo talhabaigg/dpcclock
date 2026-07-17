@@ -169,6 +169,12 @@ class Employee extends Model implements HasMedia, ProvidesSigningPlaceholders
             ->every(fn (array $item) => $item['status'] === 'valid');
     }
 
+    /** Site-task assignments (work-tracker phases, rectifications). */
+    public function siteTaskAssignments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SiteTaskAssignee::class);
+    }
+
     public function isOfficeStaff(): bool
     {
         return (int) $this->employing_entity_id === (int) config('services.employment_hero.cms_entity_id');

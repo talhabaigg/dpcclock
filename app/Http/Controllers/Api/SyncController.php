@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
 
 class SyncController extends Controller
 {
+    use Concerns\SyncsSiteTasks;
+
     /**
      * SWCP and GRE company parent IDs (from Employment Hero).
      */
@@ -103,6 +105,12 @@ class SyncController extends Controller
             ),
         ];
 
+        // Site tasks joined the schema in v2 — older builds don't know these
+        // tables, so only send them to clients that ask for v2+.
+        if ((int) $request->input('schema_version', 1) >= 2) {
+            $changes = array_merge($changes, $this->pullSiteTaskTables($projectIds, $since));
+        }
+
         return response()->json([
             'changes' => $changes,
             'timestamp' => $timestamp->getTimestampMs(),
@@ -137,6 +145,7 @@ class SyncController extends Controller
                 ->whereNotNull('watermelon_id')
                 ->pluck('watermelon_id')
                 ->toArray(),
+            ...$this->activeSiteTaskIds($projectIds),
         ]);
     }
 
@@ -173,6 +182,28 @@ class SyncController extends Controller
 
             if (isset($changes['segment_statuses'])) {
                 $this->pushSegmentStatuses($changes['segment_statuses']);
+            }
+
+            // Site-task domain. Order matters: tasks before everything that
+            // references them; checklists before their items.
+            if (isset($changes['site_tasks'])) {
+                $this->pushSiteTasks($changes['site_tasks'], $lastPulledAt);
+            }
+
+            if (isset($changes['checklists'])) {
+                $this->pushSiteTaskChecklists($changes['checklists']);
+            }
+
+            if (isset($changes['checklist_items'])) {
+                $this->pushSiteTaskChecklistItems($changes['checklist_items']);
+            }
+
+            if (isset($changes['site_task_assignees'])) {
+                $this->pushSiteTaskAssignees($changes['site_task_assignees'], $lastPulledAt);
+            }
+
+            if (isset($changes['comments'])) {
+                $this->pushSiteTaskComments($changes['comments']);
             }
 
             DB::commit();

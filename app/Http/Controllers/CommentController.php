@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmploymentApplication;
 use App\Models\ForecastProject;
 use App\Models\Injury;
+use App\Models\SiteTask;
 use App\Models\ToolboxTalk;
 use App\Models\User;
 use App\Models\WhsDeliverable;
@@ -30,6 +31,7 @@ class CommentController extends Controller
         'daily_prestart' => DailyPrestart::class,
         'toolbox_talk' => ToolboxTalk::class,
         'whs_deliverable' => WhsDeliverable::class,
+        'site_task' => SiteTask::class,
     ];
 
     /**
@@ -305,6 +307,12 @@ class CommentController extends Controller
             $commentable instanceof WhsDeliverable => [
                 url(route('locations.whs-deliverables.show', [$commentable->location_id, $commentable->id])),
                 "WHS deliverable {$commentable->name}",
+            ],
+            $commentable instanceof SiteTask => [
+                ($pin = $commentable->effectivePin())
+                    ? url("/drawings/{$pin['drawing_id']}/plan?task={$commentable->id}")
+                    : null,
+                "site task \"{$commentable->title}\"",
             ],
             default => [null, null],
         };
