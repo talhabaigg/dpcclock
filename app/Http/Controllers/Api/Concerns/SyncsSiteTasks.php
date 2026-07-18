@@ -91,7 +91,12 @@ trait SyncsSiteTasks
             'employees' => $this->pullTable(
                 Employee::query()->select(['id', 'name', 'created_at', 'updated_at', 'deleted_at']),
                 $since,
-                fn ($record) => $this->formatSyncEmployee($record)
+                fn ($record) => $this->formatSyncEmployee($record),
+                // Reference data keyed by numeric id — formatSyncEmployee never
+                // reads/writes watermelon_id. Must stay softDeletes:false: the
+                // employees table has no watermelon_id column, so pullTable's
+                // trashed back-fill (saveQuietly) would throw SQLSTATE 42S22.
+                softDeletes: false
             ),
         ];
     }
