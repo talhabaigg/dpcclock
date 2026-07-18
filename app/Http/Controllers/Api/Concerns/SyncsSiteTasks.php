@@ -214,6 +214,12 @@ trait SyncsSiteTasks
     {
         $task = SiteTask::withTrashed()->find($comment->commentable_id);
 
+        // Photo URLs are short-lived S3 links; the client refreshes them on pull.
+        $attachments = $comment->getMedia('attachments')->map(fn ($m) => [
+            'name' => $m->file_name,
+            'url' => $m->getTemporaryUrl(now()->addHours(12)),
+        ])->values()->toArray();
+
         return [
             'id' => $this->ensureWatermelonId($comment),
             'server_id' => $comment->id,
@@ -221,11 +227,15 @@ trait SyncsSiteTasks
             'user_id' => $comment->user_id,
             'user_name' => $comment->user?->name ?? '',
             'body' => $comment->body ?? '',
-            // Photo URLs are short-lived S3 links; the client refreshes them on pull.
-            'attachments' => $comment->getMedia('attachments')->map(fn ($m) => [
-                'name' => $m->file_name,
-                'url' => $m->getTemporaryUrl(now()->addHours(12)),
-            ])->values()->toArray(),
+            // Rich-text source of truth (TipTap/ProseMirror doc), json-encoded to
+            // a string so the mobile can store it in a scalar column. Carries
+            // formatting + @mentions; the mobile renders this, falling back to
+            // `body` when absent.
+            'body_json' => $comment->body_json ? json_encode($comment->body_json) : null,
+            'attachments' => $attachments,
+            // Same array, json-encoded to a string so the mobile can store it in
+            // a scalar column (WMDB columns are scalar-only) and render thumbnails.
+            'attachments_json' => empty($attachments) ? null : json_encode($attachments),
             'created_at' => $comment->created_at?->getTimestampMs() ?? 0,
             'updated_at' => $comment->updated_at?->getTimestampMs() ?? 0,
         ];
@@ -525,15 +535,24 @@ trait SyncsSiteTasks
             }
 
             $task = SiteTask::where('watermelon_id', $record['site_task_id'] ?? '')->first();
+            $bodyJson = $this->decodeBodyJson($record['body_json'] ?? null);
             $body = trim((string) ($record['body'] ?? ''));
+            if ($body === '' && $bodyJson) {
+                $body = Comment::plainTextFromDoc($bodyJson);
+            }
             if (! $task || $body === '') {
                 continue;
             }
 
+            // NOTE: @mentions in body_json carry EMPLOYEE ids (the mobile syncs
+            // employees, not users), so we do NOT run syncMentions()/notify here —
+            // that needs an employee→user bridge (parity TODO). The mention nodes
+            // still render on the web via body_json.
             $task->comments()->create([
                 'watermelon_id' => $record['id'],
                 'user_id' => auth()->id(),
                 'body' => $body,
+                'body_json' => $bodyJson,
             ]);
         }
 
@@ -544,7 +563,17 @@ trait SyncsSiteTasks
 
             // Authors may edit their own comments only.
             if ($comment && $comment->user_id === auth()->id()) {
-                $comment->update(['body' => trim((string) ($record['body'] ?? $comment->body))]);
+                $bodyJson = $this->decodeBodyJson($record['body_json'] ?? null);
+                $body = array_key_exists('body', $record)
+                    ? trim((string) $record['body'])
+                    : $comment->body;
+                if (($body === '' || ! array_key_exists('body', $record)) && $bodyJson) {
+                    $body = Comment::plainTextFromDoc($bodyJson);
+                }
+                $comment->update([
+                    'body' => $body,
+                    'body_json' => $bodyJson ?? $comment->body_json,
+                ]);
             }
         }
 
@@ -586,5 +615,24 @@ trait SyncsSiteTasks
     private function msToCarbon($ms): ?Carbon
     {
         return $ms ? Carbon::createFromTimestampMs($ms) : null;
+    }
+
+    /**
+     * Decode the wire `body_json` (a JSON string from the mobile, or already an
+     * array) into a ProseMirror doc array, or null. The comments table casts
+     * body_json to array, so we hand back a decoded array.
+     */
+    private function decodeBodyJson($value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return null;
     }
 }
