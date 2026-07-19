@@ -216,8 +216,16 @@ trait SyncsSiteTasks
 
         // Photo URLs are short-lived S3 links; the client refreshes them on pull.
         $attachments = $comment->getMedia('attachments')->map(fn ($m) => [
+            // The media id is the handle the mobile editor needs to PUT markup
+            // back; filenames are server-assigned and not stable enough to
+            // address a row by.
+            'id' => $m->id,
             'name' => $m->file_name,
             'url' => $m->getTemporaryUrl(now()->addHours(12)),
+            // Vector markup drawn over the photo, in natural-image pixels. Sent
+            // down so annotations made on the web render on the device (and
+            // vice versa) without baking anything into the image file.
+            'annotations' => $m->getCustomProperty('annotations'),
         ])->values()->toArray();
 
         return [

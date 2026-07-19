@@ -125,6 +125,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Deferred photo upload for offline-created site-task comments
     Route::post('comments/{watermelonId}/attachments', [CommentAttachmentController::class, 'store'])
         ->name('api.comments.attachments.store');
+    // Re-edit the markup on an attachment that has already uploaded. Addressed
+    // by watermelon id + media id, the two identifiers the offline client holds.
+    Route::put('comments/{watermelonId}/attachments/{media}/annotations', [CommentAttachmentController::class, 'updateAnnotations'])
+        ->name('api.comments.attachments.annotations');
 
     // Projects (SWCP + GRE locations) and project-level drawings
     Route::get('projects', [ProjectDrawingController::class, 'projects'])

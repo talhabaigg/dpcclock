@@ -13,6 +13,7 @@ use App\Models\ToolboxTalk;
 use App\Models\User;
 use App\Models\WhsDeliverable;
 use App\Notifications\CommentMentionedNotification;
+use App\Support\PhotoAnnotations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -161,25 +162,26 @@ class CommentController extends Controller
         $mediaItem = $comment->getMedia('attachments')->firstWhere('id', $media);
         abort_unless($mediaItem, 404);
 
-        $validated = $request->validate([
-            'canvas' => ['required', 'array'],
-            'canvas.w' => ['required', 'integer', 'min:1', 'max:50000'],
-            'canvas.h' => ['required', 'integer', 'min:1', 'max:50000'],
-            'items' => ['present', 'array', 'max:300'],
-            'items.*.id' => ['required', 'string', 'max:64'],
-            'items.*.type' => ['required', 'string', 'in:text,line,arrow,double-arrow,freehand'],
-            'items.*.color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'items.*.strokeWidth' => ['nullable', 'numeric', 'min:0.1', 'max:1000'],
-            'items.*.points' => ['nullable', 'array', 'max:20000'],
-            'items.*.points.*' => ['numeric'],
-            'items.*.x' => ['nullable', 'numeric'],
-            'items.*.y' => ['nullable', 'numeric'],
-            'items.*.text' => ['nullable', 'string', 'max:1000'],
-            'items.*.fontSize' => ['nullable', 'numeric', 'min:1', 'max:2000'],
-        ]);
+        // NOTE: deliberately no authorship check here, unlike the API path.
+        // The web affordance is permission-gated (site tasks) or open to any
+        // viewer (injury register), so WHS staff annotating a worker's photo is
+        // a supported flow — an author-only rule would break it. That does mean
+        // any authenticated user who can resolve a comment can overwrite its
+        // markup wholesale, since this endpoint replaces rather than merges.
+        // Narrowing it needs a real policy (who may annotate which commentable),
+        // not an authorship test.
+
+        // Shared with both mobile paths so a shape type added here cannot be
+        // silently rejected there.
+        $validated = $request->validate(PhotoAnnotations::rules());
 
         $mediaItem->setCustomProperty('annotations', $validated);
         $mediaItem->save();
+
+        // The WatermelonDB delta pull selects comments on updated_at, and media
+        // rows do not touch their owner — without this, markup added on the web
+        // never reaches the mobile client.
+        $comment->touch();
 
         return response()->json(['annotations' => $validated]);
     }
