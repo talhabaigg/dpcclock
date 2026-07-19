@@ -31,6 +31,13 @@ class CommentAttachmentController extends Controller
         $media = $comment->addMedia($request->file('file'))
             ->toMediaCollection('attachments');
 
+        // Media rows do not propagate to the owner's timestamps, and the
+        // WatermelonDB delta pull selects comments purely on created_at /
+        // updated_at. Without this the comment is never re-sent, so the client
+        // never receives the attachments_json carrying this file — and the
+        // 12-hour signed URL is never re-issued either.
+        $comment->touch();
+
         return response()->json([
             'success' => true,
             'attachment' => [
