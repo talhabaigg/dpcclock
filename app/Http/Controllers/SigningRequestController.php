@@ -216,14 +216,15 @@ class SigningRequestController extends Controller
         return $oneOffHtml ?? '';
     }
 
-    private function authorizeSignableAction(SigningRequest $signingRequest): void
+    private function authorizeSignableAction(SigningRequest $signingRequest, bool $readOnly = false): void
     {
         $signable = $signingRequest->signable;
         if ($signable instanceof \App\Models\Employee) {
             \Illuminate\Support\Facades\Gate::authorize('sendDocuments', $signable);
         }
         // EmploymentApplication signables rely on the existing employment-applications permission gate at the route level.
-        if ($signable instanceof \App\Models\EmploymentApplication && $signable->isLocked()) {
+        // The onboarding lock only freezes mutations — read-only actions like downloads stay available.
+        if (! $readOnly && $signable instanceof \App\Models\EmploymentApplication && $signable->isLocked()) {
             abort(403, 'Enquiry is locked — applicant has been onboarded.');
         }
     }
@@ -1579,7 +1580,7 @@ class SigningRequestController extends Controller
         $requests = SigningRequest::query()->whereIn('id', $data['ids'])->get();
         $files = [];
         foreach ($requests as $sr) {
-            $this->authorizeSignableAction($sr);
+            $this->authorizeSignableAction($sr, readOnly: true);
             $media = $sr->getFirstMedia('signed_document') ?? $sr->getFirstMedia('uploaded_document');
             if ($media) {
                 $files[] = ['name' => $media->file_name, 'path' => $media->getPath()];
@@ -1622,7 +1623,7 @@ class SigningRequestController extends Controller
 
     public function download(SigningRequest $signingRequest, Request $request)
     {
-        $this->authorizeSignableAction($signingRequest);
+        $this->authorizeSignableAction($signingRequest, readOnly: true);
 
         // Preview mode: render the unsigned document with resolved variables, regardless of status.
         // Used so senders can see exactly what was sent to the recipient before they sign.
