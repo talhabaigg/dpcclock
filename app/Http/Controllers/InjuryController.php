@@ -199,7 +199,7 @@ class InjuryController extends Controller
 
     public function show(Injury $injury)
     {
-        $injury->load(['employee', 'location', 'representative', 'creator', 'media', 'formRequests.formTemplate.fields', 'formRequests.media', 'formRequests.assigneeUser:id,name']);
+        $injury->load(['employee', 'location', 'representative', 'creator', 'media', 'formRequests.formTemplate.fields', 'formRequests.media', 'formRequests.assigneeUser:id,name', 'formRequests.submittedBy:id,name']);
 
         $formRequests = $injury->formRequests->map(fn ($fr) => [
             'id' => $fr->id,
@@ -213,6 +213,7 @@ class InjuryController extends Controller
             'assignee_user_id' => $fr->assignee_user_id,
             'assignee_user_name' => $fr->assigneeUser?->name,
             'submitted_at' => $fr->submitted_at?->toISOString(),
+            'submitted_by_name' => $fr->submittedBy?->name,
             'opened_at' => $fr->opened_at?->toISOString(),
             'expires_at' => $fr->expires_at?->toISOString(),
             'response_snapshot' => $this->resolveSnapshotSignatureUrls($fr),

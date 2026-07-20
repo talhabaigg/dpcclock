@@ -34,6 +34,7 @@ interface FormRequestRow {
     formable_url: string | null;
     form_template: { id: number; name: string } | null;
     sent_by: { id: number; name: string } | null;
+    submitted_by_name: string | null;
     assignee_user: { id: number; name: string } | null;
     assignee_permission: string | null;
 }
@@ -492,6 +493,9 @@ export default function FormRequestsIndex() {
                                             <TableCell className="px-3 text-xs">
                                                 <Badge variant={isSubmitted ? 'default' : 'secondary'} className="mr-1.5 text-[10px] capitalize">{fr.status}</Badge>
                                                 <span className="text-muted-foreground">{statusTimestamp}</span>
+                                                {isSubmitted && fr.submitted_by_name && (
+                                                    <p className="text-[10px] text-muted-foreground">by {fr.submitted_by_name}</p>
+                                                )}
                                             </TableCell>
                                             <TableCell className="px-3 text-right">
                                                 <DropdownMenu>

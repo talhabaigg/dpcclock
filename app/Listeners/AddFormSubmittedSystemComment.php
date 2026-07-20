@@ -29,14 +29,16 @@ class AddFormSubmittedSystemComment
             return;
         }
 
+        // Credit the authenticated submitter when known (in-app submissions);
+        // fall back to the creation-time recipient for token submissions.
         $formable->addSystemComment(
-            "Form \"{$formName}\" completed by {$formRequest->recipient_name}",
+            "Form \"{$formName}\" completed by {$formRequest->submitterName()}",
             [
                 'type' => 'form_submitted',
                 'form_request_id' => $formRequest->id,
                 'form_name' => $formName,
             ],
-            $formRequest->sent_by,
+            $formRequest->submitted_by ?? $formRequest->sent_by,
         );
     }
 }

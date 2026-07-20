@@ -30,6 +30,7 @@ class FormRequest extends Model implements HasMedia
         'response_snapshot',
         'sent_by',
         'submitted_at',
+        'submitted_by',
         'opened_at',
         'expires_at',
         'cancelled_at',
@@ -78,6 +79,20 @@ class FormRequest extends Model implements HasMedia
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    /**
+     * Who actually completed the form: the authenticated in-app submitter
+     * when known, otherwise the creation-time recipient (token submissions).
+     */
+    public function submitterName(): ?string
+    {
+        return $this->submittedBy?->name ?? $this->recipient_name;
     }
 
     public function isSubmitted(): bool

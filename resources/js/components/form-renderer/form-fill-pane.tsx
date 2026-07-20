@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { router } from '@inertiajs/react';
+import type { SharedData } from '@/types';
+import { router, usePage } from '@inertiajs/react';
 import { Loader2, X as XIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { FormFieldDisplay } from './form-field-display';
@@ -49,6 +50,7 @@ export interface FormRequestData {
     subject_type?: string | null;
     subject_id?: number | null;
     submitted_at: string | null;
+    submitted_by_name?: string | null;
     opened_at?: string | null;
     expires_at?: string | null;
     responses?: Record<string, unknown> | null;
@@ -134,6 +136,7 @@ export function FormFillPane({
     formRequest: FormRequestData | null;
     onClose: () => void;
 }) {
+    const { auth } = usePage<SharedData>().props;
     const [values, setValues] = useState<Record<number, FormResponseValue>>({});
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
@@ -261,6 +264,13 @@ export function FormFillPane({
 
     if (!formRequest) return null;
 
+    // User-assigned forms may only be completed by the assignee — mirrors the
+    // server-side check in FormRequestController::submitInternal.
+    const assignedToOther =
+        formRequest.assignee_strategy === 'user' &&
+        formRequest.assignee_user_id != null &&
+        formRequest.assignee_user_id !== auth.user.id;
+
     return (
         <aside
             className="bg-background fixed inset-y-0 right-0 z-30 flex w-full max-w-[520px] flex-col border-l shadow-2xl animate-in slide-in-from-right duration-200"
@@ -290,6 +300,15 @@ export function FormFillPane({
                 </button>
             </div>
 
+            {assignedToOther ? (
+                <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+                    <p className="text-muted-foreground max-w-sm text-center text-sm">
+                        This form is assigned to{' '}
+                        <span className="text-foreground font-medium">{formRequest.assignee_user_name ?? 'another user'}</span>{' '}
+                        — only they can complete it.
+                    </p>
+                </div>
+            ) : (
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
                 {isPaginated && (
                     <div className="text-muted-foreground border-b px-4 py-1.5 text-right text-xs">
@@ -378,6 +397,7 @@ export function FormFillPane({
                     </div>
                 </div>
             </form>
+            )}
         </aside>
     );
 }
@@ -404,7 +424,7 @@ export function FormResponsePane({
                 <div className="min-w-0">
                     <p className="truncate text-xs font-semibold">{formRequest.form_template?.name ?? 'Form'}</p>
                     <p className="text-muted-foreground truncate text-xs">
-                        Submitted by <span className="text-foreground">{formRequest.recipient_name}</span>
+                        Submitted by <span className="text-foreground">{formRequest.submitted_by_name ?? formRequest.recipient_name}</span>
                         {formRequest.submitted_at && <> · {formatDateTime(formRequest.submitted_at)}</>}
                     </p>
                 </div>

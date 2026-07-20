@@ -125,6 +125,7 @@ class FormService
         FormRequest $formRequest,
         array $responses,
         Request $request,
+        ?User $submitter = null,
     ): void {
         if ($formRequest->isSubmitted()) {
             throw new \RuntimeException('This form has already been submitted.');
@@ -153,6 +154,7 @@ class FormService
                 'responses' => json_encode($responses),
                 'response_snapshot' => json_encode($snapshot),
                 'submitted_at' => now(),
+                'submitted_by' => $submitter?->id,
                 'status' => 'submitted',
                 'submitter_ip_address' => $request->ip(),
                 'submitter_user_agent' => Str::limit($request->userAgent(), 500),

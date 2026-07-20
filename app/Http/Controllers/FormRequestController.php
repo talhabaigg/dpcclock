@@ -39,7 +39,7 @@ class FormRequestController extends Controller
         unset($filters['per_page']);
 
         $query = FormRequest::query()
-            ->with(['formTemplate:id,name', 'sentBy:id,name', 'assigneeUser:id,name', 'formable'])
+            ->with(['formTemplate:id,name', 'sentBy:id,name', 'assigneeUser:id,name', 'submittedBy:id,name', 'formable'])
             ->latest();
 
         if (! empty($filters['status'])) {
@@ -110,6 +110,7 @@ class FormRequestController extends Controller
                     'name' => $fr->formTemplate->name,
                 ] : null,
                 'sent_by' => $fr->sentBy ? ['id' => $fr->sentBy->id, 'name' => $fr->sentBy->name] : null,
+                'submitted_by_name' => $fr->submittedBy?->name,
                 'assignee_user' => $fr->assigneeUser ? ['id' => $fr->assigneeUser->id, 'name' => $fr->assigneeUser->name] : null,
                 'assignee_permission' => $fr->assignee_permission,
             ]),
@@ -272,7 +273,9 @@ class FormRequestController extends Controller
         $responses = $this->collectResponses($formRequest, $validated, $visibility);
 
         try {
-            $this->formService->processSubmission($formRequest, $responses, $request);
+            // Token submissions are usually guests; when a logged-in user
+            // follows the link, still credit them as the submitter.
+            $this->formService->processSubmission($formRequest, $responses, $request, $request->user());
         } catch (\RuntimeException $e) {
             return view('forms.expired', ['message' => $e->getMessage()]);
         }
@@ -369,6 +372,17 @@ class FormRequestController extends Controller
             }
         }
 
+        // User-assigned forms (e.g. a WHS sign-off assigned to a specific
+        // person) can only be submitted by that person — a sign-off completed
+        // by anyone else would be recorded against the assignee's name.
+        if ($formRequest->assignee_strategy === 'user' && $formRequest->assignee_user_id) {
+            if ($request->user()->id !== $formRequest->assignee_user_id) {
+                $assigneeName = $formRequest->assigneeUser?->name ?? 'the assigned user';
+
+                return back()->withErrors(['form' => "This form is assigned to {$assigneeName} — only they can complete it."]);
+            }
+        }
+
         $visibility = $this->computeVisibility($formRequest, $request->all());
         $rules = $this->buildValidationRules($formRequest, $visibility);
         $validated = $request->validate($rules);
@@ -376,23 +390,13 @@ class FormRequestController extends Controller
         $responses = $this->collectResponses($formRequest, $validated, $visibility);
 
         try {
-            $this->formService->processSubmission($formRequest, $responses, $request);
+            $this->formService->processSubmission($formRequest, $responses, $request, $request->user());
         } catch (\RuntimeException $e) {
             return back()->withErrors(['form' => $e->getMessage()]);
         }
 
-        // Log who actually submitted from inside the app so the audit trail
-        // captures the authenticated user, not just the email-time recipient.
-        $formable = $formRequest->formable;
-        if ($formable && method_exists($formable, 'addSystemComment')) {
-            $templateName = $formRequest->formTemplate->name;
-            $formable->addSystemComment(
-                "Form \"{$templateName}\" submitted in-app by {$request->user()->name}",
-                ['type' => 'form_submitted_in_app', 'form_request_id' => $formRequest->id],
-                $request->user()->id,
-            );
-        }
-
+        // The FormSubmitted listener adds the audit comment, crediting the
+        // authenticated submitter via submitted_by — no extra comment needed.
         return back()->with('success', 'Form submitted.');
     }
 

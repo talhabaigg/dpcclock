@@ -1327,11 +1327,17 @@ export default function EmploymentApplicationShow({ application: app, comments, 
     // long as their permission grants overlap.
     function canFillFormRequest(fr: FormRequestData): boolean {
         if (app.status === 'onboarded') return false;
+        // User-assigned forms (e.g. a WHS sign-off) may only be completed by
+        // the assignee — even admins can't sign on someone else's behalf.
+        // Mirrors the server check in FormRequestController::submitInternal.
+        if (fr.assignee_strategy === 'user' && fr.assignee_user_id) {
+            return auth.user?.id === fr.assignee_user_id;
+        }
         if (auth.isAdmin) return true;
         if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
             return permissions.includes(fr.assignee_permission);
         }
-        // User-assigned / email-recipient forms — fall back to the standard screening permission.
+        // Email-recipient forms — fall back to the standard screening permission.
         return permissions.includes('employment-applications.screen');
     }
     const canView = auth.isAdmin || permissions.includes('employment-applications.view');

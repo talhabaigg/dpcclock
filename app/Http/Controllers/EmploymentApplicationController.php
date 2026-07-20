@@ -385,7 +385,7 @@ class EmploymentApplicationController extends Controller
         // loaded so URL resolution stays N+1-free.
         $formRequests = $employmentApplication->formRequests()
             ->whereNotIn('status', ['cancelled'])
-            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'assigneeUser:id,name', 'media'])
+            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'assigneeUser:id,name', 'submittedBy:id,name', 'media'])
             ->latest()
             ->get();
 
@@ -492,6 +492,7 @@ class EmploymentApplicationController extends Controller
                 'subject_type' => $fr->subject_type,
                 'subject_id' => $fr->subject_id,
                 'submitted_at' => $fr->submitted_at?->toISOString(),
+                'submitted_by_name' => $fr->submittedBy?->name,
                 'opened_at' => $fr->opened_at?->toISOString(),
                 'expires_at' => $fr->expires_at?->toISOString(),
                 'responses' => $fr->responses,

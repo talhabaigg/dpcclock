@@ -224,12 +224,18 @@ export default function EmployeeShow() {
 
     const permissions = auth?.permissions ?? [];
     const canFillFormRequest = useCallback((fr: FormRequestData): boolean => {
+        // User-assigned forms may only be completed by the assignee — even
+        // admins can't sign on someone else's behalf. Mirrors the server
+        // check in FormRequestController::submitInternal.
+        if (fr.assignee_strategy === 'user' && fr.assignee_user_id) {
+            return auth?.user?.id === fr.assignee_user_id;
+        }
         if (auth?.isAdmin) return true;
         if (fr.assignee_strategy === 'permission' && fr.assignee_permission) {
             return permissions.includes(fr.assignee_permission);
         }
         return permissions.includes('employees.view');
-    }, [auth?.isAdmin, permissions]);
+    }, [auth?.isAdmin, auth?.user?.id, permissions]);
 
     const [showSigningModal, setShowSigningModal] = useState(false);
     const [editingDraft, setEditingDraft] = useState<SigningRequestSummary | null>(null);

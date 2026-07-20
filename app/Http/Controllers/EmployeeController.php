@@ -396,7 +396,7 @@ class EmployeeController extends Controller
 
         $formRequests = $employee->formRequests()
             ->whereNotIn('status', ['cancelled'])
-            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'assigneeUser:id,name', 'media'])
+            ->with(['formTemplate:id,name', 'formTemplate.fields', 'sentBy:id,name', 'assigneeUser:id,name', 'submittedBy:id,name', 'media'])
             ->get();
 
         return Inertia::render('employees/show', [
@@ -427,6 +427,7 @@ class EmployeeController extends Controller
                 'subject_type' => $fr->subject_type,
                 'subject_id' => $fr->subject_id,
                 'submitted_at' => $fr->submitted_at?->toISOString(),
+                'submitted_by_name' => $fr->submittedBy?->name,
                 'opened_at' => $fr->opened_at?->toISOString(),
                 'expires_at' => $fr->expires_at?->toISOString(),
                 'created_at' => $fr->created_at?->toISOString(),
