@@ -2,8 +2,14 @@ export type EmployeeOption = { id: number; name: string };
 
 export type ChecklistTemplateOption = { id: number; name: string; items_count: number };
 
-/** User-facing classification ("Builder Concerns", "Works Tracker", ...). */
-export type CategoryOption = { id: number; name: string; code: string; color: string };
+/** Predefined task title offered during quick creation. */
+export type TitlePresetOption = { id: number; title: string };
+
+/**
+ * User-facing classification ("Builder Concerns", "Works Tracker", ...).
+ * `presets` (from /site-task-categories) already includes global presets.
+ */
+export type CategoryOption = { id: number; name: string; code: string; color: string; presets?: TitlePresetOption[] };
 
 export type SiteTaskAssignee = {
     id: number;
@@ -40,6 +46,7 @@ export type ChecklistDto = {
 
 export type SiteTaskDto = {
     id: number;
+    location_id: number;
     parent_id: number | null;
     category_id: number | null;
     category?: CategoryOption | null;

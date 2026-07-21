@@ -10,6 +10,7 @@ use App\Models\DrawingObservation;
 use App\Models\Location;
 use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
+use App\Models\SiteTaskTitlePreset;
 use App\Services\TakeoffCostCalculator;
 use App\Support\MeasurementGeometry;
 use Carbon\Carbon;
@@ -107,8 +108,19 @@ class SyncController extends Controller
 
         // Site tasks joined the schema in v2 — older builds don't know these
         // tables, so only send them to clients that ask for v2+.
-        if ((int) $request->input('schema_version', 1) >= 2) {
+        $schemaVersion = (int) $request->input('schema_version', 1);
+        if ($schemaVersion >= 2) {
             $changes = array_merge($changes, $this->pullSiteTaskTables($projectIds, $since));
+        }
+
+        // Title presets joined in v3 (quick task creation name picker).
+        if ($schemaVersion >= 3) {
+            $changes['site_task_title_presets'] = $this->pullTable(
+                SiteTaskTitlePreset::active(),
+                $since,
+                fn ($record) => $this->formatSiteTaskTitlePreset($record),
+                softDeletes: false
+            );
         }
 
         return response()->json([

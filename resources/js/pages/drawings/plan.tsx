@@ -1,11 +1,9 @@
 import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
 import { PlanViewerToolbar } from '@/components/plan-viewer-toolbar';
+import { CreateSiteTaskDialog } from '@/components/site-tasks/create-task-dialog';
 import { SiteTaskDialog } from '@/components/site-tasks/site-task-dialog';
-import { CategoryCode } from '@/components/site-tasks/task-sections';
-import { type CategoryOption, pinMetaFor, type SiteTaskDto } from '@/components/site-tasks/types';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { type CategoryOption, type EmployeeOption, pinMetaFor, type SiteTaskDto } from '@/components/site-tasks/types';
 import AppLayout from '@/layouts/app-layout';
 import { api } from '@/lib/api';
 import { type BreadcrumbItem } from '@/types';
@@ -70,6 +68,15 @@ export default function DrawingPlan() {
             .catch(() => {});
     }, [canViewTasks]);
 
+    // Assignee options for the quick-create dialog — the project kiosk's roster.
+    const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+    useEffect(() => {
+        if (!canEditTasks) return;
+        api.get<{ employees: EmployeeOption[] }>('/site-task-employees', { params: { project: projectId } })
+            .then((res) => setEmployees(res.employees))
+            .catch(() => {});
+    }, [canEditTasks, projectId]);
+
     // Esc cancels pin-drop mode.
     useEffect(() => {
         if (!pinMode) return;
@@ -99,27 +106,9 @@ export default function DrawingPlan() {
         return parent?.id ?? null;
     };
 
-    // Dropping a pin asks for a category, creates the task, and opens its
-    // dialog — the title is renamed inline there.
+    // Dropping a pin opens the shared quick-create dialog (category, name,
+    // assignees, due date, photos), then opens the created task's dialog.
     const [pendingPin, setPendingPin] = useState<Point | null>(null);
-
-    const createPin = async (point: Point, category: CategoryOption) => {
-        setPendingPin(null);
-        try {
-            const res = await api.post<{ task: SiteTaskDto }>(`/projects/${projectId}/site-tasks`, {
-                category_id: category.id,
-                title: 'New pin',
-                drawing_id: drawing.id,
-                page_number: 1,
-                x: point.x,
-                y: point.y,
-            });
-            await loadTasks();
-            setSelectedTaskId(res.task.id);
-        } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Failed to create pin');
-        }
-    };
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -146,7 +135,11 @@ export default function DrawingPlan() {
                     pinDropMode={pinMode && canEditTasks}
                     onCanvasClick={(point) => {
                         setPinMode(false);
-                        setPendingPin(point);
+                        // The viewer fires this on pointerup; the browser's
+                        // trailing `click` would land outside a dialog opened
+                        // synchronously and immediately dismiss it. Open on
+                        // the next task instead.
+                        window.setTimeout(() => setPendingPin(point), 0);
                     }}
                 />
                 <PlanViewerToolbar controls={viewControls} pinMode={pinMode} onTogglePinMode={() => setPinMode((v) => !v)} canEdit={canEditTasks} />
@@ -170,30 +163,20 @@ export default function DrawingPlan() {
                 onOpenTask={(id) => setSelectedTaskId(id)}
             />
 
-            {/* Category picker for a freshly dropped pin */}
-            <Dialog open={pendingPin !== null} onOpenChange={(open) => !open && setPendingPin(null)}>
-                <DialogContent className="sm:max-w-xs">
-                    <DialogHeader>
-                        <DialogTitle className="text-sm">New pin — pick a category</DialogTitle>
-                    </DialogHeader>
-                    <ul className="space-y-1">
-                        {categories.map((c) => (
-                            <li key={c.id}>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="coarse:h-12 h-10 w-full justify-start gap-2.5 text-sm"
-                                    onClick={() => pendingPin && void createPin(pendingPin, c)}
-                                >
-                                    <CategoryCode category={c} className="h-7 w-7 text-[10px]" />
-                                    {c.name}
-                                </Button>
-                            </li>
-                        ))}
-                        {categories.length === 0 && <li className="text-muted-foreground text-xs">No categories configured.</li>}
-                    </ul>
-                </DialogContent>
-            </Dialog>
+            {/* Quick-create for a freshly dropped pin */}
+            <CreateSiteTaskDialog
+                projectId={projectId}
+                open={pendingPin !== null}
+                onOpenChange={(open) => !open && setPendingPin(null)}
+                categories={categories}
+                employees={employees}
+                pin={pendingPin ? { drawing_id: drawing.id, page_number: 1, x: pendingPin.x, y: pendingPin.y } : null}
+                onCreated={(taskId) => {
+                    setPendingPin(null);
+                    void loadTasks();
+                    setSelectedTaskId(taskId);
+                }}
+            />
         </AppLayout>
     );
 }

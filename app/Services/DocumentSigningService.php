@@ -198,7 +198,7 @@ class DocumentSigningService
         $pdfContent = $this->pdfService->generate($signingRequest, $signatureDataUrl, $initialsDataUrl);
 
         $signingRequest->addMediaFromString($pdfContent)
-            ->usingFileName('signed-document.pdf')
+            ->usingFileName($signingRequest->signedDocumentFileName())
             ->withCustomProperties(['document_hash' => $signingRequest->document_hash])
             ->toMediaCollection('signed_document');
 

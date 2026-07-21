@@ -24,6 +24,12 @@ class SiteTaskCategory extends Model
         return $this->hasMany(SiteTask::class, 'category_id');
     }
 
+    public function titlePresets(): HasMany
+    {
+        return $this->hasMany(SiteTaskTitlePreset::class, 'category_id')
+            ->orderBy('sort_order')->orderBy('id');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

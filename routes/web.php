@@ -56,6 +56,7 @@ use App\Http\Controllers\PendingPurchaseOrderController;
 use App\Http\Controllers\ProductionUploadController;
 use App\Http\Controllers\ProjectCalendarController;
 use App\Http\Controllers\ProjectTaskController;
+use App\Http\Controllers\SiteTaskCategoryController;
 use App\Http\Controllers\SiteTaskController;
 use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
@@ -1327,6 +1328,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::delete('/site-tasks/{siteTask}', [SiteTaskController::class, 'destroy'])->name('site-tasks.destroy')
         ->middleware('permission:site-tasks.delete');
+
+    // Category + title-preset management (admin only)
+    Route::middleware('permission:site-tasks.manage-categories')->group(function () {
+        Route::get('/site-task-categories/manage', [SiteTaskCategoryController::class, 'index'])->name('site-task-categories.manage');
+        Route::post('/site-task-categories', [SiteTaskCategoryController::class, 'store'])->name('site-task-categories.store');
+        Route::patch('/site-task-categories/{category}', [SiteTaskCategoryController::class, 'update'])->name('site-task-categories.update');
+        Route::delete('/site-task-categories/{category}', [SiteTaskCategoryController::class, 'destroy'])->name('site-task-categories.destroy');
+        Route::post('/site-task-title-presets', [SiteTaskCategoryController::class, 'storePreset'])->name('site-task-title-presets.store');
+        Route::patch('/site-task-title-presets/{preset}', [SiteTaskCategoryController::class, 'updatePreset'])->name('site-task-title-presets.update');
+        Route::delete('/site-task-title-presets/{preset}', [SiteTaskCategoryController::class, 'destroyPreset'])->name('site-task-title-presets.destroy');
+    });
 
     // --------------------------------------------
     // TAKEOFF (view: read measurements; edit: create/modify measurements, conditions, bid areas)

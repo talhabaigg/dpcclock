@@ -1,6 +1,6 @@
-import { DatePickerDemo } from '@/components/date-picker';
+import { CreateSiteTaskDialog } from '@/components/site-tasks/create-task-dialog';
 import { SiteTaskDialog } from '@/components/site-tasks/site-task-dialog';
-import { AvatarStack, CategoryCode, describeError, EmployeeMultiPicker, StatusBadge } from '@/components/site-tasks/task-sections';
+import { AvatarStack, CategoryCode, StatusBadge } from '@/components/site-tasks/task-sections';
 import {
     type CategoryOption,
     type EmployeeOption,
@@ -13,9 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -131,11 +129,11 @@ export default function SiteTaskBoard() {
                 .then((res) => setCategories(res.categories))
                 .catch(() => {}),
             api
-                .get<{ employees: EmployeeOption[] }>('/site-task-employees')
+                .get<{ employees: EmployeeOption[] }>('/site-task-employees', { params: { project: project.id } })
                 .then((res) => setEmployees(res.employees))
                 .catch(() => {}),
         ]).finally(() => setLoading(false));
-    }, [loadTasks]);
+    }, [loadTasks, project.id]);
 
     // Flatten parents + children into one card list, keeping the parent ref
     // so a card can say where it lives ("in Unit 1203").
@@ -355,7 +353,7 @@ export default function SiteTaskBoard() {
                 </DialogContent>
             </Dialog>
 
-            <CreateTaskDialog
+            <CreateSiteTaskDialog
                 projectId={project.id}
                 open={createOpen}
                 onOpenChange={setCreateOpen}
@@ -367,123 +365,6 @@ export default function SiteTaskBoard() {
                 }}
             />
         </AppLayout>
-    );
-}
-
-/** Create a task with no pin/drawing — board-only tasks. */
-function CreateTaskDialog({
-    projectId,
-    open,
-    onOpenChange,
-    categories,
-    employees,
-    onCreated,
-}: {
-    projectId: number;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    categories: CategoryOption[];
-    employees: EmployeeOption[];
-    onCreated: (taskId: number) => void;
-}) {
-    const [title, setTitle] = useState('');
-    const [categoryId, setCategoryId] = useState<string>('');
-    const [description, setDescription] = useState('');
-    const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
-    const [employeeIds, setEmployeeIds] = useState<number[]>([]);
-    const [saving, setSaving] = useState(false);
-
-    const submit = async () => {
-        if (!title.trim()) {
-            toast.error('Give the task a title.');
-            return;
-        }
-        if (!categoryId) {
-            toast.error('Pick a category.');
-            return;
-        }
-        setSaving(true);
-        try {
-            const res = await api.post<{ task: SiteTaskDto }>(`/projects/${projectId}/site-tasks`, {
-                category_id: Number(categoryId),
-                title: title.trim(),
-                description: description.trim() || null,
-                due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
-                employee_ids: employeeIds,
-            });
-            onOpenChange(false);
-            setTitle('');
-            setCategoryId('');
-            setDescription('');
-            setDueDate(undefined);
-            setEmployeeIds([]);
-            toast.success('Task created');
-            onCreated(res.task.id);
-        } catch (e) {
-            toast.error(describeError(e));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="text-sm">Create Task</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                    <Field>
-                        <FieldLabel className="text-xs">Title</FieldLabel>
-                        <Input
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="What needs doing?"
-                            autoFocus
-                            onKeyDown={(e) => e.key === 'Enter' && void submit()}
-                        />
-                    </Field>
-                    <Field>
-                        <FieldLabel className="text-xs">Category</FieldLabel>
-                        <Select value={categoryId} onValueChange={setCategoryId}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Pick category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {categories.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)} className="text-xs">
-                                        <span className="flex items-center gap-1.5">
-                                            <CategoryCode category={c} />
-                                            {c.name}
-                                        </span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </Field>
-                    <Field>
-                        <FieldLabel className="text-xs">Description (optional)</FieldLabel>
-                        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="text-sm" />
-                    </Field>
-                    <Field>
-                        <FieldLabel className="text-xs">Due date (optional)</FieldLabel>
-                        <DatePickerDemo value={dueDate} onChange={setDueDate} />
-                    </Field>
-                    <Field>
-                        <FieldLabel className="text-xs">Assign to (optional)</FieldLabel>
-                        <EmployeeMultiPicker employees={employees} selected={employeeIds} onChange={setEmployeeIds} />
-                    </Field>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button size="sm" onClick={submit} disabled={saving}>
-                        {saving ? <Spinner className="h-3.5 w-3.5" /> : 'Create Task'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
     );
 }
 

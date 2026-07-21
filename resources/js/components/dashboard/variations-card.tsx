@@ -74,6 +74,7 @@ const TYPE_LABEL: Record<string, string> = {
     yet2submit: 'Yet to Submit',
     pending: 'Pending',
     approved: 'Approved',
+    'n/a': 'Type Missing',
 };
 
 function typeLabel(type: string) {

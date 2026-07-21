@@ -11,6 +11,7 @@ use App\Models\Location;
 use App\Models\SiteTask;
 use App\Models\SiteTaskAssignee;
 use App\Models\SiteTaskCategory;
+use App\Models\SiteTaskTitlePreset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,12 +66,22 @@ class SiteTaskController extends Controller
     }
 
     /**
-     * Employee options for the assignee picker.
+     * Employee options for the assignee picker. With ?project= the list is
+     * the project location's kiosk roster; projects without a kiosk fall
+     * back to all employees so the picker never comes up empty.
      */
-    public function employees(): JsonResponse
+    public function employees(Request $request): JsonResponse
     {
+        $kiosk = $request->filled('project')
+            ? Location::find($request->integer('project'))?->kiosk
+            : null;
+
+        $query = $kiosk
+            ? $kiosk->employees()->getQuery()
+            : Employee::query();
+
         return response()->json([
-            'employees' => Employee::orderBy('name')->get(['id', 'name']),
+            'employees' => $query->orderBy('name')->get(['employees.id', 'employees.name']),
         ]);
     }
 
@@ -89,15 +100,33 @@ class SiteTaskController extends Controller
     }
 
     /**
-     * Category options for the pin/category pickers.
+     * Category options for the pin/category pickers, each carrying its title
+     * presets (category-specific first, then globals) for the name pickers.
      */
     public function categories(): JsonResponse
     {
-        return response()->json([
-            'categories' => SiteTaskCategory::active()
-                ->orderBy('sort_order')
-                ->get(['id', 'name', 'code', 'color']),
-        ]);
+        $globalPresets = SiteTaskTitlePreset::active()
+            ->whereNull('category_id')
+            ->orderBy('sort_order')->orderBy('id')
+            ->get(['id', 'title'])
+            ->map(fn ($p) => ['id' => $p->id, 'title' => $p->title]);
+
+        $categories = SiteTaskCategory::active()
+            ->with(['titlePresets' => fn ($q) => $q->active()])
+            ->orderBy('sort_order')
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'code' => $c->code,
+                'color' => $c->color,
+                'presets' => $c->titlePresets
+                    ->map(fn ($p) => ['id' => $p->id, 'title' => $p->title])
+                    ->concat($globalPresets)
+                    ->values(),
+            ]);
+
+        return response()->json(['categories' => $categories]);
     }
 
     public function show(SiteTask $siteTask): JsonResponse

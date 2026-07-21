@@ -479,6 +479,12 @@ const configuration = [
                 permission: 'checklists.manage-templates',
             },
             {
+                name: 'Site Task Categories',
+                url: '/site-task-categories/manage',
+                icon: Tags,
+                permission: 'site-tasks.manage-categories',
+            },
+            {
                 name: 'Document Templates',
                 url: '/document-templates',
                 icon: NotepadText,

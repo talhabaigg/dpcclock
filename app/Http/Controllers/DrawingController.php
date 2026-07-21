@@ -49,6 +49,9 @@ class DrawingController extends Controller
             ->withCount(['measurements as takeoff_count' => function ($q) {
                 $q->where('scope', 'takeoff');
             }])
+            ->withCount(['siteTasks as pinned_task_count' => function ($q) {
+                $q->whereNotNull('x')->whereNotNull('y');
+            }])
             ->orderBy('sheet_number')
             ->orderBy('created_at', 'desc')
             ->get()
@@ -63,6 +66,7 @@ class DrawingController extends Controller
                     'created_at' => $drawing->created_at,
                     'thumbnail_url' => $drawing->thumbnail_url,
                     'takeoff_count' => $drawing->takeoff_count,
+                    'pinned_task_count' => $drawing->pinned_task_count,
                     'revision_count' => $drawing->sheet_number
                         ? ($revisionCounts[$drawing->sheet_number] ?? 1)
                         : 1,

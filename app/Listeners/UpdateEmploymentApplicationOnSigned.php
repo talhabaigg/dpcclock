@@ -32,9 +32,18 @@ class UpdateEmploymentApplicationOnSigned
             ->exists();
 
         if (! $alreadyCommented) {
+            $documentLabel = $signingRequest->document_title
+                ?: $signingRequest->documentTemplate?->name
+                ?: 'Contract';
+
             $application->addSystemComment(
-                "Contract signed by {$signingRequest->signer_full_name}",
-                ['type' => 'contract_signed', 'signing_request_id' => $signingRequest->id],
+                "{$signingRequest->signer_full_name} signed {$documentLabel}",
+                [
+                    'type' => 'contract_signed',
+                    'signing_request_id' => $signingRequest->id,
+                    'signer_name' => $signingRequest->signer_full_name,
+                    'document_title' => $documentLabel,
+                ],
                 $signingRequest->sent_by,
             );
         }

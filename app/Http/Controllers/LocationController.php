@@ -377,6 +377,9 @@ class LocationController extends Controller
             ->leftJoin('variation_line_items', 'variations.id', '=', 'variation_line_items.variation_id')
             ->where('variations.location_id', $location->id)
             ->whereNull('variations.deleted_at')
+            ->whereNotNull('variations.premier_co_id')
+            // Hide internal types, matching the variations index default
+            ->whereIn('variations.type', ['YET2SUBMIT', 'PENDING', 'APPROVED'])
             ->select('variations.status', 'variations.type')
             ->selectRaw('COUNT(DISTINCT variations.id) as qty')
             ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')
@@ -391,6 +394,7 @@ class LocationController extends Controller
             ->where('variations.location_id', $location->id)
             ->where('variations.type', 'PENDING')
             ->whereNull('variations.deleted_at')
+            ->whereNotNull('variations.premier_co_id')
             ->where('variations.co_date', '<=', now()->subDays(30))
             ->selectRaw('COUNT(DISTINCT variations.id) as count')
             ->selectRaw('COALESCE(SUM(variation_line_items.revenue), 0) as value')

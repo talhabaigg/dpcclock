@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\SiteTask;
 use App\Models\SiteTaskAssignee;
 use App\Models\SiteTaskCategory;
+use App\Models\SiteTaskTitlePreset;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -608,6 +609,21 @@ trait SyncsSiteTasks
             'sort_order' => $category->sort_order,
             'created_at' => $category->created_at?->getTimestampMs() ?? 0,
             'updated_at' => $category->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
+    private function formatSiteTaskTitlePreset(SiteTaskTitlePreset $preset): array
+    {
+        // Reference data: numeric server id doubles as the watermelon id.
+        // category_id null = global preset, offered under every category.
+        return [
+            'id' => (string) $preset->id,
+            'server_id' => $preset->id,
+            'category_id' => $preset->category_id,
+            'title' => $preset->title,
+            'sort_order' => $preset->sort_order,
+            'created_at' => $preset->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $preset->updated_at?->getTimestampMs() ?? 0,
         ];
     }
 

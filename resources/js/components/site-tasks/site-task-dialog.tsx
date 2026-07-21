@@ -118,9 +118,6 @@ export function SiteTaskDialog({
     // employees never leave the pickers stale/greyed out.
     useEffect(() => {
         if (!open) return;
-        api.get<{ employees: EmployeeOption[] }>('/site-task-employees')
-            .then((res) => setEmployees(res.employees))
-            .catch((e) => toast.error(describeError(e)));
         api.get<{ templates: ChecklistTemplateOption[] }>('/site-task-checklist-templates')
             .then((res) => setTemplates(res.templates))
             .catch((e) => toast.error(describeError(e)));
@@ -128,6 +125,16 @@ export function SiteTaskDialog({
             .then((res) => setCategories(res.categories))
             .catch(() => {});
     }, [open]);
+
+    // Assignee options are the task's project kiosk roster, so they wait for
+    // the detail (and its location_id) to load.
+    const locationId = detail?.task.location_id;
+    useEffect(() => {
+        if (!open || !locationId) return;
+        api.get<{ employees: EmployeeOption[] }>('/site-task-employees', { params: { project: locationId } })
+            .then((res) => setEmployees(res.employees))
+            .catch((e) => toast.error(describeError(e)));
+    }, [open, locationId]);
 
     const refresh = useCallback(() => {
         void loadDetail();

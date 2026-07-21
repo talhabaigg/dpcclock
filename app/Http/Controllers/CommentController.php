@@ -38,7 +38,7 @@ class CommentController extends Controller
     /**
      * Store a new comment on a commentable model.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $this->normalizeBodyJson($request);
 
@@ -78,6 +78,12 @@ class CommentController extends Controller
         }
 
         $this->syncMentions($comment, $model);
+
+        // API-style callers (quick-create photo upload) get JSON; Inertia
+        // composers keep the redirect-back flow.
+        if ($request->wantsJson()) {
+            return response()->json(['comment' => ['id' => $comment->id]], 201);
+        }
 
         return back();
     }

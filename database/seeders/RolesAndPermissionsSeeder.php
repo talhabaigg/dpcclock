@@ -286,6 +286,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'site-tasks.view' => 'View site tasks and QA checklists on plans',
             'site-tasks.edit' => 'Create/edit site tasks, tick QA items, raise rectifications',
             'site-tasks.delete' => 'Delete site tasks',
+            'site-tasks.manage-categories' => 'Manage site task categories and title presets',
         ],
 
         // ============================================

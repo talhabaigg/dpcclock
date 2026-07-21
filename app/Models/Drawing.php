@@ -98,6 +98,11 @@ class Drawing extends Model implements HasMedia
         return $this->belongsTo(Location::class, 'project_id');
     }
 
+    public function siteTasks()
+    {
+        return $this->hasMany(SiteTask::class, 'drawing_id');
+    }
+
     public function observations()
     {
         return $this->hasMany(DrawingObservation::class, 'drawing_id');

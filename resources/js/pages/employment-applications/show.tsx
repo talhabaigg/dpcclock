@@ -366,7 +366,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
     const [showReplies, setShowReplies] = useState(false);
     const isSystem = comment.metadata !== null;
     const statusChange = comment.metadata?.status_change as { from: string; to: string } | undefined;
-    const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number } : undefined;
+    const contractSignedMeta = comment.metadata?.type === 'contract_signed' ? comment.metadata as { type: string; signing_request_id: number; signer_name?: string; document_title?: string } : undefined;
     const formSubmittedMeta = comment.metadata?.type === 'form_submitted' ? comment.metadata as { type: string; form_request_id: number; form_name: string } : undefined;
     const onboardedMeta = comment.metadata?.type === 'onboarded' ? comment.metadata as { type: string; eh_employee_id: number; location_name: string; company_code: string } : undefined;
     const isOwner = currentUserId !== undefined && comment.user?.id === currentUserId;
@@ -396,8 +396,15 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
                     <p className="text-sm">
-                        <span className="font-medium">{comment.user?.name ?? 'System'}</span>
-                        <span className="text-muted-foreground"> {comment.body}</span>
+                        {contractSignedMeta.signer_name ? (
+                            <>
+                                <span className="font-medium">{contractSignedMeta.signer_name}</span>
+                                <span className="text-muted-foreground"> signed </span>
+                                <span className="font-medium">{contractSignedMeta.document_title ?? 'the contract'}</span>
+                            </>
+                        ) : (
+                            <span className="text-muted-foreground">{comment.body}</span>
+                        )}
                     </p>
                     <p className="text-muted-foreground text-xs">{formatDateTime(comment.created_at)}</p>
                     <button
@@ -406,7 +413,7 @@ function CommentBubble({ comment, currentUserId, onEdit, onDelete, onOpenFormRes
                         className="mt-1.5 flex items-center gap-1.5 rounded-md border bg-white px-3 py-1.5 text-xs font-medium text-green-700 shadow-sm hover:bg-green-50 transition-colors"
                     >
                         <FileSignature className="h-3.5 w-3.5" />
-                        View Signed Document
+                        {contractSignedMeta.document_title ? `View ${contractSignedMeta.document_title}` : 'View Signed Document'}
                     </button>
                 </div>
             </div>

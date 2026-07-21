@@ -1583,7 +1583,10 @@ class SigningRequestController extends Controller
             $this->authorizeSignableAction($sr, readOnly: true);
             $media = $sr->getFirstMedia('signed_document') ?? $sr->getFirstMedia('uploaded_document');
             if ($media) {
-                $files[] = ['name' => $media->file_name, 'path' => $media->getPath()];
+                $name = $media->collection_name === 'signed_document'
+                    ? $sr->signedDocumentFileName()
+                    : $media->file_name;
+                $files[] = ['name' => $name, 'path' => $media->getPath()];
                 continue;
             }
             if ($sr->document_html) {
@@ -1643,13 +1646,17 @@ class SigningRequestController extends Controller
             ?? $signingRequest->getFirstMedia('uploaded_document');
 
         if ($media) {
+            $filename = $media->collection_name === 'signed_document'
+                ? $signingRequest->signedDocumentFileName()
+                : $media->file_name;
+
             return response()->streamDownload(function () use ($media) {
                 $stream = $media->stream();
                 fpassthru($stream);
                 if (is_resource($stream)) {
                     fclose($stream);
                 }
-            }, $media->file_name, [
+            }, $filename, [
                 'Content-Type' => $media->mime_type,
             ]);
         }

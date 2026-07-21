@@ -72,6 +72,7 @@ type Drawing = {
     created_at: string;
     thumbnail_url: string | null;
     takeoff_count: number;
+    pinned_task_count: number;
     revision_count: number;
 };
 
@@ -555,7 +556,7 @@ export default function DrawingsIndex() {
                         </Table>
                     </Card>
                 ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                         {filteredDrawings.map((drawing) => (
                             <div key={drawing.id} className="group relative">
                                 <Link
@@ -574,7 +575,7 @@ export default function DrawingsIndex() {
                                                     src={drawing.thumbnail_url}
                                                     alt={drawing.display_name}
                                                     loading="lazy"
-                                                    className="h-full w-full object-contain transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.03] dark:brightness-90 dark:invert"
+                                                    className="h-full w-full object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.03] dark:brightness-90 dark:invert"
                                                 />
                                             ) : (
                                                 <div className="flex h-full w-full items-center justify-center">
@@ -582,6 +583,14 @@ export default function DrawingsIndex() {
                                                 </div>
                                             )}
                                             <div className="absolute right-1 top-1 flex flex-col items-end gap-1">
+                                                {drawing.pinned_task_count > 0 && (
+                                                    <span
+                                                        className="bg-primary text-primary-foreground flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-medium tabular-nums shadow-sm"
+                                                        title={`${drawing.pinned_task_count} pinned task${drawing.pinned_task_count === 1 ? '' : 's'}`}
+                                                    >
+                                                        {drawing.pinned_task_count}
+                                                    </span>
+                                                )}
                                                 {drawing.status !== 'active' && statusConfig[drawing.status] && (
                                                     <Badge variant={statusConfig[drawing.status].variant} className="text-xs">
                                                         {statusConfig[drawing.status].label}
@@ -589,46 +598,13 @@ export default function DrawingsIndex() {
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="p-2">
-                                            <p className="truncate text-sm font-medium" title={drawing.title || 'Untitled'}>
-                                                {drawing.title || 'Untitled'}
+                                        <div className="border-t p-2">
+                                            <p className="line-clamp-2 min-h-10 break-words text-sm font-medium" title={drawing.display_name}>
+                                                {drawing.display_name}
                                             </p>
                                         </div>
                                     </Card>
                                 </Link>
-                                {canDelete && (
-                                    <>
-                                        <div
-                                            className="bg-background/80 absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full shadow-sm backdrop-blur-sm"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                toggleSelected(drawing.id);
-                                            }}
-                                            role="presentation"
-                                        >
-                                            <Checkbox
-                                                aria-label={`Select ${drawing.display_name}`}
-                                                checked={selectedIds.has(drawing.id)}
-                                                onCheckedChange={() => toggleSelected(drawing.id)}
-                                                onClick={(e) => e.stopPropagation()}
-                                            />
-                                        </div>
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="text-muted-foreground hover:text-destructive absolute left-1 top-1 h-7 w-7 rounded-full bg-background/80 opacity-80 shadow-sm backdrop-blur-sm transition-all duration-150 ease-out hover:opacity-100 group-hover:opacity-100 motion-safe:hover:scale-110 motion-safe:active:scale-95"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                handleDelete(drawing);
-                                            }}
-                                            disabled={deletingId === drawing.id}
-                                            aria-label={`Delete ${drawing.display_name}`}
-                                        >
-                                            <Trash2 className={cn('h-3.5 w-3.5 transition-transform', deletingId === drawing.id && 'animate-pulse')} />
-                                        </Button>
-                                    </>
-                                )}
                             </div>
                         ))}
                     </div>

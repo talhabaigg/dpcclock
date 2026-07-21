@@ -61,6 +61,23 @@ class SigningRequest extends Model implements HasMedia
         ];
     }
 
+    /**
+     * Friendly filename for the signed PDF, e.g. "employment-contract-jane-smith-signed.pdf".
+     * The media itself is stored as a generic name for historical requests.
+     */
+    public function signedDocumentFileName(): string
+    {
+        $title = $this->document_title ?: $this->documentTemplate?->name ?: 'document';
+        $signer = $this->signer_full_name ?? $this->recipient_name;
+
+        $name = str()->slug($title);
+        if ($signer) {
+            $name .= '-' . str()->slug($signer);
+        }
+
+        return $name . '-signed.pdf';
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('signature')->singleFile();
