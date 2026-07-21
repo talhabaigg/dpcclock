@@ -1,9 +1,10 @@
 import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
+import { PlanVersionControl, type PlanOption } from '@/components/plan-version-control';
 import { PlanViewerToolbar } from '@/components/plan-viewer-toolbar';
 import { CreateSiteTaskDialog } from '@/components/site-tasks/create-task-dialog';
 import { SiteTaskDialog } from '@/components/site-tasks/site-task-dialog';
-import { type CategoryOption, type EmployeeOption, pinMetaFor, type SiteTaskDto } from '@/components/site-tasks/types';
+import { pinMetaFor, type CategoryOption, type EmployeeOption, type SiteTaskDto } from '@/components/site-tasks/types';
 import AppLayout from '@/layouts/app-layout';
 import { api } from '@/lib/api';
 import { type BreadcrumbItem } from '@/types';
@@ -12,15 +13,29 @@ import { Head, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+type ComparisonDrawing = {
+    id: number;
+    display_name: string;
+    revision_number: string | null;
+    created_at: string;
+};
+
+type PlanComparison = {
+    old: ComparisonDrawing;
+    new: ComparisonDrawing;
+};
+
 /**
  * Basic plan viewer — standalone pan/zoom page, deliberately separate from
  * the takeoff/DPC/budget workspace. Site-task pins (units) live here: drop a
  * pin, open it, run QA checklists / rectifications / work tracker.
  */
 export default function DrawingPlan() {
-    const { drawing, project, auth } = usePage<{
+    const { drawing, project, planOptions, comparison, auth } = usePage<{
         drawing: Drawing;
         project: Project | null;
+        planOptions: PlanOption[];
+        comparison: PlanComparison | null;
         auth?: { permissions?: string[] };
     }>().props;
 
@@ -30,6 +45,7 @@ export default function DrawingPlan() {
 
     const [zoom, setZoom] = useState(1);
     const [viewControls, setViewControls] = useState<ViewControls | null>(null);
+    const [comparisonError, setComparisonError] = useState<string | null>(null);
 
     const [tasks, setTasks] = useState<SiteTaskDto[]>([]);
     const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -44,6 +60,12 @@ export default function DrawingPlan() {
     const displayName = drawing.display_name || drawing.title || drawing.sheet_number || 'Drawing';
     const projectName = project?.name || 'Project';
     const projectId = project?.id || drawing.project_id;
+    const fileUrl = `/api/drawings/${comparison?.old.id ?? drawing.id}/file`;
+    const comparisonFileUrl = comparison ? `/api/drawings/${comparison.new.id}/file` : undefined;
+    const comparisonLabel = (plan: ComparisonDrawing) =>
+        plan.revision_number
+            ? `${plan.display_name} · Rev ${plan.revision_number}`
+            : `${plan.display_name} · ${new Date(plan.created_at).toLocaleString()}`;
 
     const loadTasks = useCallback(async () => {
         if (!canViewTasks) return;
@@ -123,9 +145,12 @@ export default function DrawingPlan() {
 
             <div className="relative h-[calc(100vh-4rem)] overflow-hidden">
                 <PixiDrawingViewer
-                    fileUrl={`/api/drawings/${drawing.id}/file`}
+                    fileUrl={fileUrl}
                     viewMode="pan"
                     measurements={[]}
+                    comparisonImageUrl={comparisonFileUrl}
+                    comparisonMode={comparison ? 'difference' : 'overlay'}
+                    onComparisonError={setComparisonError}
                     onZoomChange={setZoom}
                     onViewControlsChange={setViewControls}
                     showBuiltInControls={false}
@@ -143,6 +168,29 @@ export default function DrawingPlan() {
                     }}
                 />
                 <PlanViewerToolbar controls={viewControls} pinMode={pinMode} onTogglePinMode={() => setPinMode((v) => !v)} canEdit={canEditTasks} />
+                <PlanVersionControl planOptions={planOptions} currentDrawingId={drawing.id} />
+                {comparison && (
+                    <div className="bg-background/95 absolute top-3 right-3 z-10 flex max-w-[min(34rem,calc(100%-5rem))] items-center gap-3 rounded-md border px-3 py-2 text-xs shadow-sm">
+                        <span className="font-medium">Comparison</span>
+                        <span className="flex min-w-0 items-center gap-1.5 text-red-700 dark:text-red-400" title={comparisonLabel(comparison.old)}>
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />
+                            <span className="truncate">Old: {comparisonLabel(comparison.old)}</span>
+                        </span>
+                        <span className="flex min-w-0 items-center gap-1.5 text-blue-700 dark:text-blue-400" title={comparisonLabel(comparison.new)}>
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-600" />
+                            <span className="truncate">New: {comparisonLabel(comparison.new)}</span>
+                        </span>
+                        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full bg-neutral-900 dark:bg-neutral-200" />
+                            Same
+                        </span>
+                    </div>
+                )}
+                {comparisonError && (
+                    <div className="bg-destructive text-destructive-foreground absolute top-14 right-3 z-10 max-w-sm rounded-md px-3 py-2 text-xs shadow-sm">
+                        Comparison could not be rendered: {comparisonError}
+                    </div>
+                )}
                 {pinMode && (
                     <div className="bg-primary/90 text-primary-foreground pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded px-3 py-1 text-[11px] shadow">
                         Click the plan to drop a pin — Esc to cancel
