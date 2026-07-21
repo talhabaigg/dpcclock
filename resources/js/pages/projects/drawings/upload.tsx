@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { formatDistanceToNow } from 'date-fns';
-import { CheckCircle, CloudDownload, Clock, Eye, FileText, Loader2, RefreshCw, Upload, X, XCircle } from 'lucide-react';
+import { CheckCircle, Clock, Eye, FileText, Loader2, RefreshCw, Upload, X, XCircle } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
@@ -140,15 +140,6 @@ export default function DrawingsUpload() {
             <Head title={`Upload Drawings — ${project.name}`} />
 
             <div className="mx-auto w-full max-w-5xl space-y-4 p-2 sm:p-4">
-                <div className="flex justify-end">
-                    <Link href={`/projects/${project.id}/drawings/import-aconex`}>
-                        <Button variant="outline" size="sm" className="gap-2">
-                            <CloudDownload className="h-4 w-4" />
-                            Import from Aconex
-                        </Button>
-                    </Link>
-                </div>
-
                 <Card>
                     <CardContent className="p-3 sm:p-6">
                         <div

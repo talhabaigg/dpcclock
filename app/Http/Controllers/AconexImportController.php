@@ -75,6 +75,16 @@ class AconexImportController extends Controller
     }
 
     /**
+     * File formats this app can actually render/take off (PDF + raster images).
+     * CAD/model formats are dropped from the picker since importing them just
+     * creates a drawing the app can't open.
+     */
+    protected function isUnsupportedFormat(string $fileType): bool
+    {
+        return in_array(strtolower(trim($fileType)), ['dwg', 'dgn', 'dxf', 'dwf', 'dwfx', 'ifc', 'rvt', 'nwd', 'nwc', 'skp', '3ds'], true);
+    }
+
+    /**
      * Search the linked Aconex project's document register.
      * Flags documents that already have a matching Drawing (by document number)
      * in this project, and whether the Aconex revision is newer.
@@ -87,18 +97,22 @@ class AconexImportController extends Controller
 
         $validated = $request->validate([
             'query' => 'sometimes|string|max:500',
+            'page' => 'sometimes|integer|min:1',
         ]);
 
         $query = $validated['query'] ?? 'doctype:"Drawing"';
+        $page = $validated['page'] ?? 1;
 
         try {
             $aconexClient = app(AconexClient::class);
-            $documents = $aconexClient->searchDocuments($project->aconex_project_id, $query);
+            $result = $aconexClient->searchPage($project->aconex_project_id, $query, $page);
         } catch (\Throwable $e) {
             Log::error('AconexImportController: search failed', ['error' => $e->getMessage()]);
 
             return response()->json(['message' => 'Aconex search failed: '.$e->getMessage()], 502);
         }
+
+        $documents = $result['documents'];
 
         $existingBySheet = Drawing::where('project_id', $project->id)
             ->whereNotNull('sheet_number')
@@ -107,15 +121,91 @@ class AconexImportController extends Controller
             ->groupBy('sheet_number')
             ->map(fn ($group) => $group->first()->revision_number);
 
-        $documents = collect($documents)->map(function ($doc) use ($existingBySheet) {
+        $documents = collect($documents)->reject(fn ($doc) => $this->isUnsupportedFormat($doc['file_type'] ?? ''))->map(function ($doc) use ($existingBySheet) {
             $existingRevision = $existingBySheet->get($doc['document_number']);
             $doc['already_imported'] = $existingRevision !== null;
             $doc['import_is_new_revision'] = $existingRevision !== null && $existingRevision !== $doc['revision'];
+            // The revision currently held in this project (null = never imported) —
+            // powers the "B → C" revision-change display on the import picker.
+            $doc['imported_revision'] = $existingRevision;
 
             return $doc;
         })->values();
 
-        return response()->json(['documents' => $documents]);
+        return response()->json([
+            'documents' => $documents,
+            'total' => $result['total'],
+            'page' => $result['page'],
+            'page_size' => $result['page_size'],
+            'has_more' => $result['has_more'],
+        ]);
+    }
+
+    /**
+     * Drawings already imported from Aconex that now have a newer revision in
+     * Aconex. Only the previously-imported document numbers are queried (not
+     * the whole register), so this stays cheap regardless of register size.
+     */
+    public function updates(Location $project, AconexClient $aconex)
+    {
+        if (! $project->aconex_project_id) {
+            return response()->json(['message' => 'This project is not linked to an Aconex project yet.'], 422);
+        }
+
+        // Latest imported revision per Aconex-sourced sheet in this project.
+        // Media is eager-loaded so we can hand back the local thumbnail.
+        $imported = Drawing::where('project_id', $project->id)
+            ->whereNotNull('aconex_document_id')
+            ->whereNotNull('sheet_number')
+            ->with('media')
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'sheet_number', 'revision_number', 'aconex_version_number'])
+            ->groupBy('sheet_number')
+            ->map(fn ($group) => $group->first());
+
+        if ($imported->isEmpty()) {
+            // Nothing imported from Aconex yet — the client skips the Updates
+            // folder and drops straight into browsing the register.
+            return response()->json(['documents' => [], 'count' => 0, 'has_imported' => false]);
+        }
+
+        try {
+            $aconexDocs = $aconex->fetchByDocNumbers($project->aconex_project_id, $imported->keys()->all());
+        } catch (\Throwable $e) {
+            Log::error('AconexImportController: updates lookup failed', ['error' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Aconex updates check failed: '.$e->getMessage()], 502);
+        }
+
+        $updates = collect($aconexDocs)
+            ->reject(fn ($doc) => $this->isUnsupportedFormat($doc['file_type'] ?? ''))
+            ->filter(fn ($doc) => $imported->has($doc['document_number']))
+            ->groupBy('document_number')
+            // Keep only the current (highest-version) row per document number.
+            ->map(fn ($group) => $group->sortByDesc('version_number')->first())
+            ->filter(function ($doc) use ($imported) {
+                $local = $imported->get($doc['document_number']);
+                // Prefer Aconex's monotonic version number; fall back to revision text.
+                if ($local->aconex_version_number !== null && isset($doc['version_number'])) {
+                    return (int) $doc['version_number'] > (int) $local->aconex_version_number;
+                }
+
+                return $local->revision_number !== $doc['revision'];
+            })
+            ->map(function ($doc) use ($imported) {
+                $local = $imported->get($doc['document_number']);
+                $doc['already_imported'] = true;
+                $doc['import_is_new_revision'] = true;
+                $doc['imported_revision'] = $local->revision_number;
+                // The local thumbnail of the currently-imported revision — cheap
+                // to show since it's already generated (no Aconex download).
+                $doc['thumbnail_url'] = $local->thumbnail_url;
+
+                return $doc;
+            })
+            ->values();
+
+        return response()->json(['documents' => $updates, 'count' => $updates->count(), 'has_imported' => true]);
     }
 
     /**

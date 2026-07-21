@@ -105,7 +105,7 @@ class AconexClient
     {
         $params = [
             'search_query' => $searchQuery,
-            'return_fields' => 'docno,title,doctype,fileType,author,registered,revision,filename,versionnumber',
+            'return_fields' => 'docno,title,doctype,discipline,fileType,author,registered,revision,filename,versionnumber',
             'search_type' => 'NUMBER_LIMITED',
             'search_result_size' => $resultSize,
         ];
@@ -121,6 +121,96 @@ class AconexClient
         $response->throw();
 
         return $this->parseDocumentXml($response->body());
+    }
+
+    /**
+     * Look up specific document numbers in the register (batched into OR
+     * queries). Used to check just the drawings we've already imported for
+     * newer revisions, instead of scanning the whole register.
+     *
+     * @param  array<int, string>  $documentNumbers
+     * @return array<int, array<string, mixed>>
+     */
+    public function fetchByDocNumbers(string $aconexProjectId, array $documentNumbers): array
+    {
+        $numbers = array_values(array_unique(array_filter($documentNumbers)));
+        $results = [];
+
+        foreach (array_chunk($numbers, 40) as $chunk) {
+            $query = collect($chunk)
+                ->map(fn ($n) => 'docno:"'.str_replace('"', '', $n).'"')
+                ->implode(' OR ');
+
+            foreach ($this->searchDocuments($aconexProjectId, $query, 500) as $doc) {
+                $results[] = $doc;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Fetch one page of the register (server-side pagination) so large
+     * registers never have to be loaded in full.
+     *
+     * Uses Aconex's PAGED search. Falls back to a single NUMBER_LIMITED call
+     * (page 1 only) if the instance rejects PAGED, so search never hard-fails.
+     *
+     * @return array{documents: array<int, array<string, mixed>>, total: ?int, page: int, page_size: int, has_more: bool}
+     */
+    public function searchPage(string $aconexProjectId, string $searchQuery, int $page = 1, int $pageSize = 100): array
+    {
+        $page = max(1, $page);
+
+        try {
+            $response = Http::withToken($this->getAccessToken())
+                ->withHeaders(['Accept' => 'application/xml'])
+                ->get("https://{$this->instance}/api/projects/{$aconexProjectId}/register", [
+                    'search_query' => $searchQuery,
+                    'return_fields' => 'docno,title,doctype,discipline,fileType,author,registered,revision,filename,versionnumber',
+                    'search_type' => 'PAGED',
+                    'page_size' => $pageSize,
+                    'page_number' => $page,
+                ]);
+
+            $response->throw();
+
+            $parsed = trim($response->body()) === '' ? null : new SimpleXMLElement($response->body());
+            $documents = $parsed ? $this->parseDocumentElements($parsed) : [];
+            $total = $parsed ? $this->extractTotal($parsed) : null;
+
+            $hasMore = $total !== null
+                ? $page * $pageSize < $total
+                : count($documents) >= $pageSize;
+
+            return ['documents' => $documents, 'total' => $total, 'page' => $page, 'page_size' => $pageSize, 'has_more' => $hasMore];
+        } catch (\Throwable $e) {
+            Log::warning('AconexClient: paged search failed, falling back to NUMBER_LIMITED', ['error' => $e->getMessage()]);
+
+            $documents = $this->searchDocuments($aconexProjectId, $searchQuery, 500);
+
+            return ['documents' => $documents, 'total' => count($documents), 'page' => 1, 'page_size' => 500, 'has_more' => false];
+        }
+    }
+
+    /**
+     * Pull the total result count out of the register response so the UI can
+     * render "page X of Y". Attribute naming varies, so probe a few names on
+     * both the root and the SearchResults node; null when it can't be found.
+     */
+    protected function extractTotal(SimpleXMLElement $parsed): ?int
+    {
+        $nodes = [$parsed, $parsed->SearchResults ?? null];
+
+        foreach (['TotalResults', 'totalResults', 'SelectedResultsCount'] as $attr) {
+            foreach ($nodes as $node) {
+                if ($node !== null && isset($node[$attr])) {
+                    return (int) $node[$attr];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -167,7 +257,14 @@ class AconexClient
             return [];
         }
 
-        $parsed = new SimpleXMLElement($xml);
+        return $this->parseDocumentElements(new SimpleXMLElement($xml));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function parseDocumentElements(SimpleXMLElement $parsed): array
+    {
         $documents = [];
 
         foreach ($parsed->SearchResults->Document ?? [] as $doc) {
@@ -176,6 +273,7 @@ class AconexClient
                 'document_number' => (string) $doc->DocumentNumber,
                 'title' => (string) $doc->Title,
                 'doctype' => (string) $doc->DocumentType,
+                'discipline' => (string) ($doc->Discipline ?? ''),
                 'file_type' => (string) $doc->FileType,
                 'filename' => (string) ($doc->Filename ?? ''),
                 'author' => (string) $doc->Author,

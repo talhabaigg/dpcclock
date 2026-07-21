@@ -45,7 +45,7 @@ class DrawingController extends Controller
             ->select([
                 'id', 'project_id', 'sheet_number', 'title',
                 'revision_number', 'status', 'created_at',
-                'previous_revision_id', 'aconex_document_id',
+                'previous_revision_id', 'aconex_document_id', 'aconex_version_number',
             ])
             ->withCount(['measurements as takeoff_count' => function ($q) {
                 $q->where('scope', 'takeoff');
@@ -71,6 +71,9 @@ class DrawingController extends Controller
                     'revision_count' => $drawing->sheet_number
                         ? ($revisionCounts[$drawing->sheet_number] ?? 1)
                         : 1,
+                    // Aconex provenance — surfaced as a "Source" column in the list view.
+                    'is_aconex' => $drawing->aconex_document_id !== null,
+                    'aconex_version_number' => $drawing->aconex_version_number,
                     // Revision auto-imported from Aconex within the last week —
                     // surfaced as a "New revision" badge until it ages out.
                     'is_new_revision' => $drawing->aconex_document_id !== null

@@ -1,3 +1,4 @@
+import AconexIcon from '@/components/aconex-icon';
 import InputSearch from '@/components/inputSearch';
 import { Badge } from '@/components/ui/badge';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -5,6 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { api, ApiError } from '@/lib/api';
@@ -12,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowUpDown, CheckCircle, ClipboardList, Clock, Download, Eye, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, PencilRuler, Trash2, Upload, X } from 'lucide-react';
+import { ArrowUpDown, CheckCircle, Clock, Download, EllipsisVertical, FileImage, FileText, FileUp, Grid3X3, History, List, Loader2, Menu, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -75,6 +79,8 @@ type Drawing = {
     pinned_task_count: number;
     revision_count: number;
     is_new_revision: boolean;
+    is_aconex: boolean;
+    aconex_version_number: number | null;
 };
 
 type SortConfig = {
@@ -143,6 +149,12 @@ export default function DrawingsIndex() {
     const [prodResult, setProdResult] = useState<ProjectProductionImportResult | null>(null);
     const prodInputRef = useRef<HTMLInputElement | null>(null);
 
+    const [editDrawing, setEditDrawing] = useState<Drawing | null>(null);
+    const [editSheet, setEditSheet] = useState('');
+    const [editRev, setEditRev] = useState('');
+    const [editTitle, setEditTitle] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
+
     const resetImportState = () => {
         setImportFile(null);
         setImporting(false);
@@ -208,6 +220,37 @@ export default function DrawingsIndex() {
         router.delete(`/drawings/${drawing.id}`, {
             onFinish: () => setDeletingId(null),
         });
+    };
+
+    const openEdit = (drawing: Drawing) => {
+        setEditDrawing(drawing);
+        setEditSheet(drawing.sheet_number ?? '');
+        setEditRev(drawing.revision_number ?? '');
+        setEditTitle(drawing.title ?? '');
+    };
+
+    // Filenames typically encode the sheet number before the first " - ",
+    // e.g. "ARC-2509.13 - PARTITION SETOUT PLAN - LEVEL 20.pdf".
+    const sheetFromFilename = (title: string | null): string =>
+        (title ?? '').replace(/\.[a-z0-9]+$/i, '').split(' - ')[0].trim();
+
+    const handleEditSave = async () => {
+        if (!editDrawing) return;
+        setSavingEdit(true);
+        try {
+            await api.patch(`/drawings/${editDrawing.id}`, {
+                sheet_number: editSheet.trim() || null,
+                revision_number: editRev.trim() || null,
+                title: editTitle.trim() || null,
+            });
+            toast.success('Drawing updated.');
+            setEditDrawing(null);
+            router.reload({ only: ['drawings'] });
+        } catch (e) {
+            toast.error(describeApiError(e));
+        } finally {
+            setSavingEdit(false);
+        }
     };
 
     const toggleSelected = (id: number) => {
@@ -330,20 +373,20 @@ export default function DrawingsIndex() {
             <Head title={`Drawings — ${project.name}`} />
 
             <div className="mx-auto w-full max-w-5xl space-y-4 p-2 sm:p-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div className="relative w-full max-w-md">
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:max-w-md sm:flex-initial">
                         <InputSearch searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchName="drawing number or title" />
                     </div>
 
                     {hasActiveFilters && (
                         <Button variant="ghost" size="sm" onClick={clearFilters}>
                             <X className="mr-1 h-4 w-4" />
-                            Clear filters
+                            Clear
                         </Button>
                     )}
 
                     <div className="ml-auto flex items-center gap-2">
-                        <span className="text-muted-foreground text-sm tabular-nums">
+                        <span className="text-muted-foreground hidden text-sm tabular-nums sm:inline">
                             {filteredDrawings.length} of {drawings.length}
                         </span>
                         <div className="flex rounded-md border">
@@ -372,49 +415,59 @@ export default function DrawingsIndex() {
                                 <Grid3X3 className="h-4 w-4" />
                             </Button>
                         </div>
-                        {canViewSiteTasks && (
-                            <Link href={`/projects/${project.id}/tasks`}>
-                                <Button size="sm" variant="outline" className="gap-2">
-                                    <ClipboardList className="h-4 w-4" />
-                                    Tasks
-                                </Button>
-                            </Link>
-                        )}
-                        {canEditTakeoff && (
+                        {canCreate && (
                             <>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-2"
-                                    onClick={() => {
-                                        resetImportState();
-                                        setImportOpen(true);
-                                    }}
-                                >
-                                    <FileUp className="h-4 w-4" />
-                                    Import takeoffs
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-2"
-                                    onClick={() => {
-                                        resetProdState();
-                                        setProdOpen(true);
-                                    }}
-                                >
-                                    <FileUp className="h-4 w-4" />
-                                    Import production
-                                </Button>
+                                <Link href={`/projects/${project.id}/drawings/upload`}>
+                                    <Button size="sm" className="gap-2">
+                                        <Upload className="h-4 w-4" />
+                                        Upload
+                                    </Button>
+                                </Link>
+                                <Link href={`/projects/${project.id}/drawings/import-aconex`}>
+                                    <Button size="sm" variant="outline" className="gap-2">
+                                        <AconexIcon className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Import from Aconex</span>
+                                        <span className="sm:hidden">Aconex</span>
+                                    </Button>
+                                </Link>
                             </>
                         )}
-                        {canCreate && (
-                            <Link href={`/projects/${project.id}/drawings/upload`}>
-                                <Button size="sm" className="gap-2">
-                                    <Upload className="h-4 w-4" />
-                                    Upload
-                                </Button>
-                            </Link>
+                        {(canViewSiteTasks || canEditTakeoff) && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="outline" aria-label="More actions">
+                                        <Menu className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                                    {canViewSiteTasks && (
+                                        <DropdownMenuItem asChild>
+                                            <Link href={`/projects/${project.id}/tasks`}>Tasks</Link>
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canViewSiteTasks && canEditTakeoff && <DropdownMenuSeparator />}
+                                    {canEditTakeoff && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onClick={() => {
+                                                    resetImportState();
+                                                    setImportOpen(true);
+                                                }}
+                                            >
+                                                Import takeoffs
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={() => {
+                                                    resetProdState();
+                                                    setProdOpen(true);
+                                                }}
+                                            >
+                                                Import production
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
                     </div>
                 </div>
@@ -450,11 +503,11 @@ export default function DrawingsIndex() {
                     </Card>
                 ) : viewMode === 'list' ? (
                     <Card className="py-0">
-                        <Table>
+                        <Table className="text-xs">
                             <TableHeader className="bg-muted/50">
                                 <TableRow>
                                     {canDelete && (
-                                        <TableHead className="w-12 px-4">
+                                        <TableHead className="w-10 px-3">
                                             <Checkbox
                                                 aria-label="Select all drawings"
                                                 checked={allVisibleSelected}
@@ -463,19 +516,28 @@ export default function DrawingsIndex() {
                                             />
                                         </TableHead>
                                     )}
-                                    <TableHead className={canDelete ? 'pl-2' : 'pl-3 sm:pl-6'}>
-                                        <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('title')}>
-                                            File
-                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    <TableHead className={canDelete ? 'pl-1' : 'pl-3 sm:pl-4'}>
+                                        <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-xs" onClick={() => handleSort('title')}>
+                                            Drawing
+                                            <ArrowUpDown className="ml-1.5 h-3 w-3" />
                                         </Button>
                                     </TableHead>
-                                    <TableHead>
-                                        <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => handleSort('created_at')}>
+                                    <TableHead className="hidden md:table-cell">
+                                        <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-xs" onClick={() => handleSort('sheet_number')}>
+                                            Sheet No.
+                                            <ArrowUpDown className="ml-1.5 h-3 w-3" />
+                                        </Button>
+                                    </TableHead>
+                                    <TableHead className="hidden sm:table-cell">Rev</TableHead>
+                                    <TableHead className="hidden text-right lg:table-cell">Takeoffs</TableHead>
+                                    <TableHead className="hidden lg:table-cell">Source</TableHead>
+                                    <TableHead className="hidden md:table-cell">
+                                        <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-xs" onClick={() => handleSort('created_at')}>
                                             Created
-                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                            <ArrowUpDown className="ml-1.5 h-3 w-3" />
                                         </Button>
                                     </TableHead>
-                                    <TableHead className="pr-3 text-right sm:pr-6">Actions</TableHead>
+                                    <TableHead className="w-10 pr-3 text-right sm:pr-4" />
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -483,9 +545,11 @@ export default function DrawingsIndex() {
                                     <TableRow
                                         key={drawing.id}
                                         data-state={selectedIds.has(drawing.id) ? 'selected' : undefined}
+                                        className="cursor-pointer"
+                                        onClick={() => router.visit(`/drawings/${drawing.id}`)}
                                     >
                                         {canDelete && (
-                                            <TableCell className="w-12 px-4">
+                                            <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
                                                 <Checkbox
                                                     aria-label={`Select ${drawing.display_name}`}
                                                     checked={selectedIds.has(drawing.id)}
@@ -493,15 +557,15 @@ export default function DrawingsIndex() {
                                                 />
                                             </TableCell>
                                         )}
-                                        <TableCell className={cn('font-medium', canDelete ? 'pl-2' : 'pl-3 sm:pl-6')}>
-                                            <div className="flex items-center gap-3">
+                                        <TableCell className={cn('font-medium', canDelete ? 'pl-1' : 'pl-3 sm:pl-4')}>
+                                            <div className="flex items-center gap-2">
                                                 {drawing.thumbnail_url ? (
                                                     <HoverCard>
                                                         <HoverCardTrigger asChild>
                                                             <img
                                                                 src={drawing.thumbnail_url}
                                                                 alt=""
-                                                                className="h-10 w-10 cursor-zoom-in rounded border object-cover"
+                                                                className="h-8 w-8 rounded border object-cover"
                                                             />
                                                         </HoverCardTrigger>
                                                         <HoverCardContent side="right" align="start" className="w-auto p-1">
@@ -513,42 +577,92 @@ export default function DrawingsIndex() {
                                                         </HoverCardContent>
                                                     </HoverCard>
                                                 ) : (
-                                                    <div className="bg-muted flex h-10 w-10 items-center justify-center rounded border">
-                                                        <FileText className="text-muted-foreground h-5 w-5" />
+                                                    <div className="bg-muted flex h-8 w-8 items-center justify-center rounded border">
+                                                        <FileText className="text-muted-foreground h-4 w-4" />
                                                     </div>
                                                 )}
-                                                <span className="truncate">{drawing.title || '—'}</span>
+                                                <span className="min-w-0 break-words" title={drawing.display_name}>
+                                                    {drawing.title || '—'}
+                                                </span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="tabular-nums">{format(new Date(drawing.created_at), 'dd MMM yyyy')}</TableCell>
-                                        <TableCell className="pr-3 sm:pr-6">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <Link href={`/drawings/${drawing.id}`}>
-                                                    <Button size="sm" variant="outline" className="gap-1.5">
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                        View
-                                                    </Button>
-                                                </Link>
-                                                {canViewTakeoff && (
-                                                    <Link href={`/drawings/${drawing.id}/takeoff`}>
-                                                        <Button size="sm" variant="outline" className="gap-1.5">
-                                                            <PencilRuler className="h-3.5 w-3.5" />
-                                                            Takeoff
+                                        <TableCell className="text-muted-foreground hidden font-mono md:table-cell">
+                                            {drawing.sheet_number || '—'}
+                                        </TableCell>
+                                        <TableCell className="hidden sm:table-cell">
+                                            <div className="flex items-center gap-1.5">
+                                                <span>{drawing.revision_number || '—'}</span>
+                                                {drawing.revision_count > 1 && (
+                                                    <span className="text-muted-foreground" title={`${drawing.revision_count} revisions`}>
+                                                        · {drawing.revision_count}
+                                                    </span>
+                                                )}
+                                                {drawing.is_new_revision && (
+                                                    <Badge variant="default" className="h-4 px-1 text-[10px]">
+                                                        New
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground hidden text-right tabular-nums lg:table-cell">
+                                            {drawing.takeoff_count > 0 ? drawing.takeoff_count.toLocaleString() : '—'}
+                                        </TableCell>
+                                        <TableCell className="hidden lg:table-cell">
+                                            {drawing.is_aconex ? (
+                                                <span className="text-muted-foreground inline-flex items-center gap-1" title="Imported from Aconex">
+                                                    <AconexIcon className="h-3.5 w-3.5" />
+                                                    {drawing.aconex_version_number ? `v${drawing.aconex_version_number}` : 'Aconex'}
+                                                </span>
+                                            ) : (
+                                                <span className="text-muted-foreground">—</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground hidden tabular-nums md:table-cell">
+                                            {format(new Date(drawing.created_at), 'dd MMM yyyy')}
+                                        </TableCell>
+                                        <TableCell className="pr-3 sm:pr-4" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex justify-end">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="h-7 w-7"
+                                                            aria-label={`Actions for ${drawing.display_name}`}
+                                                            disabled={deletingId === drawing.id}
+                                                        >
+                                                            {deletingId === drawing.id ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <EllipsisVertical className="h-4 w-4" />
+                                                            )}
                                                         </Button>
-                                                    </Link>
-                                                )}
-                                                {canDelete && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="text-muted-foreground hover:text-destructive gap-1.5"
-                                                        onClick={() => handleDelete(drawing)}
-                                                        disabled={deletingId === drawing.id}
-                                                        aria-label={`Delete ${drawing.display_name}`}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                )}
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
+                                                        <DropdownMenuItem asChild>
+                                                            <Link href={`/drawings/${drawing.id}`}>View</Link>
+                                                        </DropdownMenuItem>
+                                                        {canViewTakeoff && (
+                                                            <DropdownMenuItem asChild>
+                                                                <Link href={`/drawings/${drawing.id}/takeoff`}>Takeoff</Link>
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {canCreate && (
+                                                            <DropdownMenuItem onClick={() => openEdit(drawing)}>Edit details</DropdownMenuItem>
+                                                        )}
+                                                        {canDelete && (
+                                                            <>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    className="text-destructive focus:text-destructive"
+                                                                    onClick={() => handleDelete(drawing)}
+                                                                >
+                                                                    Delete
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -585,7 +699,7 @@ export default function DrawingsIndex() {
                                             )}
                                             <div className="absolute right-1 top-1 flex flex-col items-end gap-1">
                                                 {drawing.is_new_revision && (
-                                                    <Badge className="bg-amber-500 text-xs text-white shadow-sm" title="A new revision was imported from Aconex">
+                                                    <Badge variant="default" className="text-xs shadow-sm" title="A new revision was imported from Aconex">
                                                         New revision
                                                     </Badge>
                                                 )}
@@ -857,6 +971,76 @@ export default function DrawingsIndex() {
                                 Import
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={!!editDrawing}
+                onOpenChange={(next) => {
+                    if (savingEdit) return;
+                    if (!next) setEditDrawing(null);
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit drawing details</DialogTitle>
+                        <DialogDescription>
+                            Set the sheet number and revision. These are filled automatically for drawings imported from Aconex.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="edit-sheet">Sheet number</Label>
+                            <Input
+                                id="edit-sheet"
+                                value={editSheet}
+                                onChange={(e) => setEditSheet(e.target.value)}
+                                placeholder="e.g. ARC-2509.13"
+                                disabled={savingEdit}
+                            />
+                            {editDrawing &&
+                                sheetFromFilename(editDrawing.title) &&
+                                sheetFromFilename(editDrawing.title) !== editSheet && (
+                                    <button
+                                        type="button"
+                                        className="text-primary text-xs hover:underline"
+                                        onClick={() => setEditSheet(sheetFromFilename(editDrawing.title))}
+                                    >
+                                        Use "{sheetFromFilename(editDrawing.title)}" from filename
+                                    </button>
+                                )}
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="edit-rev">Revision</Label>
+                            <Input
+                                id="edit-rev"
+                                value={editRev}
+                                onChange={(e) => setEditRev(e.target.value)}
+                                placeholder="e.g. C"
+                                disabled={savingEdit}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="edit-title">Title</Label>
+                            <Input
+                                id="edit-title"
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                disabled={savingEdit}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" disabled={savingEdit} onClick={() => setEditDrawing(null)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleEditSave} disabled={savingEdit} className="gap-1.5">
+                            {savingEdit && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                            Save
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
