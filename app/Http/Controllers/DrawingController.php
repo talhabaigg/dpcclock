@@ -45,6 +45,7 @@ class DrawingController extends Controller
             ->select([
                 'id', 'project_id', 'sheet_number', 'title',
                 'revision_number', 'status', 'created_at',
+                'previous_revision_id', 'aconex_document_id',
             ])
             ->withCount(['measurements as takeoff_count' => function ($q) {
                 $q->where('scope', 'takeoff');
@@ -70,6 +71,11 @@ class DrawingController extends Controller
                     'revision_count' => $drawing->sheet_number
                         ? ($revisionCounts[$drawing->sheet_number] ?? 1)
                         : 1,
+                    // Revision auto-imported from Aconex within the last week —
+                    // surfaced as a "New revision" badge until it ages out.
+                    'is_new_revision' => $drawing->aconex_document_id !== null
+                        && $drawing->previous_revision_id !== null
+                        && $drawing->created_at?->gt(now()->subDays(7)),
                 ];
             });
 

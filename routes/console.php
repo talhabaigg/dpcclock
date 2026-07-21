@@ -26,6 +26,12 @@ Schedule::command('app:sync-timesheets')
     ->timezone('Australia/Brisbane');
 Schedule::command('app:backup-database')->dailyAt('23:00')->timezone('Australia/Brisbane');
 
+// Pick up new drawing revisions from Aconex for linked projects each morning.
+Schedule::command('aconex:check-revisions')
+    ->dailyAt('06:00')
+    ->timezone('Australia/Brisbane')
+    ->withoutOverlapping();
+
 // Daily roll-up of any queue failures over the last 24h — safety net in addition
 // to realtime per-failure alerts (see app/Listeners/NotifyOnJobFailed.php).
 Schedule::command('queue:failure-digest')

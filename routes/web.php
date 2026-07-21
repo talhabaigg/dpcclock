@@ -28,6 +28,7 @@ use App\Http\Controllers\ToolboxTalkController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\AconexImportController;
 use App\Http\Controllers\DrawingController;
 use App\Http\Controllers\DrawingMeasurementController;
 use App\Http\Controllers\DrawingObservationController;
@@ -1300,6 +1301,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
+
+        // Import from Aconex
+        Route::get('/projects/{project}/drawings/import-aconex', [AconexImportController::class, 'show'])->name('drawings.aconex.show');
+        Route::get('/aconex/projects', [AconexImportController::class, 'listAconexProjects'])->name('drawings.aconex.projects');
+        Route::patch('/projects/{project}/drawings/aconex-link', [AconexImportController::class, 'link'])->name('drawings.aconex.link');
+        Route::get('/projects/{project}/drawings/aconex-search', [AconexImportController::class, 'search'])->name('drawings.aconex.search');
+        Route::get('/projects/{project}/drawings/aconex-preview/{documentId}', [AconexImportController::class, 'preview'])->name('drawings.aconex.preview');
+        Route::post('/projects/{project}/drawings/aconex-import', [AconexImportController::class, 'import'])->name('drawings.aconex.import');
     });
     Route::delete('/drawings/{drawing}', [DrawingController::class, 'destroy'])->name('drawings.destroy')
         ->middleware('permission:drawings.delete');

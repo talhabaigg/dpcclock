@@ -74,6 +74,7 @@ type Drawing = {
     takeoff_count: number;
     pinned_task_count: number;
     revision_count: number;
+    is_new_revision: boolean;
 };
 
 type SortConfig = {
@@ -583,6 +584,11 @@ export default function DrawingsIndex() {
                                                 </div>
                                             )}
                                             <div className="absolute right-1 top-1 flex flex-col items-end gap-1">
+                                                {drawing.is_new_revision && (
+                                                    <Badge className="bg-amber-500 text-xs text-white shadow-sm" title="A new revision was imported from Aconex">
+                                                        New revision
+                                                    </Badge>
+                                                )}
                                                 {drawing.pinned_task_count > 0 && (
                                                     <span
                                                         className="bg-primary text-primary-foreground flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-medium tabular-nums shadow-sm"

@@ -95,4 +95,11 @@ return [
         'from' => env('CLICKSEND_FROM'),
     ],
 
+    'aconex' => [
+        'client_id' => env('ACONEX_CLIENT_ID'),
+        'client_secret' => env('ACONEX_CLIENT_SECRET'),
+        'lobby_url' => env('ACONEX_LOBBY_URL', 'https://constructionandengineering.oraclecloud.com'),
+        'instance' => env('ACONEX_INSTANCE', 'au1.aconex.com'),
+    ],
+
 ];

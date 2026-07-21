@@ -23,6 +23,7 @@ class Drawing extends Model implements HasMedia
         'revision_number',
         'status',
         'previous_revision_id',
+        'aconex_document_id',
         'tiles_width',
         'tiles_height',
         'created_by',

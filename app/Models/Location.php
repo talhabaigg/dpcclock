@@ -35,6 +35,7 @@ class Location extends Model
         'master_hourly_rate',
         'sell_multiplier_percentage',
         'ppe_public_token',
+        'aconex_project_id',
     ];
 
     protected $casts = [
