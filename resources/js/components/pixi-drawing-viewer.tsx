@@ -3,12 +3,12 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPagePr
 // Custom worker entry that polyfills Map.getOrInsertComputed before loading
 // pdf.worker — Safari/iPadOS doesn't ship that method yet and PDF.js v5 calls
 // it inside the worker. See resources/js/pdf-worker-with-polyfill.ts.
-import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
 import { Application, CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from './ui/button';
+import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
 import type { CalibrationData, MeasurementData, Point, ViewMode } from './measurement-layer';
+import { Button } from './ui/button';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -63,6 +63,8 @@ type Props = {
     /** Comparison overlay (revision diff). PDF or image URL. */
     comparisonImageUrl?: string;
     comparisonOpacity?: number;
+    comparisonMode?: 'overlay' | 'difference';
+    onComparisonError?: (message: string | null) => void;
     /** Dim the underlying PDF page (0–100, default 100=fully visible). Lets DPC/production
      * pages emphasize measurement strokes against a faded plan. */
     pageOpacity?: number;
@@ -208,8 +210,7 @@ const distPointToSegment = (p: Point, a: Point, b: Point): number => {
 
 // True when this point has a bezier handle on either side. A vertex with no
 // handles is a corner; with handles it's a smooth bezier control point.
-const pointHasHandles = (p: Point): boolean =>
-    p.hix !== undefined || p.hiy !== undefined || p.hox !== undefined || p.hoy !== undefined;
+const pointHasHandles = (p: Point): boolean => p.hix !== undefined || p.hiy !== undefined || p.hox !== undefined || p.hoy !== undefined;
 
 // Cubic Bezier point at parameter t ∈ [0, 1].
 const bezierPoint = (a: Point, ah: Point, bh: Point, b: Point, t: number): Point => {
@@ -236,14 +237,7 @@ const drawBezierPath = (g: Graphics, points: Point[], W: number, H: number, clos
         const aHas = a.hox !== undefined || a.hoy !== undefined;
         const bHas = b.hix !== undefined || b.hiy !== undefined;
         if (aHas || bHas) {
-            g.bezierCurveTo(
-                (a.x + (a.hox ?? 0)) * W,
-                (a.y + (a.hoy ?? 0)) * H,
-                (b.x + (b.hix ?? 0)) * W,
-                (b.y + (b.hiy ?? 0)) * H,
-                b.x * W,
-                b.y * H,
-            );
+            g.bezierCurveTo((a.x + (a.hox ?? 0)) * W, (a.y + (a.hoy ?? 0)) * H, (b.x + (b.hix ?? 0)) * W, (b.y + (b.hiy ?? 0)) * H, b.x * W, b.y * H);
         } else {
             g.lineTo(b.x * W, b.y * H);
         }
@@ -316,6 +310,8 @@ export function PixiDrawingViewer({
     tileWidth,
     comparisonImageUrl,
     comparisonOpacity = 50,
+    comparisonMode = 'overlay',
+    onComparisonError,
     pageOpacity = 100,
     productionLabels,
     segmentStatuses,
@@ -353,6 +349,9 @@ export function PixiDrawingViewer({
     const docRef = useRef<PDFDocumentProxy | null>(null);
     const pageRef = useRef<PDFPageProxy | null>(null);
     const renderTaskRef = useRef<RenderTask | null>(null);
+    const comparisonDocRef = useRef<PDFDocumentProxy | null>(null);
+    const comparisonPageRef = useRef<PDFPageProxy | null>(null);
+    const comparisonRenderTaskRef = useRef<RenderTask | null>(null);
     const regionRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
     const regionScaleRef = useRef(1);
     const lastRasterErrorRef = useRef<string | null>(null);
@@ -426,7 +425,7 @@ export function PixiDrawingViewer({
             app.canvas.style.touchAction = 'none';
 
             const world = new Container();
-            const pageLayer = new Container();    // PDF tiles + fallback live here
+            const pageLayer = new Container(); // PDF tiles + fallback live here
             const measurementsLayer = new Container();
             const drawingLayer = new Container();
             const pinsLayer = new Container();
@@ -516,6 +515,35 @@ export function PixiDrawingViewer({
                 pageRef.current = page;
                 const v = page.getViewport({ scale: 1 });
                 const dims = { width: v.width, height: v.height };
+
+                if (comparisonMode === 'difference' && comparisonImageUrl) {
+                    try {
+                        const comparisonDoc = await getDocument({
+                            url: comparisonImageUrl,
+                            isEvalSupported: false,
+                            withCredentials: true,
+                            enableHWA: !IS_IOS,
+                        }).promise;
+                        if (cancelled) {
+                            await comparisonDoc.destroy();
+                            return;
+                        }
+                        comparisonDocRef.current = comparisonDoc;
+                        const comparisonPage = await comparisonDoc.getPage(1);
+                        if (cancelled) {
+                            comparisonPage.cleanup();
+                            await comparisonDoc.destroy();
+                            return;
+                        }
+                        comparisonPageRef.current = comparisonPage;
+                        onComparisonError?.(null);
+                    } catch (error) {
+                        if (!cancelled) {
+                            onComparisonError?.(error instanceof Error ? error.message : 'Failed to load the comparison PDF.');
+                        }
+                    }
+                }
+
                 setPdfDims(dims);
                 onPdfDimsLoaded?.(dims);
                 setLoading(false);
@@ -529,12 +557,17 @@ export function PixiDrawingViewer({
         return () => {
             cancelled = true;
             renderTaskRef.current?.cancel();
+            comparisonRenderTaskRef.current?.cancel();
             pageRef.current?.cleanup();
+            comparisonPageRef.current?.cleanup();
             docRef.current?.destroy();
+            comparisonDocRef.current?.destroy();
             pageRef.current = null;
+            comparisonPageRef.current = null;
             docRef.current = null;
+            comparisonDocRef.current = null;
         };
-    }, [fileUrl]);
+    }, [fileUrl, comparisonImageUrl, comparisonMode, onComparisonError]);
 
     const makeMipmappedTexture = useCallback((canvas: HTMLCanvasElement | OffscreenCanvas): Texture => {
         const source = new CanvasSource({
@@ -618,6 +651,138 @@ export function PixiDrawingViewer({
         [],
     );
 
+    const rasterizeComparisonRegion = useCallback(
+        async (
+            region: { x: number; y: number; w: number; h: number },
+            scale: number,
+        ): Promise<{ canvas: HTMLCanvasElement | OffscreenCanvas; effectiveScale: number } | null> => {
+            const oldPage = pageRef.current;
+            const newPage = comparisonPageRef.current;
+            if (!oldPage || !newPage || !pdfDims || region.w <= 0 || region.h <= 0) return null;
+
+            renderTaskRef.current?.cancel();
+            comparisonRenderTaskRef.current?.cancel();
+
+            let finalScale = scale;
+            const maxDim = Math.max(region.w * scale, region.h * scale);
+            if (maxDim > MAX_TEXTURE_DIM) finalScale *= MAX_TEXTURE_DIM / maxDim;
+
+            const maxPixels = IS_IOS ? 4_000_000 : 16_000_000;
+            const requestedPixels = region.w * region.h * finalScale * finalScale;
+            if (requestedPixels > maxPixels) finalScale *= Math.sqrt(maxPixels / requestedPixels);
+
+            const canvasW = Math.max(1, Math.ceil(region.w * finalScale));
+            const canvasH = Math.max(1, Math.ceil(region.h * finalScale));
+            const createCanvas = (): HTMLCanvasElement | OffscreenCanvas => {
+                const useOffscreen = !IS_IOS && typeof OffscreenCanvas !== 'undefined';
+                return useOffscreen
+                    ? new OffscreenCanvas(canvasW, canvasH)
+                    : Object.assign(document.createElement('canvas'), { width: canvasW, height: canvasH });
+            };
+
+            const renderPlan = async (page: PDFPageProxy, canvas: HTMLCanvasElement | OffscreenCanvas, comparison: boolean) => {
+                const ctx = canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+                if (!ctx) throw new Error(`Failed to acquire 2D context (${canvasW}x${canvasH}).`);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvasW, canvasH);
+                ctx.translate(-region.x * finalScale, -region.y * finalScale);
+
+                const baseViewport = page.getViewport({ scale: 1 });
+                if (comparison) ctx.scale(pdfDims.width / baseViewport.width, pdfDims.height / baseViewport.height);
+
+                const renderTask = page.render({
+                    canvasContext: ctx as CanvasRenderingContext2D,
+                    viewport: page.getViewport({ scale: finalScale }),
+                    canvas: canvas as HTMLCanvasElement,
+                    intent: 'display',
+                });
+
+                if (comparison) comparisonRenderTaskRef.current = renderTask;
+                else renderTaskRef.current = renderTask;
+
+                await renderTask.promise;
+
+                if (comparison) comparisonRenderTaskRef.current = null;
+                else renderTaskRef.current = null;
+            };
+
+            try {
+                const oldCanvas = createCanvas();
+                const newCanvas = createCanvas();
+                await Promise.all([renderPlan(oldPage, oldCanvas, false), renderPlan(newPage, newCanvas, true)]);
+
+                const oldCtx = oldCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+                const newCtx = newCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+                if (!oldCtx || !newCtx) throw new Error('Failed to read the comparison canvases.');
+
+                const oldImage = oldCtx.getImageData(0, 0, canvasW, canvasH);
+                const newImage = newCtx.getImageData(0, 0, canvasW, canvasH);
+                const pixelCount = canvasW * canvasH;
+                const oldInk = new Uint8Array(pixelCount);
+                const newInk = new Uint8Array(pixelCount);
+
+                const measureInk = (data: Uint8ClampedArray, target: Uint8Array) => {
+                    for (let pixel = 0, offset = 0; pixel < pixelCount; pixel++, offset += 4) {
+                        const luminance = (data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114) / 255;
+                        target[pixel] = Math.round(Math.min(1, Math.max(0, (0.94 - luminance) / 0.42)) * 255);
+                    }
+                };
+
+                measureInk(oldImage.data, oldInk);
+                measureInk(newImage.data, newInk);
+
+                const nearby = (ink: Uint8Array, pixel: number, x: number, y: number) => {
+                    let value = ink[pixel];
+                    if (x > 0) value = Math.max(value, ink[pixel - 1]);
+                    if (x + 1 < canvasW) value = Math.max(value, ink[pixel + 1]);
+                    if (y > 0) value = Math.max(value, ink[pixel - canvasW]);
+                    if (y + 1 < canvasH) value = Math.max(value, ink[pixel + canvasW]);
+                    return value / 255;
+                };
+
+                for (let y = 0, pixel = 0, offset = 0; y < canvasH; y++) {
+                    for (let x = 0; x < canvasW; x++, pixel++, offset += 4) {
+                        const oldValue = oldInk[pixel] / 255;
+                        const newValue = newInk[pixel] / 255;
+                        const oldNear = nearby(oldInk, pixel, x, y);
+                        const newNear = nearby(newInk, pixel, x, y);
+                        let same = Math.max(Math.min(oldValue, newNear), Math.min(newValue, oldNear));
+                        let removed = Math.max(0, oldValue - newNear);
+                        let added = Math.max(0, newValue - oldNear);
+                        const total = same + removed + added;
+
+                        if (total > 1) {
+                            same /= total;
+                            removed /= total;
+                            added /= total;
+                        }
+
+                        const background = 1 - Math.min(1, same + removed + added);
+                        oldImage.data[offset] = Math.round(background * 255 + same * 8 + removed * 230 + added * 13);
+                        oldImage.data[offset + 1] = Math.round(background * 255 + same * 8 + removed * 24 + added * 71);
+                        oldImage.data[offset + 2] = Math.round(background * 255 + same * 8 + removed * 24 + added * 242);
+                        oldImage.data[offset + 3] = 255;
+                    }
+                }
+
+                oldCtx.putImageData(oldImage, 0, 0);
+                onComparisonError?.(null);
+                return { canvas: oldCanvas, effectiveScale: finalScale };
+            } catch (error) {
+                if ((error as { name?: string })?.name === 'RenderingCancelledException') return null;
+                const message = error instanceof Error ? error.message : 'Failed to render the comparison.';
+                onComparisonError?.(message);
+                // eslint-disable-next-line no-console -- comparison failures must remain diagnosable without breaking the viewer
+                console.error('[pixi-drawing-viewer] Regional comparison render failed', error);
+                return null;
+            }
+        },
+        [pdfDims, onComparisonError],
+    );
+
+    const activeRasterizeRegion = comparisonMode === 'difference' ? rasterizeComparisonRegion : rasterizeRegion;
+
     const computeVisibleRegion = useCallback(
         (overscan: number) => {
             const app = appRef.current;
@@ -666,7 +831,7 @@ export function PixiDrawingViewer({
             world.scale.set(fit);
             world.position.set((app.screen.width - pdfDims.width * fit) / 2, (app.screen.height - pdfDims.height * fit) / 2);
 
-            const fallbackResult = await rasterizeRegion(
+            const fallbackResult = await activeRasterizeRegion(
                 { x: 0, y: 0, w: pdfDims.width, h: pdfDims.height },
                 fit * dpr * FALLBACK_QUALITY_MULTIPLIER,
             );
@@ -684,7 +849,7 @@ export function PixiDrawingViewer({
             }
 
             const region = computeVisibleRegion(RENDER_REGION_OVERSCAN);
-            const result = await rasterizeRegion(region, fit * dpr * RASTER_OVERSCAN);
+            const result = await activeRasterizeRegion(region, fit * dpr * RASTER_OVERSCAN);
             if (cancelled) return;
             if (!result) {
                 // If both passes failed and no fallback sprite was added, the
@@ -727,7 +892,7 @@ export function PixiDrawingViewer({
         return () => {
             cancelled = true;
         };
-    }, [appReady, pdfDims, rasterizeRegion, computeVisibleRegion, onZoomChange, makeMipmappedTexture]);
+    }, [appReady, pdfDims, activeRasterizeRegion, computeVisibleRegion, onZoomChange, makeMipmappedTexture]);
 
     const maybeRerasterize = useCallback(async () => {
         const page = pageRef.current;
@@ -749,7 +914,7 @@ export function PixiDrawingViewer({
         if (scaleDrift < RERASTER_DRIFT && insideRendered) return;
 
         const region = computeVisibleRegion(RENDER_REGION_OVERSCAN);
-        const result = await rasterizeRegion(region, requiredScale);
+        const result = await activeRasterizeRegion(region, requiredScale);
         if (!result) return;
 
         const texture = makeMipmappedTexture(result.canvas);
@@ -763,7 +928,7 @@ export function PixiDrawingViewer({
 
         regionRef.current = region;
         regionScaleRef.current = result.effectiveScale;
-    }, [pdfDims, rasterizeRegion, computeVisibleRegion, makeMipmappedTexture]);
+    }, [pdfDims, activeRasterizeRegion, computeVisibleRegion, makeMipmappedTexture]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Comparison overlay — load a second PDF/image as a translucent sprite on
@@ -780,6 +945,8 @@ export function PixiDrawingViewer({
             comparisonSpriteRef.current.destroy({ texture: true, textureSource: true });
             comparisonSpriteRef.current = null;
         }
+        onComparisonError?.(null);
+        if (comparisonMode === 'difference') return;
         if (!comparisonImageUrl) return;
 
         let cancelled = false;
@@ -871,15 +1038,25 @@ export function PixiDrawingViewer({
                     world.addChild(sprite);
                 }
                 comparisonSpriteRef.current = sprite;
-            } catch {
+            } catch (error) {
+                if (!cancelled) {
+                    const message = error instanceof Error ? error.message : 'Failed to render plan comparison.';
+                    onComparisonError?.(message);
+                    // eslint-disable-next-line no-console -- comparison failures must remain diagnosable without breaking the base viewer
+                    console.error('[pixi-drawing-viewer] Comparison render failed', error);
+                }
                 // Swallow — we don't want a bad comparison URL to break the viewer.
             }
         })();
 
         return () => {
             cancelled = true;
+            if (comparisonSpriteRef.current) {
+                comparisonSpriteRef.current.destroy({ texture: true, textureSource: true });
+                comparisonSpriteRef.current = null;
+            }
         };
-    }, [appReady, pdfDims, comparisonImageUrl, comparisonOpacity, makeMipmappedTexture]);
+    }, [appReady, pdfDims, fileUrl, comparisonImageUrl, comparisonOpacity, comparisonMode, makeMipmappedTexture, onComparisonError]);
 
     // Apply pageOpacity to the page layer (PDF tiles + fallback sprite).
     useEffect(() => {
@@ -892,8 +1069,8 @@ export function PixiDrawingViewer({
     useEffect(() => {
         const sprite = comparisonSpriteRef.current;
         if (!sprite) return;
-        sprite.alpha = Math.min(1, Math.max(0, comparisonOpacity / 100));
-    }, [comparisonOpacity]);
+        sprite.alpha = comparisonMode === 'difference' ? 1 : Math.min(1, Math.max(0, comparisonOpacity / 100));
+    }, [comparisonOpacity, comparisonMode]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Wheel zoom — bypass React for the hot path, settle re-rasterizes
@@ -1288,24 +1465,27 @@ export function PixiDrawingViewer({
 
     // Imperatively zoom around the viewport center. Used by the +/- buttons.
     // Clamps to [minScale, MAX_SCALE].
-    const zoomByFactor = useCallback((factor: number) => {
-        const app = appRef.current;
-        const world = worldRef.current;
-        if (!app || !world) return;
-        const cx = app.canvas.clientWidth / 2;
-        const cy = app.canvas.clientHeight / 2;
-        const oldScale = world.scale.x;
-        const minScale = minScaleRef.current;
-        const newScale = Math.max(minScale, Math.min(MAX_SCALE, oldScale * factor));
-        if (newScale === oldScale) return;
-        const localX = (cx - world.position.x) / oldScale;
-        const localY = (cy - world.position.y) / oldScale;
-        world.scale.set(newScale);
-        world.position.set(cx - localX * newScale, cy - localY * newScale);
-        setZoomDisplay(newScale);
-        onZoomChange?.(newScale);
-        window.setTimeout(() => maybeRerasterize(), 100);
-    }, [onZoomChange, maybeRerasterize]);
+    const zoomByFactor = useCallback(
+        (factor: number) => {
+            const app = appRef.current;
+            const world = worldRef.current;
+            if (!app || !world) return;
+            const cx = app.canvas.clientWidth / 2;
+            const cy = app.canvas.clientHeight / 2;
+            const oldScale = world.scale.x;
+            const minScale = minScaleRef.current;
+            const newScale = Math.max(minScale, Math.min(MAX_SCALE, oldScale * factor));
+            if (newScale === oldScale) return;
+            const localX = (cx - world.position.x) / oldScale;
+            const localY = (cy - world.position.y) / oldScale;
+            world.scale.set(newScale);
+            world.position.set(cx - localX * newScale, cy - localY * newScale);
+            setZoomDisplay(newScale);
+            onZoomChange?.(newScale);
+            window.setTimeout(() => maybeRerasterize(), 100);
+        },
+        [onZoomChange, maybeRerasterize],
+    );
 
     // Reset the world transform to fit the full PDF in the viewport.
     const fitToScreen = useCallback(() => {
@@ -1314,10 +1494,7 @@ export function PixiDrawingViewer({
         if (!app || !world || !pdfDims) return;
         const fit = computeFitScale();
         world.scale.set(fit);
-        world.position.set(
-            (app.screen.width - pdfDims.width * fit) / 2,
-            (app.screen.height - pdfDims.height * fit) / 2,
-        );
+        world.position.set((app.screen.width - pdfDims.width * fit) / 2, (app.screen.height - pdfDims.height * fit) / 2);
         setZoomDisplay(fit);
         onZoomChange?.(fit);
         window.setTimeout(() => maybeRerasterize(), 100);
@@ -1341,10 +1518,7 @@ export function PixiDrawingViewer({
             minScaleRef.current = fit;
             if (world.scale.x < fit) {
                 world.scale.set(fit);
-                world.position.set(
-                    (app.screen.width - pdfDims.width * fit) / 2,
-                    (app.screen.height - pdfDims.height * fit) / 2,
-                );
+                world.position.set((app.screen.width - pdfDims.width * fit) / 2, (app.screen.height - pdfDims.height * fit) / 2);
                 setZoomDisplay(fit);
                 onZoomChange?.(fit);
             }
@@ -1358,40 +1532,43 @@ export function PixiDrawingViewer({
 
     // Brief outward ring at a UV point for tactile feedback on each placed
     // point. Pixi has no DOM, so we drive it manually via app.ticker.
-    const fireClickBurst = useCallback((uv: Point, cssColor: string, kind: 'click' | 'pulse' = 'click') => {
-        const app = appRef.current;
-        const world = worldRef.current;
-        const fxLayer = fxLayerRef.current;
-        if (!app || !world || !fxLayer || !pdfDims) return;
+    const fireClickBurst = useCallback(
+        (uv: Point, cssColor: string, kind: 'click' | 'pulse' = 'click') => {
+            const app = appRef.current;
+            const world = worldRef.current;
+            const fxLayer = fxLayerRef.current;
+            if (!app || !world || !fxLayer || !pdfDims) return;
 
-        const color = hexFromCss(cssColor);
-        const cx = uv.x * pdfDims.width;
-        const cy = uv.y * pdfDims.height;
-        const invScale = 1 / world.scale.x;
-        const startRadius = (kind === 'click' ? 6 : 8) * invScale;
-        const endRadius = (kind === 'click' ? 18 : 28) * invScale;
-        const duration = kind === 'click' ? 550 : 1300;
+            const color = hexFromCss(cssColor);
+            const cx = uv.x * pdfDims.width;
+            const cy = uv.y * pdfDims.height;
+            const invScale = 1 / world.scale.x;
+            const startRadius = (kind === 'click' ? 6 : 8) * invScale;
+            const endRadius = (kind === 'click' ? 18 : 28) * invScale;
+            const duration = kind === 'click' ? 550 : 1300;
 
-        const ring = new Graphics();
-        fxLayer.addChild(ring);
+            const ring = new Graphics();
+            fxLayer.addChild(ring);
 
-        const start = performance.now();
-        const tick = () => {
-            const t = (performance.now() - start) / duration;
-            if (t >= 1) {
-                fxLayer.removeChild(ring);
-                ring.destroy();
-                app.ticker.remove(tick);
-                return;
-            }
-            const eased = 1 - Math.pow(1 - t, 3);
-            const r = startRadius + (endRadius - startRadius) * eased;
-            const alpha = 0.9 * (1 - t);
-            ring.clear();
-            ring.circle(cx, cy, r).stroke({ color, width: 3 * invScale, alpha });
-        };
-        app.ticker.add(tick);
-    }, [pdfDims]);
+            const start = performance.now();
+            const tick = () => {
+                const t = (performance.now() - start) / duration;
+                if (t >= 1) {
+                    fxLayer.removeChild(ring);
+                    ring.destroy();
+                    app.ticker.remove(tick);
+                    return;
+                }
+                const eased = 1 - Math.pow(1 - t, 3);
+                const r = startRadius + (endRadius - startRadius) * eased;
+                const alpha = 0.9 * (1 - t);
+                ring.clear();
+                ring.circle(cx, cy, r).stroke({ color, width: 3 * invScale, alpha });
+            };
+            app.ticker.add(tick);
+        },
+        [pdfDims],
+    );
 
     // Find a vertex of a selected measurement under a UV point — for vertex
     // drag detection. Returns { id, index, uv } or null.
@@ -1662,13 +1839,13 @@ export function PixiDrawingViewer({
             // distinguishes click-to-place-point from drag-to-pan via the moved
             // flag. Skip when we're mid-bezier-handle-drag — the gesture there
             // is already owned by the handle-drag branch above.
-            const dragPansWorld = handleDraggingIdx == null && (
-                viewMode === 'pan' ||
-                viewMode === 'measure_line' ||
-                viewMode === 'measure_area' ||
-                viewMode === 'measure_count' ||
-                viewMode === 'calibrate'
-            );
+            const dragPansWorld =
+                handleDraggingIdx == null &&
+                (viewMode === 'pan' ||
+                    viewMode === 'measure_line' ||
+                    viewMode === 'measure_area' ||
+                    viewMode === 'measure_count' ||
+                    viewMode === 'calibrate');
 
             // Pinch-zoom owns the world transform while two fingers are down —
             // skip the single-pointer pan update or it'll fight the pinch.
@@ -2039,11 +2216,15 @@ export function PixiDrawingViewer({
             return;
         }
         const minPointsToFinish =
-            viewMode === 'measure_line' ? 2 :
-            viewMode === 'measure_area' ? 3 :
-            viewMode === 'measure_rectangle' ? 2 :
-            viewMode === 'measure_count' ? 1 :
-            Infinity;
+            viewMode === 'measure_line'
+                ? 2
+                : viewMode === 'measure_area'
+                  ? 3
+                  : viewMode === 'measure_rectangle'
+                    ? 2
+                    : viewMode === 'measure_count'
+                      ? 1
+                      : Infinity;
         onDrawingControlsChange({
             viewMode,
             pointCount: drawingPoints.length,
@@ -2273,7 +2454,8 @@ export function PixiDrawingViewer({
 
                 // Pill background drawn directly in world coords (Graphics is
                 // already vector — never blurs).
-                const padX = 6 * invScale, padY = 3 * invScale;
+                const padX = 6 * invScale,
+                    padY = 3 * invScale;
                 const tw = chipText.width;
                 const th = chipText.height;
                 const pill = new Graphics();
@@ -2473,9 +2655,7 @@ export function PixiDrawingViewer({
             const isArea = viewMode === 'measure_area';
             // For area mode, fold the cursor in as a temp last vertex so the
             // user sees the polygon close + fill in real-time as they move.
-            const previewPoints = isArea && hoverPoint
-                ? [...drawingPoints, hoverPoint]
-                : drawingPoints;
+            const previewPoints = isArea && hoverPoint ? [...drawingPoints, hoverPoint] : drawingPoints;
 
             drawBezierPath(g, previewPoints, W, H, false);
             if (isArea && previewPoints.length >= 3) {
@@ -2486,12 +2666,7 @@ export function PixiDrawingViewer({
             // stroke at the real-world width so the user sees the same line
             // they'll get after committing.
             let inProgressStrokeWidth = 2 * invScale;
-            if (
-                viewMode === 'measure_line'
-                && activeConditionThickness
-                && activeConditionThickness > 0
-                && calibrationFactor
-            ) {
+            if (viewMode === 'measure_line' && activeConditionThickness && activeConditionThickness > 0 && calibrationFactor) {
                 const metersPerUnit = METERS_PER_UNIT[calibrationFactor.unit] ?? 1;
                 inProgressStrokeWidth = (activeConditionThickness / metersPerUnit) * calibrationFactor.pdfPointsPerUnit;
             }
@@ -2655,10 +2830,7 @@ export function PixiDrawingViewer({
         // immediate visual confirmation that the tool is active. Falls back
         // to '—' until we have enough data to compute a real value.
         const isMeasureMode =
-            viewMode === 'measure_line' ||
-            viewMode === 'measure_area' ||
-            viewMode === 'measure_rectangle' ||
-            viewMode === 'calibrate';
+            viewMode === 'measure_line' || viewMode === 'measure_area' || viewMode === 'measure_rectangle' || viewMode === 'calibrate';
         if (!isMeasureMode) return null;
 
         if (viewMode === 'measure_line') {
@@ -2743,9 +2915,7 @@ export function PixiDrawingViewer({
             )}
             {loadError && (
                 <div className="absolute inset-0 z-10 flex items-start justify-center overflow-auto bg-white/95 p-4 dark:bg-neutral-900/95">
-                    <pre className="font-mono text-[11px] leading-snug whitespace-pre-wrap break-words text-red-600 select-text">
-                        {loadError}
-                    </pre>
+                    <pre className="font-mono text-[11px] leading-snug break-words whitespace-pre-wrap text-red-600 select-text">{loadError}</pre>
                 </div>
             )}
 
@@ -2850,21 +3020,19 @@ function HoverTooltip({ x, y, measurement }: { x: number; y: number; measurement
             style={style}
         >
             <div className="flex items-center gap-1.5">
-                {isDeduction && (
-                    <span className="rounded bg-red-500/80 px-1 py-px text-[9px] font-semibold tracking-wide uppercase">Deduction</span>
-                )}
+                {isDeduction && <span className="rounded bg-red-500/80 px-1 py-px text-[9px] font-semibold tracking-wide uppercase">Deduction</span>}
                 {co && <span className="rounded bg-blue-500/80 px-1 py-px text-[9px] font-semibold">CO {co}</span>}
                 <span className="font-semibold">{measurement.name}</span>
             </div>
-            <div className="mt-0.5 text-[13px] leading-tight font-bold tabular-nums">
-                {value != null ? `${value.toFixed(2)} ${unit}` : '—'}
-            </div>
+            <div className="mt-0.5 text-[13px] leading-tight font-bold tabular-nums">{value != null ? `${value.toFixed(2)} ${unit}` : '—'}</div>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/80">
                 <span>{typeLabel}</span>
                 {perimeter != null && !isDeduction && (
                     <>
                         <span className="text-white/40">·</span>
-                        <span className="tabular-nums">Perimeter {perimeter.toFixed(2)} {unit}</span>
+                        <span className="tabular-nums">
+                            Perimeter {perimeter.toFixed(2)} {unit}
+                        </span>
                     </>
                 )}
             </div>
@@ -2908,7 +3076,7 @@ function LiveMeasurementPanel({
 
     return (
         <div
-            className="pointer-events-none absolute z-20 flex flex-col gap-0.5 overflow-hidden rounded-lg bg-zinc-900/95 p-2.5 text-white shadow-xl shadow-black/40 ring-1 ring-white/10 backdrop-blur-md"
+            className="pointer-events-none absolute z-20 flex flex-col gap-0.5 overflow-hidden rounded-lg bg-zinc-900/95 p-2.5 text-white shadow-xl ring-1 shadow-black/40 ring-white/10 backdrop-blur-md"
             style={{
                 left,
                 top,

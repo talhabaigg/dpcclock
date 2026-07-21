@@ -196,13 +196,73 @@ class DrawingController extends Controller
      * Basic plan viewer — standalone read-only page, no takeoff tooling.
      * Only needs drawings.view.
      */
-    public function plan(Drawing $drawing): Response
+    public function plan(Request $request, Drawing $drawing): Response
     {
         $drawing->load('project:id,name');
+
+        $comparison = null;
+        $oldId = $request->integer('compare_old');
+        $newId = $request->integer('compare_new');
+
+        if ($oldId > 0 && $newId === $drawing->id && $oldId !== $newId) {
+            $comparisonDrawings = Drawing::where('project_id', $drawing->project_id)
+                ->whereKey([$oldId, $newId])
+                ->get()
+                ->keyBy('id');
+
+            if ($comparisonDrawings->count() === 2) {
+                $formatComparisonDrawing = fn (Drawing $plan) => [
+                    'id' => $plan->id,
+                    'display_name' => $plan->display_name,
+                    'revision_number' => $plan->revision_number,
+                    'created_at' => $plan->created_at,
+                ];
+
+                $comparison = [
+                    'old' => $formatComparisonDrawing($comparisonDrawings->get($oldId)),
+                    'new' => $formatComparisonDrawing($comparisonDrawings->get($newId)),
+                ];
+            }
+        }
+
+        $planOptions = Drawing::where('project_id', $drawing->project_id)
+            ->select([
+                'id',
+                'project_id',
+                'sheet_number',
+                'title',
+                'revision_number',
+                'status',
+                'created_at',
+            ])
+            ->orderBy('sheet_number')
+            ->orderByDesc('created_at')
+            ->get()
+            ->groupBy(fn (Drawing $plan) => $plan->sheet_number ?: 'drawing-'.$plan->id)
+            ->map(function ($versions, $key) {
+                /** @var Drawing $representative */
+                $representative = $versions->firstWhere('status', Drawing::STATUS_ACTIVE) ?? $versions->first();
+
+                return [
+                    'key' => (string) $key,
+                    'sheet_number' => $representative->sheet_number,
+                    'title' => $representative->title,
+                    'display_name' => $representative->display_name,
+                    'versions' => $versions->map(fn (Drawing $version) => [
+                        'id' => $version->id,
+                        'revision_number' => $version->revision_number,
+                        'status' => $version->status,
+                        'created_at' => $version->created_at,
+                    ])->values(),
+                ];
+            })
+            ->values();
 
         return Inertia::render('drawings/plan', [
             'drawing' => $drawing,
             'project' => $drawing->project,
+            'planOptions' => $planOptions,
+            'comparison' => $comparison,
         ]);
     }
 
