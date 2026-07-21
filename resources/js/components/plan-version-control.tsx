@@ -1,11 +1,11 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { CalendarClock, Check, GitCompareArrows, History } from 'lucide-react';
+import { Check, GitCompareArrows, History } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 export type PlanVersionOption = {
@@ -23,8 +23,6 @@ export type PlanOption = {
     versions: PlanVersionOption[];
 };
 
-type Mode = 'history' | 'compare';
-
 function queryVersion(name: string): number | null {
     if (typeof window === 'undefined') return null;
     const value = Number(new URLSearchParams(window.location.search).get(name));
@@ -39,8 +37,7 @@ function formatUploadDate(value: string): string {
 }
 
 function versionLabel(version: PlanVersionOption): string {
-    const revision = version.revision_number ? `Rev ${version.revision_number} · ` : '';
-    return `${revision}${formatUploadDate(version.created_at)}`;
+    return version.revision_number ? `Rev ${version.revision_number}` : formatUploadDate(version.created_at);
 }
 
 export function PlanVersionControl({ planOptions, currentDrawingId }: { planOptions: PlanOption[]; currentDrawingId: number }) {
@@ -62,8 +59,8 @@ export function PlanVersionControl({ planOptions, currentDrawingId }: { planOpti
     const defaultOldVersionId =
         requestedOldId ?? currentPlan?.versions.find((version) => version.id !== defaultNewVersionId)?.id ?? defaultNewVersionId;
 
-    const [open, setOpen] = useState(false);
-    const [mode, setMode] = useState<Mode>(hasComparisonQuery ? 'compare' : 'history');
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [compareOpen, setCompareOpen] = useState(false);
     const [oldPlanKey, setOldPlanKey] = useState(requestedOldPlan?.key ?? currentPlan?.key ?? '');
     const [newPlanKey, setNewPlanKey] = useState(requestedNewPlan?.key ?? currentPlan?.key ?? '');
     const [oldVersionId, setOldVersionId] = useState(defaultOldVersionId);
@@ -88,160 +85,123 @@ export function PlanVersionControl({ planOptions, currentDrawingId }: { planOpti
     };
 
     const openVersion = (versionId: number) => {
-        setOpen(false);
+        setMenuOpen(false);
         router.visit(`/drawings/${versionId}/plan`);
+    };
+
+    const openCompare = () => {
+        setMenuOpen(false);
+        setCompareOpen(true);
     };
 
     const startComparison = () => {
         if (!canCompare) return;
-        setOpen(false);
+        setCompareOpen(false);
         router.visit(`/drawings/${newVersionId}/plan?compare_old=${oldVersionId}&compare_new=${newVersionId}`);
     };
 
     return (
         <>
-            <Button
-                type="button"
-                variant={hasComparisonQuery ? 'secondary' : 'outline'}
-                size="sm"
-                className="bg-background/90 absolute bottom-3 left-3 z-10 h-9 gap-2 shadow-sm backdrop-blur"
-                onClick={() => setOpen(true)}
-            >
-                <GitCompareArrows className="h-4 w-4" />
-                Plans &amp; compare
-                {hasComparisonQuery && (
-                    <span className="flex items-center gap-1" aria-label="Comparison selected">
-                        <span className="h-2 w-2 rounded-full bg-red-600" />
-                        <span className="h-2 w-2 rounded-full bg-blue-600" />
-                    </span>
-                )}
-            </Button>
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        type="button"
+                        variant={hasComparisonQuery ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="bg-background/90 absolute bottom-3 left-3 z-10 h-9 gap-2 shadow-sm backdrop-blur"
+                    >
+                        <History className="h-4 w-4" />
+                        Versions
+                        {hasComparisonQuery && (
+                            <span className="flex items-center gap-1" aria-label="Comparison selected">
+                                <span className="h-2 w-2 rounded-full bg-red-600" />
+                                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                            </span>
+                        )}
+                    </Button>
+                </PopoverTrigger>
 
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
-                    <DialogHeader className="gap-1 px-6 pt-6">
-                        <DialogTitle>Plans and versions</DialogTitle>
-                        <DialogDescription>Open an earlier upload or compare any two plans in this project.</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="border-b px-6 pt-4">
-                        <div className="flex gap-6" role="tablist" aria-label="Plan actions">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={mode === 'history'}
-                                className={cn(
-                                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring relative flex min-h-11 items-center gap-2 pb-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
-                                    mode === 'history' &&
-                                        'text-foreground after:bg-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5',
-                                )}
-                                onClick={() => setMode('history')}
-                            >
-                                <History className="h-4 w-4" />
-                                View history
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={mode === 'compare'}
-                                className={cn(
-                                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring relative flex min-h-11 items-center gap-2 pb-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
-                                    mode === 'compare' &&
-                                        'text-foreground after:bg-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5',
-                                )}
-                                onClick={() => setMode('compare')}
-                            >
-                                <GitCompareArrows className="h-4 w-4" />
-                                Compare plans
-                            </button>
-                        </div>
+                <PopoverContent align="start" side="top" className="w-56 gap-0 p-1">
+                    <div className="max-h-72 overflow-y-auto">
+                        {currentPlan?.versions.map((version, index) => {
+                            const viewing = version.id === currentDrawingId;
+                            const label = version.revision_number ? `Rev ${version.revision_number}` : formatUploadDate(version.created_at);
+                            return (
+                                <button
+                                    type="button"
+                                    key={version.id}
+                                    className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                                    onClick={() => openVersion(version.id)}
+                                >
+                                    <span className="flex-1 truncate">
+                                        {label}
+                                        {index === 0 && <span className="text-muted-foreground"> (New)</span>}
+                                    </span>
+                                    {viewing && <Check className="h-4 w-4 shrink-0" />}
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    {mode === 'history' ? (
-                        <div className="px-6 pb-6">
-                            <div className="flex items-start justify-between gap-4 py-4">
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold">{currentPlan?.display_name ?? 'Current plan'}</p>
-                                    <p className="text-muted-foreground text-xs">Choose an upload to open in the viewer.</p>
-                                </div>
-                                <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                    {currentPlan?.versions.length ?? 0} version{currentPlan?.versions.length === 1 ? '' : 's'}
-                                </span>
-                            </div>
+                    <div className="bg-border -mx-1 my-1 h-px" />
 
-                            <ScrollArea className="max-h-72">
-                                <div className="divide-y border-y">
-                                    {currentPlan?.versions.map((version) => {
-                                        const active = version.id === currentDrawingId;
-                                        return (
-                                            <button
-                                                type="button"
-                                                key={version.id}
-                                                className="hover:bg-muted/60 focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 px-1 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-                                                onClick={() => openVersion(version.id)}
-                                            >
-                                                <span className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-                                                    {active ? (
-                                                        <Check className="h-4 w-4" />
-                                                    ) : (
-                                                        <CalendarClock className="text-muted-foreground h-4 w-4" />
-                                                    )}
-                                                </span>
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-sm font-medium">{formatUploadDate(version.created_at)}</span>
-                                                    <span className="text-muted-foreground block text-xs">
-                                                        {version.revision_number ? `Revision ${version.revision_number}` : 'Uploaded version'}
-                                                        {version.status === 'active' ? ' · Latest' : ''}
-                                                    </span>
-                                                </span>
-                                                {active && <span className="text-xs font-medium">Viewing</span>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </ScrollArea>
-                        </div>
-                    ) : (
-                        <div className="grid gap-6 px-6 pt-5 pb-6">
-                            <VersionSelector
-                                role="old"
-                                color="red"
-                                planOptions={planOptions}
-                                selectedPlanKey={oldPlanKey}
-                                selectedVersionId={oldVersionId}
-                                selectedPlan={oldPlan}
-                                onPlanChange={(key) => changePlan('old', key)}
-                                onVersionChange={setOldVersionId}
-                            />
+                    <button
+                        type="button"
+                        className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                        onClick={openCompare}
+                    >
+                        <GitCompareArrows className="h-4 w-4" />
+                        Compare
+                        {hasComparisonQuery && (
+                            <span className="ml-auto flex items-center gap-1" aria-label="Comparison active">
+                                <span className="h-2 w-2 rounded-full bg-red-600" />
+                                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                            </span>
+                        )}
+                    </button>
+                </PopoverContent>
+            </Popover>
 
-                            <VersionSelector
-                                role="new"
-                                color="blue"
-                                planOptions={planOptions}
-                                selectedPlanKey={newPlanKey}
-                                selectedVersionId={newVersionId}
-                                selectedPlan={newPlan}
-                                onPlanChange={(key) => changePlan('new', key)}
-                                onVersionChange={setNewVersionId}
-                            />
+            <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+                <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
+                    <DialogHeader className="px-6 pt-6">
+                        <DialogTitle>Compare Versions</DialogTitle>
+                        <DialogDescription className="sr-only">Compare any two plans in this project.</DialogDescription>
+                    </DialogHeader>
 
-                            <div className="flex items-center justify-between gap-4 border-t pt-4">
-                                <p className="text-muted-foreground max-w-[34ch] text-xs leading-5">
-                                    Tasks added during comparison will belong to the new plan.
-                                </p>
-                                <Button type="button" onClick={startComparison} disabled={!canCompare} className="shrink-0 gap-2">
-                                    <GitCompareArrows className="h-4 w-4" />
-                                    Compare
-                                </Button>
-                            </div>
+                    <div className="grid gap-4 px-6 pt-2 pb-6">
+                        <VersionSelector
+                            role="new"
+                            color="blue"
+                            planOptions={planOptions}
+                            selectedPlanKey={newPlanKey}
+                            selectedVersionId={newVersionId}
+                            selectedPlan={newPlan}
+                            onPlanChange={(key) => changePlan('new', key)}
+                            onVersionChange={setNewVersionId}
+                        />
 
-                            {!canCompare && oldVersionId === newVersionId && (
-                                <p className="text-destructive -mt-4 text-xs" role="alert">
-                                    Select two different versions to compare.
-                                </p>
-                            )}
-                        </div>
-                    )}
+                        <VersionSelector
+                            role="old"
+                            color="red"
+                            planOptions={planOptions}
+                            selectedPlanKey={oldPlanKey}
+                            selectedVersionId={oldVersionId}
+                            selectedPlan={oldPlan}
+                            onPlanChange={(key) => changePlan('old', key)}
+                            onVersionChange={setOldVersionId}
+                        />
+
+                        {!canCompare && oldVersionId === newVersionId && (
+                            <p className="text-destructive text-xs" role="alert">
+                                Select two different versions to compare.
+                            </p>
+                        )}
+
+                        <Button type="button" onClick={startComparison} disabled={!canCompare} className="mt-2 w-full">
+                            Compare
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </>
@@ -267,55 +227,38 @@ function VersionSelector({
     onPlanChange: (key: string) => void;
     onVersionChange: (id: number) => void;
 }) {
-    const title = role === 'old' ? 'Old plan' : 'New plan';
-
     return (
-        <section aria-labelledby={`${role}-plan-heading`} className="grid gap-3">
-            <div className="flex items-center gap-2">
-                <span className={cn('h-2.5 w-2.5 rounded-full', color === 'red' ? 'bg-red-600' : 'bg-blue-600')} />
-                <h3 id={`${role}-plan-heading`} className="text-sm font-semibold">
-                    {title}
-                </h3>
-                <span className="text-muted-foreground text-xs">{color === 'red' ? 'Shown in red' : 'Shown in blue · receives task pins'}</span>
-            </div>
+        <div className="flex items-center gap-3">
+            <span
+                className={cn('h-2.5 w-2.5 shrink-0 rounded-full', color === 'red' ? 'bg-red-600' : 'bg-blue-600')}
+                aria-label={role === 'old' ? 'Old plan (shown in red)' : 'New plan (shown in blue)'}
+            />
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] items-center gap-2">
+                <SearchSelect
+                    optionName="floor plan"
+                    placeholder="Select floor plan"
+                    selectedOption={selectedPlanKey}
+                    onValueChange={onPlanChange}
+                    options={planOptions.map((plan) => ({ value: plan.key, label: plan.display_name }))}
+                    className="h-auto min-h-11 py-1.5 text-left whitespace-normal *:data-[slot=combobox-value]:line-clamp-2"
+                    renderSelected={() => (
+                        <span className="line-clamp-2 min-w-0 flex-1 leading-4">{selectedPlan?.display_name ?? 'Select floor plan'}</span>
+                    )}
+                />
 
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-                <div className="grid min-w-0 gap-1.5">
-                    <Label htmlFor={`${role}-plan`}>Floor plan</Label>
-                    <Select value={selectedPlanKey} onValueChange={onPlanChange}>
-                        <SelectTrigger
-                            id={`${role}-plan`}
-                            className="h-auto min-h-11 min-w-0 overflow-hidden py-1.5 whitespace-normal *:data-[slot=select-value]:line-clamp-2"
-                            title={selectedPlan?.display_name}
-                        >
-                            <SelectValue className="min-w-0 overflow-hidden text-left leading-4 whitespace-normal" placeholder="Select floor plan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {planOptions.map((plan) => (
-                                <SelectItem key={plan.key} value={plan.key}>
-                                    {plan.display_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="grid min-w-0 gap-1.5">
-                    <Label htmlFor={`${role}-version`}>Version and timeframe</Label>
-                    <Select value={selectedVersionId > 0 ? String(selectedVersionId) : ''} onValueChange={(value) => onVersionChange(Number(value))}>
-                        <SelectTrigger id={`${role}-version`} className="min-w-0 overflow-hidden">
-                            <SelectValue className="min-w-0 overflow-hidden text-ellipsis" placeholder="Select version" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {selectedPlan?.versions.map((version) => (
-                                <SelectItem key={version.id} value={String(version.id)}>
-                                    {versionLabel(version)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+                <Select value={selectedVersionId > 0 ? String(selectedVersionId) : ''} onValueChange={(value) => onVersionChange(Number(value))}>
+                    <SelectTrigger className="min-h-11 min-w-0 overflow-hidden" aria-label={`Select ${role} version`}>
+                        <SelectValue className="min-w-0 overflow-hidden text-ellipsis" placeholder="Select version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {selectedPlan?.versions.map((version) => (
+                            <SelectItem key={version.id} value={String(version.id)}>
+                                {versionLabel(version)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
-        </section>
+        </div>
     );
 }
