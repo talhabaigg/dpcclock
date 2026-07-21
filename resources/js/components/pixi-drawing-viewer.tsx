@@ -3,7 +3,8 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPagePr
 // Custom worker entry that polyfills Map.getOrInsertComputed before loading
 // pdf.worker — Safari/iPadOS doesn't ship that method yet and PDF.js v5 calls
 // it inside the worker. See resources/js/pdf-worker-with-polyfill.ts.
-import { Application, CanvasSource, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, CanvasSource, Container, Filter, GlProgram, Graphics, Matrix, RenderTexture, Sprite, Text, Texture, UniformGroup } from 'pixi.js';
+import type { FilterSystem, RenderSurface } from 'pixi.js';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
@@ -151,6 +152,147 @@ const RERASTER_DRIFT = 0.1;
 const CLICK_THRESHOLD_PX = 4;
 // Hit-test tolerance in screen px — gives a forgiving click target on lines.
 const HIT_TOLERANCE_PX = 8;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Revision-diff GPU filter. The comparison used to diff two rasterized pages
+// pixel-by-pixel on the CPU (getImageData + several full passes) on every
+// re-rasterize, which froze interaction. Instead we hand both pages to the GPU
+// and let a fragment shader produce the coloured diff in one pass — so a zoom
+// costs two normal PDF renders + a near-free GPU composite.
+//
+// Aligning two independent textures inside a filter is exactly what PIXI's
+// DisplacementFilter does: the filtered sprite (the NEW page) is the input
+// (uTexture / vTextureCoord), and the OLD page is a second sprite mapped into
+// input space via `uFilterMatrix` (computed by calculateSpriteMatrix) and read
+// at `vFilterUv`. That mapping is what keeps the two aligned and the aspect
+// correct regardless of filter frame / resolution.
+//
+// The fragment reproduces the old CPU algorithm: luminance→ink ramp, a
+// 4-neighbour "nearby" dilation so hairline/anti-alias shifts don't read as
+// changes, then same/removed/added classification with the same
+// red(removed)/blue(added)/dark(same) colouring on a white ground.
+const DIFF_FILTER_VERT = `in vec2 aPosition;
+out vec2 vTextureCoord;
+out vec2 vFilterUv;
+
+uniform vec4 uInputSize;
+uniform vec4 uOutputFrame;
+uniform vec4 uOutputTexture;
+uniform mat3 uFilterMatrix;
+
+vec4 filterVertexPosition( void ) {
+    vec2 position = aPosition * uOutputFrame.zw + uOutputFrame.xy;
+    position.x = position.x * (2.0 / uOutputTexture.x) - 1.0;
+    position.y = position.y * (2.0 * uOutputTexture.z / uOutputTexture.y) - uOutputTexture.z;
+    return vec4(position, 0.0, 1.0);
+}
+
+vec2 filterTextureCoord( void ) {
+    return aPosition * (uOutputFrame.zw * uInputSize.zw);
+}
+
+void main(void) {
+    gl_Position = filterVertexPosition();
+    vTextureCoord = filterTextureCoord();
+    vFilterUv = (uFilterMatrix * vec3(vTextureCoord, 1.0)).xy;
+}`;
+
+const DIFF_FILTER_FRAG = `in vec2 vTextureCoord;
+in vec2 vFilterUv;
+out vec4 finalColor;
+
+uniform sampler2D uTexture;      // new revision (the filter input)
+uniform sampler2D uOldTexture;   // old revision (mapped via uFilterMatrix)
+uniform vec4 uInputClamp;
+uniform highp vec4 uInputSize;
+
+float ink(vec3 c) {
+    float luminance = dot(c, vec3(0.299, 0.587, 0.114));
+    return clamp((0.94 - luminance) / 0.42, 0.0, 1.0);
+}
+
+// Ink of the old page at a filter-uv offset (same pixel dimensions as the input,
+// so uInputSize.zw is the correct texel step for both samplers).
+float oldInk(vec2 uv) { return ink(texture(uOldTexture, clamp(uv, 0.0, 1.0)).rgb); }
+float newInk(vec2 uv) { return ink(texture(uTexture, clamp(uv, uInputClamp.xy, uInputClamp.zw)).rgb); }
+
+void main(void) {
+    vec2 texel = uInputSize.zw;
+
+    float oldC = oldInk(vFilterUv);
+    float newC = newInk(vTextureCoord);
+
+    // 4-neighbour dilation of each plan's ink (matches the CPU 'nearby' max).
+    float oldNear = oldC;
+    oldNear = max(oldNear, oldInk(vFilterUv + vec2(-texel.x, 0.0)));
+    oldNear = max(oldNear, oldInk(vFilterUv + vec2(texel.x, 0.0)));
+    oldNear = max(oldNear, oldInk(vFilterUv + vec2(0.0, -texel.y)));
+    oldNear = max(oldNear, oldInk(vFilterUv + vec2(0.0, texel.y)));
+
+    float newNear = newC;
+    newNear = max(newNear, newInk(vTextureCoord + vec2(-texel.x, 0.0)));
+    newNear = max(newNear, newInk(vTextureCoord + vec2(texel.x, 0.0)));
+    newNear = max(newNear, newInk(vTextureCoord + vec2(0.0, -texel.y)));
+    newNear = max(newNear, newInk(vTextureCoord + vec2(0.0, texel.y)));
+
+    float same = max(min(oldC, newNear), min(newC, oldNear));
+    float removed = max(0.0, oldC - newNear);
+    float added = max(0.0, newC - oldNear);
+    float total = same + removed + added;
+    if (total > 1.0) {
+        same /= total;
+        removed /= total;
+        added /= total;
+    }
+
+    float bg = 1.0 - min(1.0, same + removed + added);
+    finalColor = vec4(
+        bg + same * (8.0 / 255.0) + removed * (230.0 / 255.0) + added * (13.0 / 255.0),
+        bg + same * (8.0 / 255.0) + removed * (24.0 / 255.0) + added * (71.0 / 255.0),
+        bg + same * (8.0 / 255.0) + removed * (24.0 / 255.0) + added * (242.0 / 255.0),
+        1.0
+    );
+}`;
+
+// A filter that reads a second (OLD) page sprite aligned to the filtered (NEW)
+// input, modelled on PIXI's DisplacementFilter. The old sprite must live in the
+// same container being rendered so its worldTransform is current when
+// calculateSpriteMatrix maps it into input space.
+class RevisionDiffFilter extends Filter {
+    private readonly _oldSprite: Sprite;
+
+    constructor(oldSprite: Sprite) {
+        const filterUniforms = new UniformGroup({
+            uFilterMatrix: { value: new Matrix(), type: 'mat3x3<f32>' },
+        });
+        const glProgram = GlProgram.from({ vertex: DIFF_FILTER_VERT, fragment: DIFF_FILTER_FRAG, name: 'revision-diff' });
+        const source = oldSprite.texture.source;
+        super({
+            glProgram,
+            resources: { filterUniforms, uOldTexture: source, uOldSampler: source.style },
+            padding: 0,
+            antialias: 'off',
+        });
+        this._oldSprite = oldSprite;
+        this._oldSprite.renderable = false;
+    }
+
+    apply(filterManager: FilterSystem, input: Texture, output: RenderSurface, clearMode?: boolean): void {
+        const uniforms = (this.resources.filterUniforms as UniformGroup).uniforms as { uFilterMatrix: Matrix };
+        filterManager.calculateSpriteMatrix(uniforms.uFilterMatrix, this._oldSprite);
+        const source = this._oldSprite.texture.source;
+        this.resources.uOldTexture = source;
+        this.resources.uOldSampler = source.style;
+        filterManager.applyFilter(this, input, output, clearMode);
+    }
+}
+
+// A rasterize pass yields either a raw canvas (single-drawing path — the caller
+// wraps it in a mipmapped texture) or an already-built texture (difference path
+// returns the GPU-composited RenderTexture directly).
+type RegionRaster =
+    | { texture: Texture; effectiveScale: number }
+    | { canvas: HTMLCanvasElement | OffscreenCanvas; effectiveScale: number };
 
 // Format a number for measurement labels — sane precision, no trailing zeros.
 const formatNumber = (v: number): string => {
@@ -652,10 +794,7 @@ export function PixiDrawingViewer({
     );
 
     const rasterizeComparisonRegion = useCallback(
-        async (
-            region: { x: number; y: number; w: number; h: number },
-            scale: number,
-        ): Promise<{ canvas: HTMLCanvasElement | OffscreenCanvas; effectiveScale: number } | null> => {
+        async (region: { x: number; y: number; w: number; h: number }, scale: number): Promise<RegionRaster | null> => {
             const oldPage = pageRef.current;
             const newPage = comparisonPageRef.current;
             if (!oldPage || !newPage || !pdfDims || region.w <= 0 || region.h <= 0) return null;
@@ -667,7 +806,11 @@ export function PixiDrawingViewer({
             const maxDim = Math.max(region.w * scale, region.h * scale);
             if (maxDim > MAX_TEXTURE_DIM) finalScale *= MAX_TEXTURE_DIM / maxDim;
 
-            const maxPixels = IS_IOS ? 4_000_000 : 16_000_000;
+            // Caps the two page rasters + the diff RenderTexture. The diff itself
+            // is now a GPU pass (cheap), so this only gates texture memory and PDF
+            // render time, not main-thread pixel work. 8M px over the overscanned
+            // region stays ~2× supersampled on screen.
+            const maxPixels = IS_IOS ? 4_000_000 : 8_000_000;
             const requestedPixels = region.w * region.h * finalScale * finalScale;
             if (requestedPixels > maxPixels) finalScale *= Math.sqrt(maxPixels / requestedPixels);
 
@@ -708,67 +851,43 @@ export function PixiDrawingViewer({
             };
 
             try {
+                const app = appRef.current;
+                if (!app) return null;
+
                 const oldCanvas = createCanvas();
                 const newCanvas = createCanvas();
                 await Promise.all([renderPlan(oldPage, oldCanvas, false), renderPlan(newPage, newCanvas, true)]);
 
-                const oldCtx = oldCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-                const newCtx = newCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-                if (!oldCtx || !newCtx) throw new Error('Failed to read the comparison canvases.');
+                // GPU diff: upload both pages, composite through the diff filter
+                // into a RenderTexture in one pass. No getImageData / putImageData,
+                // no per-pixel CPU loops — the shader reproduces the old
+                // ink/dilation/classify algorithm on the GPU. Both sprites share
+                // one container so the filter can map OLD → the NEW input space.
+                const oldTexture = makeMipmappedTexture(oldCanvas);
+                const newTexture = makeMipmappedTexture(newCanvas);
 
-                const oldImage = oldCtx.getImageData(0, 0, canvasW, canvasH);
-                const newImage = newCtx.getImageData(0, 0, canvasW, canvasH);
-                const pixelCount = canvasW * canvasH;
-                const oldInk = new Uint8Array(pixelCount);
-                const newInk = new Uint8Array(pixelCount);
+                const oldSprite = new Sprite(oldTexture);
+                const newSprite = new Sprite(newTexture);
+                const filter = new RevisionDiffFilter(oldSprite);
+                newSprite.filters = [filter];
 
-                const measureInk = (data: Uint8ClampedArray, target: Uint8Array) => {
-                    for (let pixel = 0, offset = 0; pixel < pixelCount; pixel++, offset += 4) {
-                        const luminance = (data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114) / 255;
-                        target[pixel] = Math.round(Math.min(1, Math.max(0, (0.94 - luminance) / 0.42)) * 255);
-                    }
-                };
+                const scene = new Container();
+                scene.addChild(oldSprite); // renderable:false, present only for its transform
+                scene.addChild(newSprite);
 
-                measureInk(oldImage.data, oldInk);
-                measureInk(newImage.data, newInk);
+                const target = RenderTexture.create({ width: canvasW, height: canvasH, resolution: 1, antialias: false });
+                app.renderer.render({ container: scene, target, clear: true });
 
-                const nearby = (ink: Uint8Array, pixel: number, x: number, y: number) => {
-                    let value = ink[pixel];
-                    if (x > 0) value = Math.max(value, ink[pixel - 1]);
-                    if (x + 1 < canvasW) value = Math.max(value, ink[pixel + 1]);
-                    if (y > 0) value = Math.max(value, ink[pixel - canvasW]);
-                    if (y + 1 < canvasH) value = Math.max(value, ink[pixel + canvasW]);
-                    return value / 255;
-                };
+                // Composite now lives in `target`; tear down the scratch scene and
+                // its inputs. (GlProgram is cached by source, so rebuilding the
+                // filter each raster does not recompile the shader.)
+                scene.destroy({ children: true });
+                filter.destroy();
+                oldTexture.destroy(true);
+                newTexture.destroy(true);
 
-                for (let y = 0, pixel = 0, offset = 0; y < canvasH; y++) {
-                    for (let x = 0; x < canvasW; x++, pixel++, offset += 4) {
-                        const oldValue = oldInk[pixel] / 255;
-                        const newValue = newInk[pixel] / 255;
-                        const oldNear = nearby(oldInk, pixel, x, y);
-                        const newNear = nearby(newInk, pixel, x, y);
-                        let same = Math.max(Math.min(oldValue, newNear), Math.min(newValue, oldNear));
-                        let removed = Math.max(0, oldValue - newNear);
-                        let added = Math.max(0, newValue - oldNear);
-                        const total = same + removed + added;
-
-                        if (total > 1) {
-                            same /= total;
-                            removed /= total;
-                            added /= total;
-                        }
-
-                        const background = 1 - Math.min(1, same + removed + added);
-                        oldImage.data[offset] = Math.round(background * 255 + same * 8 + removed * 230 + added * 13);
-                        oldImage.data[offset + 1] = Math.round(background * 255 + same * 8 + removed * 24 + added * 71);
-                        oldImage.data[offset + 2] = Math.round(background * 255 + same * 8 + removed * 24 + added * 242);
-                        oldImage.data[offset + 3] = 255;
-                    }
-                }
-
-                oldCtx.putImageData(oldImage, 0, 0);
                 onComparisonError?.(null);
-                return { canvas: oldCanvas, effectiveScale: finalScale };
+                return { texture: target, effectiveScale: finalScale };
             } catch (error) {
                 if ((error as { name?: string })?.name === 'RenderingCancelledException') return null;
                 const message = error instanceof Error ? error.message : 'Failed to render the comparison.';
@@ -778,7 +897,7 @@ export function PixiDrawingViewer({
                 return null;
             }
         },
-        [pdfDims, onComparisonError],
+        [pdfDims, onComparisonError, makeMipmappedTexture],
     );
 
     const activeRasterizeRegion = comparisonMode === 'difference' ? rasterizeComparisonRegion : rasterizeRegion;
@@ -837,7 +956,7 @@ export function PixiDrawingViewer({
             );
             if (cancelled) return;
             if (fallbackResult) {
-                const fallbackTexture = makeMipmappedTexture(fallbackResult.canvas);
+                const fallbackTexture = 'texture' in fallbackResult ? fallbackResult.texture : makeMipmappedTexture(fallbackResult.canvas);
                 const fallbackSprite = new Sprite(fallbackTexture);
                 fallbackSprite.x = 0;
                 fallbackSprite.y = 0;
@@ -868,7 +987,7 @@ export function PixiDrawingViewer({
                 return;
             }
 
-            const texture = makeMipmappedTexture(result.canvas);
+            const texture = 'texture' in result ? result.texture : makeMipmappedTexture(result.canvas);
             const sprite = new Sprite(texture);
             sprite.x = region.x;
             sprite.y = region.y;
@@ -917,7 +1036,7 @@ export function PixiDrawingViewer({
         const result = await activeRasterizeRegion(region, requiredScale);
         if (!result) return;
 
-        const texture = makeMipmappedTexture(result.canvas);
+        const texture = 'texture' in result ? result.texture : makeMipmappedTexture(result.canvas);
         const oldTexture = sprite.texture;
         sprite.texture = texture;
         sprite.x = region.x;
