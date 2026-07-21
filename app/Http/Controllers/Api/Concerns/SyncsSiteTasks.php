@@ -29,8 +29,15 @@ trait SyncsSiteTasks
 {
     // ── Pull ──────────────────────────────────────────────────
 
-    private function pullSiteTaskTables(array $projectIds, ?Carbon $since): array
+    /**
+     * $migratedTables: tables the client just created via a local schema
+     * migration (Watermelon migration sync). Those pull in FULL — their rows
+     * mostly predate the client's watermark, so an incremental pull would
+     * leave the fresh table empty forever.
+     */
+    private function pullSiteTaskTables(array $projectIds, ?Carbon $since, array $migratedTables = []): array
     {
+        $sinceFor = fn (string $table) => in_array($table, $migratedTables, true) ? null : $since;
         $taskScope = SiteTask::whereIn('location_id', $projectIds);
         $taskIds = fn () => SiteTask::withTrashed()->whereIn('location_id', $projectIds)->select('id');
 
@@ -40,23 +47,23 @@ trait SyncsSiteTasks
         return [
             'site_tasks' => $this->pullTable(
                 clone $taskScope,
-                $since,
+                $sinceFor('site_tasks'),
                 fn ($record) => $this->formatSiteTask($record)
             ),
             'site_task_assignees' => $this->pullTable(
                 SiteTaskAssignee::whereIn('site_task_id', $taskIds())->with('employee:id,name', 'task:id,watermelon_id'),
-                $since,
+                $sinceFor('site_task_assignees'),
                 fn ($record) => $this->formatSiteTaskAssignee($record)
             ),
             'checklists' => $this->pullTable(
                 clone $checklistScope,
-                $since,
+                $sinceFor('checklists'),
                 fn ($record) => $this->formatSiteTaskChecklist($record),
                 softDeletes: false
             ),
             'checklist_items' => $this->pullTable(
                 ChecklistItem::whereIn('checklist_id', (clone $checklistScope)->select('id')),
-                $since,
+                $sinceFor('checklist_items'),
                 fn ($record) => $this->formatSiteTaskChecklistItem($record),
                 softDeletes: false
             ),
@@ -64,13 +71,13 @@ trait SyncsSiteTasks
                 Comment::where('commentable_type', SiteTask::class)
                     ->whereIn('commentable_id', $taskIds())
                     ->with('user:id,name', 'media'),
-                $since,
+                $sinceFor('comments'),
                 fn ($record) => $this->formatSiteTaskComment($record)
             ),
             // Reference data (read-only on the client) — numeric server ids.
             'checklist_templates' => $this->pullTable(
                 ChecklistTemplate::active()->forModel(SiteTask::class),
-                $since,
+                $sinceFor('checklist_templates'),
                 fn ($record) => $this->formatChecklistTemplate($record),
                 softDeletes: false
             ),
@@ -79,19 +86,19 @@ trait SyncsSiteTasks
                     'checklist_template_id',
                     ChecklistTemplate::active()->forModel(SiteTask::class)->select('id')
                 ),
-                $since,
+                $sinceFor('checklist_template_items'),
                 fn ($record) => $this->formatChecklistTemplateItem($record),
                 softDeletes: false
             ),
             'site_task_categories' => $this->pullTable(
                 SiteTaskCategory::active(),
-                $since,
+                $sinceFor('site_task_categories'),
                 fn ($record) => $this->formatSiteTaskCategory($record),
                 softDeletes: false
             ),
             'employees' => $this->pullTable(
                 Employee::query()->select(['id', 'name', 'created_at', 'updated_at', 'deleted_at']),
-                $since,
+                $sinceFor('employees'),
                 fn ($record) => $this->formatSyncEmployee($record),
                 // Reference data keyed by numeric id — formatSyncEmployee never
                 // reads/writes watermelon_id. Must stay softDeletes:false: the

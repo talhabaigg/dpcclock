@@ -934,22 +934,23 @@ Content-Type: application/json
 
 ---
 
-## Site Tasks (Offline Sync — schema v2)
+## Site Tasks (Offline Sync — schema-gated)
 
 Field tasks pinned on drawings: category-classified pins ("Unit 1203 — QA frame Fr WALL"), checklists imported from templates, rectification tasks raised from failed checklist items, work-tracker phases with per-person completion, and task comments. Everything here syncs through the existing WatermelonDB endpoints:
 
 ```
-GET  /api/sync/pull?last_pulled_at={ms}&schema_version=2
+GET  /api/sync/pull?last_pulled_at={ms}&schema_version={wmdb version}
 POST /api/sync/push
 GET  /api/sync/active-ids
 ```
 
-**`schema_version=2` is required to receive the site-task tables.** Clients that omit it (or send `1`) get only the original tables (projects, drawings, observations, measurements, statuses) — existing app builds are unaffected until they opt in.
+**`schema_version` gates which tables you receive** — the mobile client sends its own WatermelonDB schema version, so each server gate must equal the first app schema version that actually has the tables (WMDB `synchronize()` throws on any unknown table in the payload). Clients that omit it (or send `1`) get only the original tables (projects, drawings, observations, measurements, statuses). `>= 2` adds all the site-task tables below. `>= 10` additionally adds the `site_task_title_presets` reference table (quick-create title picker — the table joined the app's WMDB schema at v10).
 
 ### Concepts
 
 - A **top-level task** (`parent_id = null`) is a pin anchor on a drawing. Its children (max one level) are rectifications and work-tracker phases.
-- **Category** (`category_id` → `site_task_categories`) is the user-facing classification and drives the pin code/colour (BC, PV, QF, PR, QS, WT, RE). There is no `type` enum.
+- **Category** (`category_id` → `site_task_categories`) is the user-facing classification and drives the pin code/colour. The list is **admin-managed** in the portal (Site Tasks → Categories): names, codes, colours and ordering can change and new categories can be added at any time, so render pins from the synced `code`/`color` — never a hardcoded list. `BC, PV, QF, PR, QS, WT, RE` are the seeded defaults; `WT` (work tracker) and `RE` (rectification) codes carry the special behaviours below. There is no `type` enum.
+- **Title presets** (`site_task_title_presets`, schema v10+) are admin-curated title suggestions for quick task creation. Each preset is scoped to one category, or global (`category_id = null`) — globals are offered under every category. Show the category's own presets first, then the globals, each ordered by `sort_order`. Purely a naming convenience: the task stores the chosen `title` as a plain string, never a reference to the preset, and free-typed titles remain allowed.
 - **Checklists** attach to tasks, materialised from `checklist_templates`. Each template may be imported **once per task** (server skips duplicates on push).
 - **Flagging a problem is a client-side atomic dual-write**: set the checklist item `status = "problem"` AND create a rectification task (`checklist_item_id` = the item, `parent_id` = the item's task, category `RE`) in the same push. Never one without the other.
 - **Work tracker**: importing phases creates six child tasks titled `Frame firewall`, `Sheet firewall`, `Close firewall`, `Sheet unit`, `Frame unit`, `Set and sand` (category `WT`, `sort_order` 0-5). Skip titles that already exist under the parent. Per-person completion lives on the assignee row, not the task.
@@ -1020,6 +1021,8 @@ Update/delete of a comment is **author-only**; pushes from other users are ignor
 **Pull-only reference tables** (numeric server ids as the record `id`; never push):
 
 - `site_task_categories` — `{ id, server_id, name, code, color, sort_order }`. Use for the category picker and pin rendering.
+- `site_task_title_presets` (**schema v10+**) — `{ id, server_id, category_id, title, sort_order }`. `category_id` is the **numeric server id** of the owning category, or `null` for a global preset (offered under every category).
+- Categories and presets sync **active rows only**, with no tombstones and no entry in `/api/sync/active-ids`. A row deactivated or deleted in the portal simply stops appearing in pulls — the stale local copy persists until a full resync (fresh login / local reset). That's harmless: keep rendering existing pins from the stale row, but the create-task pickers should only offer what the latest pull contains. A task whose category was deleted syncs down with `category_id = null` (or may point at a category you no longer receive) — render such pins with a neutral fallback code/colour.
 - `checklist_templates` — `{ id: "ct-{n}", server_id, name }` and `checklist_template_items` — `{ id: "cti-{n}", server_id, checklist_template_id, label, sort_order, is_required }`. Offline checklist import = client materialises a `checklists` row (+ items) from these with fresh UUIDs, carrying `checklist_template_id = server_id`.
 - `employees` — `{ id: "{n}", server_id, name }` for the assignee picker.
 
@@ -1529,8 +1532,8 @@ Returns the high-resolution page preview image. Redirects to a signed S3 URL.
 | PUT | `/api/site-walk-photos/{id}` | Update a photo (caption, position) |
 | DELETE | `/api/site-walk-photos/{id}` | Delete a photo |
 | GET | `/api/site-walk-photos/{id}/file` | Stream a photo file |
-| **Site Tasks / Sync (schema v2)** | | |
-| GET | `/api/sync/pull?schema_version=2` | Watermelon pull incl. site_tasks, assignees, checklists, checklist_items, comments + reference tables |
+| **Site Tasks / Sync (schema-gated)** | | |
+| GET | `/api/sync/pull?schema_version={v}` | Watermelon pull incl. site_tasks, assignees, checklists, checklist_items, comments + reference tables (v2+; v10+ adds `site_task_title_presets`) |
 | POST | `/api/sync/push` | Watermelon push for the same tables |
 | GET | `/api/sync/active-ids` | Active watermelon ids per table (tombstone reconciliation) |
 | POST | `/api/comments/{watermelon_id}/attachments` | Deferred photo upload for offline-created task comments |

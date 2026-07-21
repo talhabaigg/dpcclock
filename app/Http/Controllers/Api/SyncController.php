@@ -44,12 +44,23 @@ class SyncController extends Controller
         $request->validate([
             'last_pulled_at' => 'nullable|numeric',
             'schema_version' => 'nullable|integer',
+            'migration' => 'nullable|string',
         ]);
 
         $lastPulledAt = $request->input('last_pulled_at');
         $since = $lastPulledAt && $lastPulledAt > 0
             ? Carbon::createFromTimestampMs($lastPulledAt)
             : null;
+
+        // Watermelon migration sync: on the FIRST pull after a client-side
+        // schema migration, the client sends the tables it just created. Those
+        // tables must be back-filled in full — their rows mostly predate the
+        // client's last_pulled_at watermark, so an incremental pull would skip
+        // them and the table would stay empty forever (the migration flag is
+        // never sent again once this pull succeeds).
+        $migration = json_decode((string) $request->input('migration', ''), true);
+        $migratedTables = array_values(array_filter((array) ($migration['tables'] ?? []), 'is_string'));
+        $sinceFor = fn (string $table) => in_array($table, $migratedTables, true) ? null : $since;
 
         // Snapshot timestamp BEFORE querying (ensures consistency)
         $timestamp = now();
@@ -110,14 +121,18 @@ class SyncController extends Controller
         // tables, so only send them to clients that ask for v2+.
         $schemaVersion = (int) $request->input('schema_version', 1);
         if ($schemaVersion >= 2) {
-            $changes = array_merge($changes, $this->pullSiteTaskTables($projectIds, $since));
+            $changes = array_merge($changes, $this->pullSiteTaskTables($projectIds, $since, $migratedTables));
         }
 
-        // Title presets joined in v3 (quick task creation name picker).
-        if ($schemaVersion >= 3) {
+        // Title presets (quick task creation name picker). The client sends its
+        // WatermelonDB schema version, and the presets table joined the app's
+        // WMDB schema at v10 — gating any lower would push an unknown table to
+        // existing builds (they send 9), and WMDB's synchronize() throws on
+        // unknown tables, breaking their entire sync.
+        if ($schemaVersion >= 10) {
             $changes['site_task_title_presets'] = $this->pullTable(
                 SiteTaskTitlePreset::active(),
-                $since,
+                $sinceFor('site_task_title_presets'),
                 fn ($record) => $this->formatSiteTaskTitlePreset($record),
                 softDeletes: false
             );
