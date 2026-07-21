@@ -240,12 +240,28 @@ class DrawingController extends Controller
                 'revision_number',
                 'status',
                 'created_at',
+                'aconex_version_number',
             ])
             ->orderBy('sheet_number')
             ->orderByDesc('created_at')
             ->get()
             ->groupBy(fn (Drawing $plan) => $plan->sheet_number ?: 'drawing-'.$plan->id)
             ->map(function ($versions, $key) {
+                // Newest revision first — import order (created_at) lies when
+                // an older revision was imported after a newer one. Aconex's
+                // version sequence is authoritative when both sides have one;
+                // revision comparison covers manual uploads.
+                $versions = $versions
+                    ->sort(function (Drawing $x, Drawing $y) {
+                        if ($x->aconex_version_number !== null && $y->aconex_version_number !== null) {
+                            return $y->aconex_version_number <=> $x->aconex_version_number;
+                        }
+
+                        return Drawing::compareRevisions($y->revision_number, $x->revision_number)
+                            ?: ($y->created_at <=> $x->created_at);
+                    })
+                    ->values();
+
                 /** @var Drawing $representative */
                 $representative = $versions->firstWhere('status', Drawing::STATUS_ACTIVE) ?? $versions->first();
 

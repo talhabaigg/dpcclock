@@ -119,6 +119,8 @@ class CheckAconexRevisions extends Command
                 $doc['title'],
                 $doc['revision'] ?: null,
                 $existing->created_by,
+                $doc['version_number'] ?: null,
+                $doc['date_modified'] ?: null,
             );
             $queuedByUser[$existing->created_by][] = $docNo;
             $queued++;

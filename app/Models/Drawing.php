@@ -24,6 +24,8 @@ class Drawing extends Model implements HasMedia
         'status',
         'previous_revision_id',
         'aconex_document_id',
+        'aconex_version_number',
+        'aconex_registered_at',
         'tiles_width',
         'tiles_height',
         'created_by',
@@ -33,6 +35,8 @@ class Drawing extends Model implements HasMedia
     protected $casts = [
         'tiles_width' => 'integer',
         'tiles_height' => 'integer',
+        'aconex_version_number' => 'integer',
+        'aconex_registered_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -292,7 +296,38 @@ class Drawing extends Model implements HasMedia
     }
 
     /**
-     * Add a new revision for this sheet. Supersedes the current active revision.
+     * Compare two revision identifiers: 1 < 2 < 10; A < B < Z < AA.
+     * Returns <0 when $a is older than $b, >0 when newer, 0 when equal.
+     * Mixed/unknown schemes fall back to natural string comparison.
+     */
+    public static function compareRevisions(?string $a, ?string $b): int
+    {
+        $a = strtoupper(trim((string) $a));
+        $b = strtoupper(trim((string) $b));
+
+        if ($a === $b) {
+            return 0;
+        }
+        if ($a === '' || $b === '') {
+            return $a === '' ? -1 : 1;
+        }
+
+        if (is_numeric($a) && is_numeric($b)) {
+            return (int) $a <=> (int) $b;
+        }
+
+        if (preg_match('/^[A-Z]+$/', $a) && preg_match('/^[A-Z]+$/', $b)) {
+            return [strlen($a), $a] <=> [strlen($b), $b];
+        }
+
+        return strnatcasecmp($a, $b);
+    }
+
+    /**
+     * Add a new revision for this sheet. Supersedes the current active revision —
+     * unless the given revision is older than the active one (an out-of-order
+     * import, e.g. rev C fetched after rev F), which is stored as already-
+     * superseded history so the newest revision stays active.
      */
     public static function addRevision(
         int $projectId,
@@ -304,6 +339,27 @@ class Drawing extends Model implements HasMedia
             ->where('sheet_number', $sheetNumber)
             ->where('status', self::STATUS_ACTIVE)
             ->first();
+
+        // Prefer Aconex's own monotonic version sequence when both sides have
+        // one — revision letters are only a fallback for manual uploads.
+        $incomingIsOlder = false;
+        if ($currentActive) {
+            if ($newDrawing->aconex_version_number !== null && $currentActive->aconex_version_number !== null) {
+                $incomingIsOlder = $newDrawing->aconex_version_number < $currentActive->aconex_version_number;
+            } elseif ($revisionNumber !== null) {
+                $incomingIsOlder = self::compareRevisions($revisionNumber, $currentActive->revision_number) < 0;
+            }
+        }
+
+        if ($incomingIsOlder) {
+            $newDrawing->project_id = $projectId;
+            $newDrawing->sheet_number = $sheetNumber;
+            $newDrawing->revision_number = $revisionNumber;
+            $newDrawing->status = self::STATUS_SUPERSEDED;
+            $newDrawing->save();
+
+            return;
+        }
 
         if ($currentActive) {
             $currentActive->update(['status' => self::STATUS_SUPERSEDED]);
@@ -347,17 +403,17 @@ class Drawing extends Model implements HasMedia
      */
     public static function getNextRevisionNumber(int $projectId, string $sheetNumber): string
     {
-        $lastRevision = self::where('project_id', $projectId)
+        // Highest by revision order, not import order — out-of-order imports
+        // mean the newest created_at isn't necessarily the highest revision.
+        $current = self::where('project_id', $projectId)
             ->where('sheet_number', $sheetNumber)
             ->whereNotNull('revision_number')
-            ->orderBy('created_at', 'desc')
-            ->first();
+            ->pluck('revision_number')
+            ->reduce(fn ($max, $rev) => $max === null || self::compareRevisions($rev, $max) > 0 ? $rev : $max);
 
-        if (! $lastRevision || ! $lastRevision->revision_number) {
+        if (! $current) {
             return 'A';
         }
-
-        $current = $lastRevision->revision_number;
 
         if (is_numeric($current)) {
             return (string) ((int) $current + 1);

@@ -32,12 +32,15 @@ type AconexDocument = {
     file_type: string;
     author: string;
     revision: string;
+    version_number: number;
     date_modified: string;
     already_imported: boolean;
     import_is_new_revision: boolean;
 };
 
 type AconexProjectOption = { id: string; name: string };
+
+type AconexVersion = Omit<AconexDocument, 'import_is_new_revision'>;
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; icon: typeof Loader2 }> = {
     draft: { label: 'Draft', variant: 'outline', icon: Clock },
@@ -73,6 +76,11 @@ export default function AconexImport() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [importing, setImporting] = useState(false);
     const [previewDoc, setPreviewDoc] = useState<AconexDocument | null>(null);
+
+    // Version-history dialog
+    const [versionsFor, setVersionsFor] = useState<AconexDocument | null>(null);
+    const [versions, setVersions] = useState<AconexVersion[] | null>(null);
+    const [importingVersionId, setImportingVersionId] = useState<string | null>(null);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Projects', href: '/locations' },
@@ -159,8 +167,57 @@ export default function AconexImport() {
     const selectedDocs = useMemo(() => documents.filter((d) => selectedIds.has(d.aconex_document_id)), [documents, selectedIds]);
 
     // Only formats browsers can render natively — CAD formats (dwg, dgn, ifc...) must be downloaded.
-    const isPreviewable = (doc: AconexDocument) => ['pdf', 'png', 'jpg', 'jpeg', 'gif'].includes(doc.file_type?.toLowerCase());
-    const previewUrl = (doc: AconexDocument) => `/projects/${project.id}/drawings/aconex-preview/${doc.aconex_document_id}`;
+    const isPreviewable = (doc: AconexDocument | AconexVersion) => ['pdf', 'png', 'jpg', 'jpeg', 'gif'].includes(doc.file_type?.toLowerCase());
+    const previewUrl = (doc: AconexDocument | AconexVersion) => `/projects/${project.id}/drawings/aconex-preview/${doc.aconex_document_id}`;
+
+    const openVersions = async (doc: AconexDocument) => {
+        setVersionsFor(doc);
+        setVersions(null);
+        try {
+            const params = new URLSearchParams({ document_number: doc.document_number });
+            const res = await fetch(`/projects/${project.id}/drawings/aconex-versions?${params}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.message ?? 'Could not load versions');
+            setVersions(data.versions ?? []);
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Could not load versions');
+            setVersionsFor(null);
+        }
+    };
+
+    const importVersion = async (version: AconexVersion) => {
+        setImportingVersionId(version.aconex_document_id);
+        try {
+            const res = await fetch(`/projects/${project.id}/drawings/aconex-import`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                body: JSON.stringify({
+                    documents: [
+                        {
+                            aconex_document_id: version.aconex_document_id,
+                            document_number: version.document_number,
+                            title: version.title,
+                            revision: version.revision,
+                            version_number: version.version_number,
+                            date_modified: version.date_modified,
+                        },
+                    ],
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.message ?? 'Import failed');
+            toast.success(data.message ?? 'Import queued');
+            setVersions((prev) => prev?.map((v) => (v.aconex_document_id === version.aconex_document_id ? { ...v, already_imported: true } : v)) ?? null);
+        } catch (e: any) {
+            toast.error(e?.message ?? 'Import failed');
+        } finally {
+            setImportingVersionId(null);
+        }
+    };
 
     const handleImport = async () => {
         if (selectedDocs.length === 0) return;
@@ -180,6 +237,8 @@ export default function AconexImport() {
                         document_number: d.document_number,
                         title: d.title,
                         revision: d.revision,
+                        version_number: d.version_number,
+                        date_modified: d.date_modified,
                     })),
                 }),
             });
@@ -345,7 +404,19 @@ export default function AconexImport() {
                                                         </TableCell>
                                                         <TableCell className="hidden text-xs sm:table-cell">{doc.document_number}</TableCell>
                                                         <TableCell className="hidden text-xs md:table-cell">{doc.doctype}</TableCell>
-                                                        <TableCell className="hidden text-xs md:table-cell">{doc.revision}</TableCell>
+                                                        <TableCell className="hidden text-xs md:table-cell">
+                                                            {doc.revision}
+                                                            {doc.version_number > 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-muted-foreground hover:text-foreground ml-1 underline decoration-dotted underline-offset-2"
+                                                                    title={`This document has ${doc.version_number} versions in Aconex — click to view them`}
+                                                                    onClick={() => openVersions(doc)}
+                                                                >
+                                                                    v{doc.version_number}
+                                                                </button>
+                                                            )}
+                                                        </TableCell>
                                                         <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
                                                             {doc.date_modified ? formatDistanceToNow(new Date(doc.date_modified), { addSuffix: true }) : '—'}
                                                         </TableCell>
@@ -452,6 +523,99 @@ export default function AconexImport() {
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog open={!!versionsFor} onOpenChange={(open) => !open && setVersionsFor(null)}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="truncate pr-8 text-sm">Versions of {versionsFor?.document_number}</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            {versionsFor?.title} — only versions transmitted to your organisation appear here.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {versions === null ? (
+                        <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-sm">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading versions...
+                        </div>
+                    ) : (
+                        <div className="max-h-[60vh] overflow-y-auto">
+                            <Table>
+                                <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                        <TableHead>Version</TableHead>
+                                        <TableHead>Rev</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Modified</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="w-20" />
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {versions.map((version, i) => (
+                                        <TableRow key={version.aconex_document_id}>
+                                            <TableCell className="text-xs">
+                                                v{version.version_number}
+                                                {i === 0 && (
+                                                    <Badge variant="secondary" className="ml-2 text-[10px]">
+                                                        Current
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-xs">{version.revision || '—'}</TableCell>
+                                            <TableCell className="text-muted-foreground hidden text-xs sm:table-cell">
+                                                {version.date_modified
+                                                    ? formatDistanceToNow(new Date(version.date_modified), { addSuffix: true })
+                                                    : '—'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {version.already_imported ? (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        Imported
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-xs">
+                                                        Not imported
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1">
+                                                    {isPreviewable(version) && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            title="Preview"
+                                                            onClick={() => setPreviewDoc(version as AconexDocument)}
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {!version.already_imported && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            title="Import this version"
+                                                            disabled={importingVersionId !== null}
+                                                            onClick={() => importVersion(version)}
+                                                        >
+                                                            {importingVersionId === version.aconex_document_id ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Download className="h-4 w-4" />
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
                 <DialogContent className="flex h-[92vh] flex-col gap-2 p-4 sm:max-w-[90vw]">

@@ -139,7 +139,8 @@
       "Bash(awk 'NR>=350 && NR<=475 && /^\\(function|const\\) [A-Za-z]|^}/' /Users/talhabaig/Documents/Laravel/dpcclock/resources/js/pages/employment-applications/show.tsx)",
       "Bash(rm -rf labour_widget_design)",
       "Bash(mkdir labour_widget_design)",
-      "Bash(unzip -q \"/Users/talhabaig/Downloads/Labour dashboard widget design-handoff.zip\" -d labour_widget_design)"
+      "Bash(unzip -q \"/Users/talhabaig/Downloads/Labour dashboard widget design-handoff.zip\" -d labour_widget_design)",
+      "Bash(git fetch *)"
     ]
   }
 }

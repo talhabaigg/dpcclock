@@ -35,6 +35,8 @@ class ImportAconexDrawingJob implements ShouldQueue
         protected string $title,
         protected ?string $revision,
         protected int $importedBy,
+        protected ?int $versionNumber = null,
+        protected ?string $registeredAt = null,
     ) {}
 
     public function handle(AconexClient $aconex): void
@@ -93,6 +95,8 @@ class ImportAconexDrawingJob implements ShouldQueue
                 'status' => Drawing::STATUS_DRAFT,
                 'created_by' => $this->importedBy,
                 'aconex_document_id' => $this->aconexDocumentId,
+                'aconex_version_number' => $this->versionNumber,
+                'aconex_registered_at' => $this->registeredAt ?: null,
             ]);
 
             $drawing->addMediaFromString($file['contents'])

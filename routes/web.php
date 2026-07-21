@@ -1308,6 +1308,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/projects/{project}/drawings/aconex-link', [AconexImportController::class, 'link'])->name('drawings.aconex.link');
         Route::get('/projects/{project}/drawings/aconex-search', [AconexImportController::class, 'search'])->name('drawings.aconex.search');
         Route::get('/projects/{project}/drawings/aconex-preview/{documentId}', [AconexImportController::class, 'preview'])->name('drawings.aconex.preview');
+        Route::get('/projects/{project}/drawings/aconex-versions', [AconexImportController::class, 'versions'])->name('drawings.aconex.versions');
         Route::post('/projects/{project}/drawings/aconex-import', [AconexImportController::class, 'import'])->name('drawings.aconex.import');
     });
     Route::delete('/drawings/{drawing}', [DrawingController::class, 'destroy'])->name('drawings.destroy')

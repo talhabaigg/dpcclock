@@ -96,18 +96,27 @@ class AconexClient
      * @param  string  $aconexProjectId  the Aconex project ID (not the local Location id)
      * @param  string  $searchQuery  plain keyword or Lucene-style query, e.g. doctype:"Drawing" AND partition
      * @param  int  $resultSize  max results in one call (NUMBER_LIMITED search)
+     * @param  bool  $includeHistory  also return superseded versions (only those
+     *                                ever visible to this org — versions never
+     *                                transmitted to us don't exist in our register)
      * @return array<int, array<string, mixed>> parsed documents
      */
-    public function searchDocuments(string $aconexProjectId, string $searchQuery, int $resultSize = 100): array
+    public function searchDocuments(string $aconexProjectId, string $searchQuery, int $resultSize = 100, bool $includeHistory = false): array
     {
+        $params = [
+            'search_query' => $searchQuery,
+            'return_fields' => 'docno,title,doctype,fileType,author,registered,revision,filename,versionnumber',
+            'search_type' => 'NUMBER_LIMITED',
+            'search_result_size' => $resultSize,
+        ];
+
+        if ($includeHistory) {
+            $params['show_document_history'] = 'true';
+        }
+
         $response = Http::withToken($this->getAccessToken())
             ->withHeaders(['Accept' => 'application/xml'])
-            ->get("https://{$this->instance}/api/projects/{$aconexProjectId}/register", [
-                'search_query' => $searchQuery,
-                'return_fields' => 'docno,title,doctype,fileType,author,registered,revision,filename',
-                'search_type' => 'NUMBER_LIMITED',
-                'search_result_size' => $resultSize,
-            ]);
+            ->get("https://{$this->instance}/api/projects/{$aconexProjectId}/register", $params);
 
         $response->throw();
 
@@ -171,6 +180,7 @@ class AconexClient
                 'filename' => (string) ($doc->Filename ?? ''),
                 'author' => (string) $doc->Author,
                 'revision' => (string) $doc->Revision,
+                'version_number' => (int) $doc->VersionNumber,
                 'date_modified' => (string) $doc->DateModified,
             ];
         }

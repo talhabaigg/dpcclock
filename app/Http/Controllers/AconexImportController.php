@@ -119,6 +119,51 @@ class AconexImportController extends Controller
     }
 
     /**
+     * All versions of one Aconex document (by document number) that are
+     * visible to our org, newest first, flagged with local import state.
+     */
+    public function versions(Request $request, Location $project, AconexClient $aconex)
+    {
+        if (! $project->aconex_project_id) {
+            return response()->json(['message' => 'This project is not linked to an Aconex project yet.'], 422);
+        }
+
+        $validated = $request->validate([
+            'document_number' => 'required|string|max:200',
+        ]);
+
+        try {
+            $documents = $aconex->searchDocuments(
+                $project->aconex_project_id,
+                'docno:"'.str_replace('"', '', $validated['document_number']).'"',
+                100,
+                includeHistory: true,
+            );
+        } catch (\Throwable $e) {
+            Log::error('AconexImportController: versions lookup failed', ['error' => $e->getMessage()]);
+
+            return response()->json(['message' => 'Aconex version lookup failed: '.$e->getMessage()], 502);
+        }
+
+        $importedIds = Drawing::where('project_id', $project->id)
+            ->whereNotNull('aconex_document_id')
+            ->pluck('aconex_document_id')
+            ->flip();
+
+        $versions = collect($documents)
+            ->filter(fn ($doc) => $doc['document_number'] === $validated['document_number'])
+            ->map(function ($doc) use ($importedIds) {
+                $doc['already_imported'] = $importedIds->has($doc['aconex_document_id']);
+
+                return $doc;
+            })
+            ->sortByDesc('version_number')
+            ->values();
+
+        return response()->json(['versions' => $versions]);
+    }
+
+    /**
      * Stream a document's file inline so the browser can preview it (PDFs
      * render natively in a new tab) before deciding to import.
      */
@@ -172,6 +217,8 @@ class AconexImportController extends Controller
             'documents.*.document_number' => 'sometimes|nullable|string',
             'documents.*.title' => 'sometimes|nullable|string',
             'documents.*.revision' => 'sometimes|nullable|string',
+            'documents.*.version_number' => 'sometimes|nullable|integer',
+            'documents.*.date_modified' => 'sometimes|nullable|string',
         ]);
 
         foreach ($validated['documents'] as $doc) {
@@ -182,6 +229,8 @@ class AconexImportController extends Controller
                 $doc['title'] ?? '',
                 $doc['revision'] ?? null,
                 $request->user()->id,
+                $doc['version_number'] ?? null,
+                $doc['date_modified'] ?? null,
             );
         }
 
