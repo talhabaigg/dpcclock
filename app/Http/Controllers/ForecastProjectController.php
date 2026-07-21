@@ -24,9 +24,9 @@ class ForecastProjectController extends Controller
         ]);
 
         $includeArchived = $request->boolean('archived');
-        $view = $request->string('view')->toString() ?: 'board';
+        $view = $request->string('view')->toString() ?: 'list';
         if (! in_array($view, ['board', 'list'], true)) {
-            $view = 'board';
+            $view = 'list';
         }
 
         $perPage = $validated['per_page'] ?? 25;
@@ -111,6 +111,14 @@ class ForecastProjectController extends Controller
     }
 
     /**
+     * Dedicated create page
+     */
+    public function create()
+    {
+        return Inertia::render('forecast-projects/create');
+    }
+
+    /**
      * Store a newly created forecast project
      */
     public function store(Request $request)
@@ -127,7 +135,7 @@ class ForecastProjectController extends Controller
 
         $project = ForecastProject::create($validated);
 
-        return redirect()->back()->with('success', 'Forecast project created successfully');
+        return redirect()->route('forecastProjects.index')->with('success', 'Forecast project created successfully');
     }
 
     /**

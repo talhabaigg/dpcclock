@@ -12,6 +12,7 @@ import {
     Briefcase,
     Building,
     Building2,
+    Calculator,
     CalendarDays,
     CalendarRange,
     ChartArea,
@@ -108,6 +109,22 @@ const projects = [
                 url: '/labour-dashboard',
                 icon: TableProperties,
                 permission: 'turnover-forecast.view',
+            },
+        ],
+    },
+];
+
+const estimating = [
+    {
+        name: 'Estimating',
+        icon: Calculator,
+        permission: 'forecast-projects.view',
+        subItems: [
+            {
+                name: 'Projects',
+                url: '/forecast-projects',
+                icon: Briefcase,
+                permission: 'forecast-projects.view',
             },
         ],
     },
@@ -573,6 +590,7 @@ export function AppSidebar() {
         });
 
     const filteredProjects = filterGroup(projects);
+    const filteredEstimating = filterGroup(estimating);
     const filteredFinance = filterGroup(finance);
     const filteredTimesheets = filterGroup(timesheets);
     const filteredWorkforce = filterGroup(workforce);
@@ -590,6 +608,7 @@ export function AppSidebar() {
 
     const allNavGroups = [
         filteredProjects,
+        filteredEstimating,
         filteredFinance,
         filteredTimesheets,
         filteredWorkforce,
@@ -627,6 +646,7 @@ export function AppSidebar() {
                 <NavFavorites allItems={allItems} />
                 <NavMain items={filteredMainNavItems} />
                 <NavDocuments items={filteredProjects} permissions={permissions} />
+                <NavDocuments items={filteredEstimating} permissions={permissions} />
                 <NavDocuments items={filteredFinance} permissions={permissions} />
                 <NavDocuments items={filteredTimesheets} permissions={permissions} />
                 <NavDocuments items={filteredWorkforce} permissions={permissions} />

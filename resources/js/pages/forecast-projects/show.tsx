@@ -13,8 +13,8 @@ import { Activity, Archive, ArrowRight, FileText, Paperclip, Pencil, Send, Trash
 import { useRef, useState } from 'react';
 
 const breadcrumbs = (project: Project): BreadcrumbItem[] => [
-    { title: 'Turnover Forecast', href: '/turnover-forecast' },
-    { title: 'Forecast Projects', href: '/forecast-projects' },
+    { title: 'Estimating', href: '/forecast-projects' },
+    { title: 'Projects', href: '/forecast-projects' },
     { title: project.project_number, href: `/forecast-projects/${project.id}` },
 ];
 

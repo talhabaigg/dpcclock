@@ -126,7 +126,8 @@ const ShowJobForecastPage = ({
 }: JobForecastProps) => {
     const breadcrumbs: BreadcrumbItem[] = isForecastProject
         ? [
-              { title: 'Forecast Projects', href: '/forecast-projects' },
+              { title: 'Estimating', href: '/forecast-projects' },
+              { title: 'Projects', href: '/forecast-projects' },
               { title: jobName || 'Forecast Project', href: '#' },
           ]
         : [
@@ -1265,7 +1266,7 @@ const ShowJobForecastPage = ({
 
                     {/* View Mode Toggle - icon only */}
                     <div className="flex-shrink-0 border-b px-4 py-2 sm:px-6">
-                        <TooltipProvider delayDuration={300}>
+                        <TooltipProvider delay={300}>
                             <div className="bg-muted inline-flex rounded-md p-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1381,7 +1382,7 @@ const ShowJobForecastPage = ({
 
                     {/* View Mode Toggle - icon only */}
                     <div className="flex-shrink-0 border-b px-4 py-2 sm:px-6">
-                        <TooltipProvider delayDuration={300}>
+                        <TooltipProvider delay={300}>
                             <div className="bg-muted inline-flex rounded-md p-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -1779,7 +1780,7 @@ const ShowJobForecastPage = ({
             <div className="flex h-full flex-col">
                 {/* Toolbar — quieted: primary controls + single overflow menu */}
                 <div className="m-2 flex flex-wrap items-center gap-2">
-                    <TooltipProvider delayDuration={300}>
+                    <TooltipProvider delay={300}>
                         {/* Back */}
                         <Tooltip>
                             <TooltipTrigger asChild>

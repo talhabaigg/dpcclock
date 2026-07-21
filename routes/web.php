@@ -1071,6 +1071,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Forecast Projects
     Route::get('/forecast-projects', [ForecastProjectController::class, 'index'])->name('forecastProjects.index')
         ->middleware('permission:forecast-projects.view');
+    Route::get('/forecast-projects/create', [ForecastProjectController::class, 'create'])->name('forecastProjects.create')
+        ->middleware('permission:forecast-projects.create');
     Route::get('/forecast-projects/{id}', [ForecastProjectController::class, 'show'])->name('forecastProjects.show')
         ->middleware('permission:forecast-projects.view');
     Route::get('/forecast-projects/{id}/forecast', [ForecastProjectController::class, 'showForecast'])->name('forecastProjects.showForecast')

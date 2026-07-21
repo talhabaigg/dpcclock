@@ -81,7 +81,7 @@ export function ForecastProjectCard({
                         <DropdownMenuContent align="end" className="min-w-max">
                             {onOpenForecast && (
                                 <DropdownMenuItem className="whitespace-nowrap" onClick={onOpenForecast}>
-                                    Open Job Forecast
+                                    Job Forecast
                                 </DropdownMenuItem>
                             )}
                             {onEdit && (

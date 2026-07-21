@@ -29,15 +29,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ChevronsLeft, ChevronsRight, EllipsisVertical, Menu, PlusCircle, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityLogDialog } from './components/ActivityLogDialog';
 import { ForecastProjectCard } from './components/ForecastProjectCard';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Turnover Forecast', href: '/turnover-forecast' },
-    { title: 'Forecast Projects', href: '/forecast-projects' },
+    { title: 'Estimating', href: '/forecast-projects' },
+    { title: 'Projects', href: '/forecast-projects' },
 ];
 
 const STATUSES: string[] = ['potential', 'likely', 'confirmed', 'cancelled'];
@@ -105,7 +105,7 @@ function getPageWindow(current: number, last: number): (number | 'ellipsis')[] {
 export default function ForecastProjectsIndex({
     projects,
     includeArchived = false,
-    view = 'board',
+    view = 'list',
     filters = {},
 }: IndexProps) {
     const isPaginated = !Array.isArray(projects);
@@ -189,20 +189,6 @@ export default function ForecastProjectsIndex({
         };
     }, [searchInput, view, includeArchived, filters.search, filters.per_page]);
 
-    const handleCreate = () => {
-        setEditingProject(null);
-        setFormData({
-            name: '',
-            project_number: '',
-            company: '',
-            description: '',
-            start_date: '',
-            end_date: '',
-            status: 'potential',
-        });
-        setDialogOpen(true);
-    };
-
     const handleEdit = (project: ForecastProject) => {
         setEditingProject(project);
 
@@ -243,17 +229,11 @@ export default function ForecastProjectsIndex({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!validate()) return;
+        if (!validate() || !editingProject) return;
 
-        if (editingProject) {
-            router.put(`/forecast-projects/${editingProject.id}`, formData, {
-                onSuccess: () => setDialogOpen(false),
-            });
-        } else {
-            router.post('/forecast-projects', formData, {
-                onSuccess: () => setDialogOpen(false),
-            });
-        }
+        router.put(`/forecast-projects/${editingProject.id}`, formData, {
+            onSuccess: () => setDialogOpen(false),
+        });
     };
 
     const confirmDelete = () => {
@@ -330,9 +310,11 @@ export default function ForecastProjectsIndex({
                         </TabsList>
 
                         <div className="ml-auto flex items-center gap-2">
-                            <Button onClick={handleCreate}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                New Forecast Project
+                            <Button asChild>
+                                <Link href="/forecast-projects/create" prefetch>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    New Forecast Project
+                                </Link>
                             </Button>
 
                             <DropdownMenu>
@@ -406,8 +388,13 @@ export default function ForecastProjectsIndex({
                                                 <TableCell className="text-muted-foreground px-3 font-mono text-sm">
                                                     <Badge variant="secondary">{String(project.project_number)}</Badge>
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground px-3 text-sm">
-                                                    {String(project.name)}
+                                                <TableCell className="px-3 text-sm">
+                                                    <Link
+                                                        href={`/forecast-projects/${project.id}`}
+                                                        className="text-foreground hover:underline"
+                                                    >
+                                                        {String(project.name)}
+                                                    </Link>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant="outline">
@@ -430,9 +417,15 @@ export default function ForecastProjectsIndex({
                                                         <DropdownMenuContent align="end" className="min-w-max">
                                                             <DropdownMenuItem
                                                                 className="whitespace-nowrap"
+                                                                onClick={() => router.visit(`/forecast-projects/${project.id}`)}
+                                                            >
+                                                                View
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                className="whitespace-nowrap"
                                                                 onClick={() => router.visit(`/forecast-projects/${project.id}/forecast`)}
                                                             >
-                                                                Open Job Forecast
+                                                                Job Forecast
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
                                                                 className="whitespace-nowrap"
@@ -605,7 +598,7 @@ export default function ForecastProjectsIndex({
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
-                        <DialogTitle>{editingProject ? 'Edit Forecast Project' : 'Create New Forecast Project'}</DialogTitle>
+                        <DialogTitle>Edit Forecast Project</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSubmit}>
                         <div className="grid gap-4 py-4">
@@ -734,7 +727,7 @@ export default function ForecastProjectsIndex({
                             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit">{editingProject ? 'Update' : 'Create'}</Button>
+                            <Button type="submit">Update</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
