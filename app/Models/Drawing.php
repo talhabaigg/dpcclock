@@ -113,6 +113,11 @@ class Drawing extends Model implements HasMedia
         return $this->hasMany(DrawingObservation::class, 'drawing_id');
     }
 
+    public function annotations()
+    {
+        return $this->morphMany(Annotation::class, 'annotatable');
+    }
+
     public function measurements()
     {
         return $this->hasMany(DrawingMeasurement::class, 'drawing_id');
@@ -182,7 +187,7 @@ class Drawing extends Model implements HasMedia
      * Build a fetchable URL for a media file. Uses a presigned temporary URL
      * for S3 (private buckets); falls back to the public URL otherwise.
      */
-    protected function mediaUrl(\Spatie\MediaLibrary\MediaCollections\Models\Media $media, string $conversion = ''): ?string
+    protected function mediaUrl(Media $media, string $conversion = ''): ?string
     {
         if ($media->disk === 's3') {
             try {
@@ -442,5 +447,4 @@ class Drawing extends Model implements HasMedia
 
         return 'A'.$letters;
     }
-
 }

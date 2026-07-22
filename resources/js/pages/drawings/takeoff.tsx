@@ -1,3 +1,5 @@
+import { AnnotationOverlayUi } from '@/components/annotations/drawing-annotations/annotation-overlay-ui';
+import { useAnnotationLayer } from '@/components/annotations/drawing-annotations/use-annotation-layer';
 import { BidAreaManager, type BidArea } from '@/components/bid-area-manager';
 import CalibrationDialog from '@/components/calibration-dialog';
 import { ConditionManager, type TakeoffCondition } from '@/components/condition-manager';
@@ -22,6 +24,14 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMeasurementHistory } from '@/hooks/use-measurement-history';
 import { DrawingWorkspaceLayout, type DrawingTab } from '@/layouts/drawing-workspace-layout';
 import { api, ApiError } from '@/lib/api';
+import { PANEL_DEFAULT_WIDTH, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PRESET_COLORS } from '@/lib/constants';
+import { measurementIntersectsRect } from '@/lib/drawing-geometry';
+import type { Drawing, Project, Revision } from '@/types/takeoff';
+import { Combobox as ComboboxPrimitive } from '@base-ui/react';
+import { usePage } from '@inertiajs/react';
+import { Download, FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, Upload, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 function describeApiError(e: unknown): string {
     if (!(e instanceof ApiError)) return e instanceof Error ? e.message : 'Unknown error';
@@ -32,14 +42,6 @@ function describeApiError(e: unknown): string {
     }
     return e.message;
 }
-import { PANEL_DEFAULT_WIDTH, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH, PRESET_COLORS } from '@/lib/constants';
-import { measurementIntersectsRect } from '@/lib/drawing-geometry';
-import type { Drawing, Project, Revision } from '@/types/takeoff';
-import { Combobox as ComboboxPrimitive } from '@base-ui/react';
-import { usePage } from '@inertiajs/react';
-import { Download, FolderTree, GitCompare, Hash, Minus, Pentagon, Plus, Search, Settings, Trash2, Upload, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 export default function DrawingTakeoff() {
     const { drawing, revisions, project, activeTab, auth } = usePage<{
@@ -51,6 +53,8 @@ export default function DrawingTakeoff() {
     }>().props;
 
     const canEditTakeoff = auth?.permissions?.includes('takeoff.edit') ?? false;
+    // Annotation writes go through the drawings.create-gated endpoints.
+    const canAnnotate = auth?.permissions?.includes('drawings.create') ?? false;
 
     const projectId = project?.id || drawing.project_id;
 
@@ -72,6 +76,19 @@ export default function DrawingTakeoff() {
 
     // View mode
     const [viewMode, setViewMode] = useState<ViewMode>('pan');
+
+    // Annotation layer (markup/shapes/text) — shares the viewer via the
+    // overlay contract. Annotation tools and measure/select modes are
+    // mutually exclusive: arming one leaves the other.
+    const ann = useAnnotationLayer({ drawingId: drawing.id, canEdit: canAnnotate, projectId });
+    const annTool = ann.tool;
+    const annSetTool = ann.setTool;
+    useEffect(() => {
+        if (annTool) setViewMode('pan');
+    }, [annTool]);
+    useEffect(() => {
+        if (viewMode !== 'pan') annSetTool(null);
+    }, [viewMode, annSetTool]);
 
     // Takeoff state
     const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
@@ -321,8 +338,7 @@ export default function DrawingTakeoff() {
 
                 const errSuffix = res.errors.length > 0 ? ` Errors: ${res.errors.slice(0, 3).join('; ')}` : '';
                 const datesSuffix = res.affected_dates.length > 0 ? ` across ${res.affected_dates.length} date(s)` : '';
-                const msg =
-                    `Production imported: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped${datesSuffix}.${errSuffix}`;
+                const msg = `Production imported: ${res.created} created, ${res.updated} updated, ${res.skipped} skipped${datesSuffix}.${errSuffix}`;
                 if (res.skipped > 0 || res.errors.length > 0) {
                     toast.warning(msg);
                 } else {
@@ -885,6 +901,8 @@ export default function DrawingTakeoff() {
                     showSelectMode
                     selectModeTitle="Drag select"
                     activeCondition={activeConditionDisplay}
+                    annotations={ann}
+                    layers={[ann.layerDef, ann.linkLayerDef]}
                 />
             }
             toolbar={
@@ -1044,7 +1062,7 @@ export default function DrawingTakeoff() {
                                 <a
                                     href="/drawing-import-templates/takeoff"
                                     download
-                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    className="hover:bg-accent text-muted-foreground hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded-sm"
                                     title="Download OST takeoff CSV template"
                                 >
                                     <Download className="h-3 w-3" />
@@ -1074,7 +1092,7 @@ export default function DrawingTakeoff() {
                                 <a
                                     href="/drawing-import-templates/conditions"
                                     download
-                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    className="hover:bg-accent text-muted-foreground hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded-sm"
                                     title="Download OST conditions CSV template"
                                 >
                                     <Download className="h-3 w-3" />
@@ -1104,7 +1122,7 @@ export default function DrawingTakeoff() {
                                 <a
                                     href="/drawing-import-templates/production"
                                     download
-                                    className="hover:bg-accent inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+                                    className="hover:bg-accent text-muted-foreground hover:text-foreground inline-flex h-6 w-6 items-center justify-center rounded-sm"
                                     title="Download production CSV template"
                                 >
                                     <Download className="h-3 w-3" />
@@ -1215,12 +1233,8 @@ export default function DrawingTakeoff() {
                         calibration={calibration}
                         conditionOpacities={conditionOpacities}
                         conditionThicknesses={conditionThicknesses}
-                        activeConditionThickness={
-                            activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.thickness ?? null) : null
-                        }
-                        activeConditionHeight={
-                            activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.height ?? null) : null
-                        }
+                        activeConditionThickness={activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.thickness ?? null) : null}
+                        activeConditionHeight={activeConditionDisplay?.type === 'linear' ? (activeConditionDisplay?.height ?? null) : null}
                         onCalibrationComplete={cal.handleCalibrationComplete}
                         onMeasurementComplete={handleMeasurementComplete}
                         onMeasurementClick={(m) => {
@@ -1244,8 +1258,10 @@ export default function DrawingTakeoff() {
                             drawingControlsRef.current = state;
                         }}
                         onPdfDimsLoaded={setPdfDims}
+                        overlays={[ann.overlay]}
                         className="absolute inset-0"
                     />
+                    <AnnotationOverlayUi api={ann} />
                 </div>
 
                 {/* Takeoff Side Panel */}
@@ -1363,41 +1379,51 @@ export default function DrawingTakeoff() {
                                 ))}
                             </datalist>
                         </div>
-                        {editingMeasurement && (() => {
-                            const eligibleConditions = conditions.filter((c) => c.type === editingMeasurement.type);
-                            const selectedCondition = eligibleConditions.find((c) => c.id === measurementConditionId) ?? null;
-                            return (
-                                <div className="grid gap-2">
-                                    <Label className="text-xs">Condition</Label>
-                                    <Select
-                                        value={measurementConditionId ? String(measurementConditionId) : 'none'}
-                                        onValueChange={(value) => setMeasurementConditionId(value === 'none' ? null : Number(value))}
-                                    >
-                                        <SelectTrigger className="h-9 text-xs">
-                                            <SelectValue placeholder="No condition (price manually)">
-                                                {selectedCondition ? selectedCondition.name : <span className="text-muted-foreground">No condition (price manually)</span>}
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">
-                                                <span className="text-muted-foreground">No condition (price manually)</span>
-                                            </SelectItem>
-                                            {eligibleConditions.map((c) => (
-                                                <SelectItem key={c.id} value={String(c.id)}>
-                                                    <span className="flex items-center gap-2">
-                                                        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
-                                                        <span>{c.name}</span>
-                                                    </span>
+                        {editingMeasurement &&
+                            (() => {
+                                const eligibleConditions = conditions.filter((c) => c.type === editingMeasurement.type);
+                                const selectedCondition = eligibleConditions.find((c) => c.id === measurementConditionId) ?? null;
+                                return (
+                                    <div className="grid gap-2">
+                                        <Label className="text-xs">Condition</Label>
+                                        <Select
+                                            value={measurementConditionId ? String(measurementConditionId) : 'none'}
+                                            onValueChange={(value) => setMeasurementConditionId(value === 'none' ? null : Number(value))}
+                                        >
+                                            <SelectTrigger className="h-9 text-xs">
+                                                <SelectValue placeholder="No condition (price manually)">
+                                                    {selectedCondition ? (
+                                                        selectedCondition.name
+                                                    ) : (
+                                                        <span className="text-muted-foreground">No condition (price manually)</span>
+                                                    )}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">
+                                                    <span className="text-muted-foreground">No condition (price manually)</span>
                                                 </SelectItem>
-                                            ))}
-                                            {eligibleConditions.length === 0 && (
-                                                <div className="text-muted-foreground px-2 py-1.5 text-xs italic">No {editingMeasurement.type} conditions defined for this project.</div>
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            );
-                        })()}
+                                                {eligibleConditions.map((c) => (
+                                                    <SelectItem key={c.id} value={String(c.id)}>
+                                                        <span className="flex items-center gap-2">
+                                                            <span
+                                                                className="inline-block h-2 w-2 rounded-full"
+                                                                style={{ backgroundColor: c.color }}
+                                                            />
+                                                            <span>{c.name}</span>
+                                                        </span>
+                                                    </SelectItem>
+                                                ))}
+                                                {eligibleConditions.length === 0 && (
+                                                    <div className="text-muted-foreground px-2 py-1.5 text-xs italic">
+                                                        No {editingMeasurement.type} conditions defined for this project.
+                                                    </div>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                );
+                            })()}
                         <div className="grid gap-2">
                             <Label className="text-xs">Color</Label>
                             <div className="flex items-center gap-2">

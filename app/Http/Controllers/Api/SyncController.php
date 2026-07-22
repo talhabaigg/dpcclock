@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Annotation;
 use App\Models\ConditionLabourCode;
 use App\Models\Drawing;
 use App\Models\DrawingMeasurement;
@@ -12,6 +13,7 @@ use App\Models\MeasurementSegmentStatus;
 use App\Models\MeasurementStatus;
 use App\Models\SiteTaskTitlePreset;
 use App\Services\TakeoffCostCalculator;
+use App\Support\Annotations as AnnotationRules;
 use App\Support\MeasurementGeometry;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -74,7 +76,7 @@ class SyncController extends Controller
         $drawingScope = fn ($q) => $q->whereIn('project_id', $projectIds)
             ->where(function ($q2) {
                 $q2->where('status', Drawing::STATUS_ACTIVE)
-                   ->orWhereNull('status');
+                    ->orWhereNull('status');
             });
 
         $changes = [
@@ -87,7 +89,7 @@ class SyncController extends Controller
                 Drawing::whereIn('project_id', $projectIds)
                     ->where(function ($q) {
                         $q->where('status', Drawing::STATUS_ACTIVE)
-                          ->orWhereNull('status');
+                            ->orWhereNull('status');
                     }),
                 $since,
                 fn ($record) => $this->formatDrawing($record)
@@ -138,6 +140,17 @@ class SyncController extends Controller
             );
         }
 
+        // Plan annotations (markup + hyperlinks) joined the WMDB schema at
+        // v11. Same gating rule as above: pushing an unknown table breaks the
+        // whole sync for older builds.
+        if ($schemaVersion >= 11) {
+            $changes['annotations'] = $this->pullTable(
+                $this->annotationQuery($projectIds),
+                $sinceFor('annotations'),
+                fn ($record) => $this->formatAnnotation($record)
+            );
+        }
+
         return response()->json([
             'changes' => $changes,
             'timestamp' => $timestamp->getTimestampMs(),
@@ -159,7 +172,7 @@ class SyncController extends Controller
             'drawings' => Drawing::whereIn('project_id', $projectIds)
                 ->where(function ($q) {
                     $q->where('status', Drawing::STATUS_ACTIVE)
-                      ->orWhereNull('status');
+                        ->orWhereNull('status');
                 })
                 ->whereNotNull('watermelon_id')
                 ->pluck('watermelon_id')
@@ -169,6 +182,10 @@ class SyncController extends Controller
                 ->pluck('watermelon_id')
                 ->toArray(),
             'observations' => DrawingObservation::whereHas('drawing', fn ($q) => $q->whereIn('project_id', $projectIds))
+                ->whereNotNull('watermelon_id')
+                ->pluck('watermelon_id')
+                ->toArray(),
+            'annotations' => $this->annotationQuery($projectIds)
                 ->whereNotNull('watermelon_id')
                 ->pluck('watermelon_id')
                 ->toArray(),
@@ -233,12 +250,16 @@ class SyncController extends Controller
                 $this->pushSiteTaskComments($changes['comments']);
             }
 
+            if (isset($changes['annotations'])) {
+                $this->pushAnnotations($changes['annotations'], $lastPulledAt);
+            }
+
             DB::commit();
 
             return response()->json([], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('[Sync] Push failed: ' . $e->getMessage(), [
+            Log::error('[Sync] Push failed: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
             ]);
 
@@ -287,7 +308,7 @@ class SyncController extends Controller
                 ->get();
 
             foreach ($trashedRecords as $record) {
-                if (!$record->watermelon_id) {
+                if (! $record->watermelon_id) {
                     $record->watermelon_id = (string) Str::uuid();
                     $record->saveQuietly();
                 }
@@ -380,12 +401,29 @@ class SyncController extends Controller
         ];
     }
 
+    /**
+     * Annotations on active drawings in synced projects. Only drawing-owned
+     * annotations sync — the table is polymorphic, but mobile has no other
+     * annotatable yet.
+     */
+    private function annotationQuery(array $projectIds)
+    {
+        return Annotation::where('annotatable_type', Drawing::class)
+            ->with(['annotatable', 'linkTarget'])
+            ->whereIn('annotatable_id', Drawing::whereIn('project_id', $projectIds)
+                ->where(function ($q) {
+                    $q->where('status', Drawing::STATUS_ACTIVE)
+                        ->orWhereNull('status');
+                })
+                ->select('id'));
+    }
+
     // ── Formatters ────────────────────────────────────────────
 
     private function formatProject(Location $location): array
     {
         // Ensure watermelon_id exists
-        if (!$location->watermelon_id) {
+        if (! $location->watermelon_id) {
             $location->watermelon_id = (string) Str::uuid();
             $location->saveQuietly();
         }
@@ -406,7 +444,7 @@ class SyncController extends Controller
 
     private function formatDrawing(Drawing $drawing): array
     {
-        if (!$drawing->watermelon_id) {
+        if (! $drawing->watermelon_id) {
             $drawing->watermelon_id = (string) Str::uuid();
             $drawing->saveQuietly();
         }
@@ -415,7 +453,7 @@ class SyncController extends Controller
         $project = $drawing->project;
         $projectWatermelonId = '';
         if ($project) {
-            if (!$project->watermelon_id) {
+            if (! $project->watermelon_id) {
                 $project->watermelon_id = (string) Str::uuid();
                 $project->saveQuietly();
             }
@@ -444,7 +482,7 @@ class SyncController extends Controller
 
     private function formatObservation(DrawingObservation $obs): array
     {
-        if (!$obs->watermelon_id) {
+        if (! $obs->watermelon_id) {
             $obs->watermelon_id = (string) Str::uuid();
             $obs->saveQuietly();
         }
@@ -453,7 +491,7 @@ class SyncController extends Controller
         $drawing = $obs->drawing;
         $drawingWatermelonId = '';
         if ($drawing) {
-            if (!$drawing->watermelon_id) {
+            if (! $drawing->watermelon_id) {
                 $drawing->watermelon_id = (string) Str::uuid();
                 $drawing->saveQuietly();
             }
@@ -479,7 +517,7 @@ class SyncController extends Controller
 
     private function formatMeasurement(DrawingMeasurement $m): array
     {
-        if (!$m->watermelon_id) {
+        if (! $m->watermelon_id) {
             $m->watermelon_id = (string) Str::uuid();
             $m->saveQuietly();
         }
@@ -489,7 +527,7 @@ class SyncController extends Controller
         if ($m->parent_measurement_id) {
             $parent = DrawingMeasurement::find($m->parent_measurement_id);
             if ($parent) {
-                if (!$parent->watermelon_id) {
+                if (! $parent->watermelon_id) {
                     $parent->watermelon_id = (string) Str::uuid();
                     $parent->saveQuietly();
                 }
@@ -545,7 +583,7 @@ class SyncController extends Controller
 
     private function formatMeasurementStatus(MeasurementStatus $s): array
     {
-        if (!$s->watermelon_id) {
+        if (! $s->watermelon_id) {
             $s->watermelon_id = (string) Str::uuid();
             $s->saveQuietly();
         }
@@ -565,7 +603,7 @@ class SyncController extends Controller
 
     private function formatSegmentStatus(MeasurementSegmentStatus $s): array
     {
-        if (!$s->watermelon_id) {
+        if (! $s->watermelon_id) {
             $s->watermelon_id = (string) Str::uuid();
             $s->saveQuietly();
         }
@@ -586,7 +624,166 @@ class SyncController extends Controller
         ];
     }
 
+    private function formatAnnotation(Annotation $a): array
+    {
+        if (! $a->watermelon_id) {
+            $a->watermelon_id = (string) Str::uuid();
+            $a->saveQuietly();
+        }
+
+        // Resolve drawing + link-target watermelon_ids for the FKs
+        $drawing = $a->annotatable;
+        $drawingWatermelonId = '';
+        if ($drawing instanceof Drawing) {
+            if (! $drawing->watermelon_id) {
+                $drawing->watermelon_id = (string) Str::uuid();
+                $drawing->saveQuietly();
+            }
+            $drawingWatermelonId = $drawing->watermelon_id;
+        }
+
+        $linkWatermelonId = null;
+        if ($a->link_drawing_id) {
+            $target = $a->linkTarget;
+            if ($target) {
+                if (! $target->watermelon_id) {
+                    $target->watermelon_id = (string) Str::uuid();
+                    $target->saveQuietly();
+                }
+                $linkWatermelonId = $target->watermelon_id;
+            }
+        }
+
+        return [
+            'id' => $a->watermelon_id,
+            'server_id' => $a->id,
+            'drawing_id' => $drawingWatermelonId,
+            'page_number' => $a->page_number ?? 1,
+            'kind' => $a->kind,
+            'color' => $a->color,
+            'filled' => (bool) $a->filled,
+            // WMDB columns are scalar — geometry travels as a JSON string,
+            // same convention as measurements' points_json.
+            'geometry_json' => json_encode($a->geometry ?? []),
+            'link_drawing_id' => $linkWatermelonId,
+            'text' => $a->text,
+            'font_size' => $a->font_size,
+            'stroke_width' => $a->stroke_width,
+            'created_at' => $a->created_at?->getTimestampMs() ?? 0,
+            'updated_at' => $a->updated_at?->getTimestampMs() ?? 0,
+        ];
+    }
+
     // ── Push helpers ──────────────────────────────────────────
+
+    /**
+     * Push annotations from mobile. FKs (drawing_id, link_drawing_id) arrive
+     * as watermelon UUIDs and are resolved to server ids; geometry arrives as
+     * geometry_json (or a geometry array). Same conflict rule as the other
+     * writable tables: server-side edits after the client's last pull → 409.
+     */
+    private function pushAnnotations(array $changes, Carbon $lastPulledAt): void
+    {
+        foreach ($changes['created'] ?? [] as $record) {
+            $drawing = Drawing::where('watermelon_id', $record['drawing_id'] ?? '')->first();
+            if (! $drawing) {
+                Log::warning('[Sync] Push: drawing not found for annotation', [
+                    'drawing_watermelon_id' => $record['drawing_id'] ?? null,
+                    'annotation_watermelon_id' => $record['id'] ?? null,
+                ]);
+
+                continue;
+            }
+
+            $kind = $record['kind'] ?? null;
+            $geometry = $this->extractAnnotationGeometry($record);
+            if (! in_array($kind, AnnotationRules::KINDS, true) || $geometry === null) {
+                Log::warning('[Sync] Push: invalid annotation payload', [
+                    'watermelon_id' => $record['id'] ?? null,
+                    'kind' => $kind,
+                ]);
+
+                continue;
+            }
+
+            $annotation = new Annotation([
+                'watermelon_id' => $record['id'],
+                'page_number' => $record['page_number'] ?? null,
+                'kind' => $kind,
+                'color' => $record['color'] ?? '#ef4444',
+                'filled' => (bool) ($record['filled'] ?? false),
+                'geometry' => $geometry,
+                'link_drawing_id' => $this->resolveLinkDrawingId($record['link_drawing_id'] ?? null),
+                'text' => $record['text'] ?? null,
+                'font_size' => $record['font_size'] ?? null,
+                'stroke_width' => $record['stroke_width'] ?? null,
+            ]);
+            $annotation->annotatable_type = Drawing::class;
+            $annotation->annotatable_id = $drawing->id;
+            $annotation->created_by = auth()->id();
+            $annotation->save();
+        }
+
+        foreach ($changes['updated'] ?? [] as $record) {
+            $annotation = Annotation::where('watermelon_id', $record['id'] ?? '')->first();
+            if (! $annotation) {
+                Log::warning('[Sync] Push: annotation not found for update', [
+                    'watermelon_id' => $record['id'] ?? null,
+                ]);
+
+                continue;
+            }
+
+            if ($annotation->updated_at && $annotation->updated_at->gt($lastPulledAt)) {
+                throw new \Exception(
+                    "Conflict: annotation {$record['id']} was modified on server after last pull",
+                    409
+                );
+            }
+
+            $annotation->update([
+                'page_number' => array_key_exists('page_number', $record) ? $record['page_number'] : $annotation->page_number,
+                'color' => $record['color'] ?? $annotation->color,
+                'filled' => array_key_exists('filled', $record) ? (bool) $record['filled'] : $annotation->filled,
+                'geometry' => $this->extractAnnotationGeometry($record) ?? $annotation->geometry,
+                'link_drawing_id' => array_key_exists('link_drawing_id', $record)
+                    ? $this->resolveLinkDrawingId($record['link_drawing_id'])
+                    : $annotation->link_drawing_id,
+                'text' => array_key_exists('text', $record) ? $record['text'] : $annotation->text,
+                'font_size' => array_key_exists('font_size', $record) ? $record['font_size'] : $annotation->font_size,
+                'stroke_width' => array_key_exists('stroke_width', $record) ? $record['stroke_width'] : $annotation->stroke_width,
+            ]);
+        }
+
+        foreach ($changes['deleted'] ?? [] as $watermelonId) {
+            Annotation::where('watermelon_id', $watermelonId)->first()?->delete();
+        }
+    }
+
+    /** Extract a geometry array from either geometry_json (string) or geometry (array). */
+    private function extractAnnotationGeometry(array $record): ?array
+    {
+        if (isset($record['geometry']) && is_array($record['geometry'])) {
+            return $record['geometry'];
+        }
+        if (isset($record['geometry_json']) && is_string($record['geometry_json'])) {
+            $decoded = json_decode($record['geometry_json'], true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return null;
+    }
+
+    /** Resolve a link-target drawing watermelon_id to a server FK, or null. */
+    private function resolveLinkDrawingId(?string $watermelonId): ?int
+    {
+        if (! $watermelonId) {
+            return null;
+        }
+
+        return Drawing::where('watermelon_id', $watermelonId)->value('id');
+    }
 
     private function pushObservations(array $changes, Carbon $lastPulledAt): void
     {
@@ -594,10 +791,11 @@ class SyncController extends Controller
         foreach ($changes['created'] ?? [] as $record) {
             // Resolve drawing_id from watermelon_id
             $drawing = Drawing::where('watermelon_id', $record['drawing_id'])->first();
-            if (!$drawing) {
+            if (! $drawing) {
                 Log::warning('[Sync] Push: drawing not found for watermelon_id', [
                     'drawing_watermelon_id' => $record['drawing_id'],
                 ]);
+
                 continue;
             }
 
@@ -618,10 +816,11 @@ class SyncController extends Controller
         // Handle updated observations
         foreach ($changes['updated'] ?? [] as $record) {
             $obs = DrawingObservation::where('watermelon_id', $record['id'])->first();
-            if (!$obs) {
+            if (! $obs) {
                 Log::warning('[Sync] Push: observation not found for watermelon_id', [
                     'watermelon_id' => $record['id'],
                 ]);
+
                 continue;
             }
 
@@ -677,21 +876,23 @@ class SyncController extends Controller
 
         foreach ($changes['created'] ?? [] as $record) {
             $drawing = Drawing::where('watermelon_id', $record['drawing_id'] ?? '')->first();
-            if (!$drawing) {
+            if (! $drawing) {
                 Log::warning('[Sync] Push: drawing not found for measurement', [
                     'drawing_watermelon_id' => $record['drawing_id'] ?? null,
                     'measurement_watermelon_id' => $record['id'] ?? null,
                 ]);
+
                 continue;
             }
 
             $points = $this->extractPoints($record);
             $type = $record['type'] ?? null;
-            if (!in_array($type, ['linear', 'area', 'count'], true) || !is_array($points)) {
+            if (! in_array($type, ['linear', 'area', 'count'], true) || ! is_array($points)) {
                 Log::warning('[Sync] Push: invalid measurement payload', [
                     'watermelon_id' => $record['id'] ?? null,
                     'type' => $type,
                 ]);
+
                 continue;
             }
 
@@ -728,10 +929,11 @@ class SyncController extends Controller
 
         foreach ($changes['updated'] ?? [] as $record) {
             $m = DrawingMeasurement::where('watermelon_id', $record['id'] ?? '')->first();
-            if (!$m) {
+            if (! $m) {
                 Log::warning('[Sync] Push: measurement not found for update', [
                     'watermelon_id' => $record['id'] ?? null,
                 ]);
+
                 continue;
             }
 
@@ -789,17 +991,20 @@ class SyncController extends Controller
         }
         if (isset($record['points_json']) && is_string($record['points_json'])) {
             $decoded = json_decode($record['points_json'], true);
+
             return is_array($decoded) ? $decoded : null;
         }
+
         return null;
     }
 
     /** Resolve a parent measurement watermelon_id to a server FK, or null. */
     private function resolveMeasurementParentId(?string $watermelonId): ?int
     {
-        if (!$watermelonId) {
+        if (! $watermelonId) {
             return null;
         }
+
         return DrawingMeasurement::where('watermelon_id', $watermelonId)->value('id');
     }
 
@@ -817,7 +1022,7 @@ class SyncController extends Controller
         }
 
         $calibration = $drawing->scaleCalibration;
-        if (!$calibration) {
+        if (! $calibration) {
             return [0.0, null, null];
         }
 
@@ -908,6 +1113,7 @@ class SyncController extends Controller
             $lccId = $record['labour_cost_code_id'] ?? null;
             if ($lccId === null) {
                 Log::warning('[Sync] Skipping segment_status without labour_cost_code_id', ['record' => $record]);
+
                 continue;
             }
             MeasurementSegmentStatus::updateOrCreate(
@@ -938,6 +1144,7 @@ class SyncController extends Controller
                 $lccId = $record['labour_cost_code_id'] ?? null;
                 if ($lccId === null) {
                     Log::warning('[Sync] Skipping segment_status update without labour_cost_code_id', ['record' => $record]);
+
                     continue;
                 }
                 // Fallback: upsert by natural key

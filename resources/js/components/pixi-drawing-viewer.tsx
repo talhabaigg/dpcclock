@@ -3,8 +3,21 @@ import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type PDFPagePr
 // Custom worker entry that polyfills Map.getOrInsertComputed before loading
 // pdf.worker — Safari/iPadOS doesn't ship that method yet and PDF.js v5 calls
 // it inside the worker. See resources/js/pdf-worker-with-polyfill.ts.
-import { Application, CanvasSource, Container, Filter, GlProgram, Graphics, Matrix, RenderTexture, Sprite, Text, Texture, UniformGroup } from 'pixi.js';
 import type { FilterSystem, RenderSurface } from 'pixi.js';
+import {
+    Application,
+    CanvasSource,
+    Container,
+    Filter,
+    GlProgram,
+    Graphics,
+    Matrix,
+    RenderTexture,
+    Sprite,
+    Text,
+    Texture,
+    UniformGroup,
+} from 'pixi.js';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import pdfWorkerUrl from '../pdf-worker-with-polyfill?worker&url';
@@ -101,7 +114,46 @@ type Props = {
      *  normalized point instead of hit-testing measurements — pin dropping. */
     pinDropMode?: boolean;
     onCanvasClick?: (point: Point) => void;
+    /** Pluggable render/interaction layers (e.g. annotations). Each overlay
+     *  gets its own world-space container above drawingLayer / below pins,
+     *  first refusal on pointer gestures, and zoom notifications. Overlay
+     *  objects must be identity-stable; the viewer re-attaches only when the
+     *  set of overlay ids changes. */
+    overlays?: ViewerOverlay[];
     className?: string;
+};
+
+/** Everything an overlay needs to render into and interact with the viewer. */
+export type OverlayContext = {
+    app: Application;
+    world: Container;
+    /** Dedicated container in world (PDF-point) coordinates. The overlay owns
+     *  its children; the viewer owns the container's lifecycle. */
+    layer: Container;
+    pdfDims: { width: number; height: number };
+    clientToUv: (cx: number, cy: number) => Point | null;
+    /** UV → canvas-host-relative px, for anchoring DOM chrome (editors, chips). */
+    uvToHost: (uv: Point) => { x: number; y: number };
+    getScale: () => number;
+    /** Override the canvas cursor; null restores the viewMode cursor. */
+    setCursor: (cursor: string | null) => void;
+};
+
+export type ViewerOverlay = {
+    id: string;
+    attach: (ctx: OverlayContext) => void;
+    detach: () => void;
+    /** Return true to consume the event — the viewer then routes the whole
+     *  gesture (move + up) to this overlay and skips its own handling. */
+    onPointerDown?: (e: PointerEvent, uv: Point | null) => boolean;
+    /** Hover (no gesture owner): return true to consume. Also receives moves
+     *  while this overlay owns the gesture. */
+    onPointerMove?: (e: PointerEvent, uv: Point | null) => boolean;
+    /** Only called while this overlay owns the gesture. */
+    onPointerUp?: (e: PointerEvent, uv: Point | null) => void;
+    /** Gesture aborted: pinch started, pointer canceled, or capture lost. */
+    onPointerCancel?: () => void;
+    onZoom?: (scale: number) => void;
 };
 
 export type ViewerPin = {
@@ -290,9 +342,7 @@ class RevisionDiffFilter extends Filter {
 // A rasterize pass yields either a raw canvas (single-drawing path — the caller
 // wraps it in a mipmapped texture) or an already-built texture (difference path
 // returns the GPU-composited RenderTexture directly).
-type RegionRaster =
-    | { texture: Texture; effectiveScale: number }
-    | { canvas: HTMLCanvasElement | OffscreenCanvas; effectiveScale: number };
+type RegionRaster = { texture: Texture; effectiveScale: number } | { canvas: HTMLCanvasElement | OffscreenCanvas; effectiveScale: number };
 
 // Format a number for measurement labels — sane precision, no trailing zeros.
 const formatNumber = (v: number): string => {
@@ -470,6 +520,7 @@ export function PixiDrawingViewer({
     onPinClick,
     pinDropMode = false,
     onCanvasClick,
+    overlays,
     className,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -488,6 +539,15 @@ export function PixiDrawingViewer({
     const pinsLayerRef = useRef<Container | null>(null);
     const pinsRef = useRef<ViewerPin[]>([]);
     pinsRef.current = pins ?? [];
+    // Pluggable overlays. Read through a ref so pointer/zoom handlers never
+    // re-bind because of them; attach/detach keys off the id set only.
+    const overlaysRef = useRef<ViewerOverlay[]>([]);
+    overlaysRef.current = overlays ?? [];
+    const overlayContainersRef = useRef<Map<string, Container>>(new Map());
+    // Cursor override requested by an overlay (e.g. crosshair while a tool is
+    // armed); falls back to the viewMode cursor when null.
+    const cursorOverrideRef = useRef<string | null>(null);
+    const baseCursorRef = useRef('default');
     const docRef = useRef<PDFDocumentProxy | null>(null);
     const pageRef = useRef<PDFPageProxy | null>(null);
     const renderTaskRef = useRef<RenderTask | null>(null);
@@ -1267,6 +1327,9 @@ export function PixiDrawingViewer({
             if (e.touches.length === 2) {
                 e.preventDefault();
                 pinchingRef.current = true;
+                // A second finger means navigate, not draw — abort any
+                // in-progress overlay draft (annotation stroke etc.).
+                overlaysRef.current.forEach((o) => o.onPointerCancel?.());
                 const t1 = e.touches[0];
                 const t2 = e.touches[1];
                 const rect = canvas.getBoundingClientRect();
@@ -1359,6 +1422,64 @@ export function PixiDrawingViewer({
         },
         [pdfDims],
     );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pluggable overlays: container lifecycle + zoom notifications
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Re-attach only when the overlay id set changes — overlay objects are
+    // identity-stable, so consumers may inline the array without churn.
+    const overlayIdsKey = (overlays ?? []).map((o) => o.id).join(',');
+
+    useEffect(() => {
+        const app = appRef.current;
+        const world = worldRef.current;
+        const pinsLayer = pinsLayerRef.current;
+        if (!app || !world || !pinsLayer || !appReady || !pdfDims) return;
+
+        const containers = overlayContainersRef.current;
+        const dims = pdfDims;
+        for (const overlay of overlaysRef.current) {
+            const layer = new Container();
+            world.addChildAt(layer, world.getChildIndex(pinsLayer));
+            containers.set(overlay.id, layer);
+            overlay.attach({
+                app,
+                world,
+                layer,
+                pdfDims: dims,
+                clientToUv,
+                uvToHost: (uv) => ({
+                    x: uv.x * dims.width * world.scale.x + world.position.x,
+                    y: uv.y * dims.height * world.scale.y + world.position.y,
+                }),
+                getScale: () => world.scale.x,
+                setCursor: (cursor) => {
+                    cursorOverrideRef.current = cursor;
+                    app.canvas.style.cursor = cursor ?? baseCursorRef.current;
+                },
+            });
+        }
+
+        return () => {
+            for (const overlay of overlaysRef.current) {
+                overlay.detach();
+                const layer = containers.get(overlay.id);
+                if (layer) {
+                    layer.parent?.removeChild(layer);
+                    layer.destroy({ children: true });
+                    containers.delete(overlay.id);
+                }
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appReady, pdfDims, clientToUv, overlayIdsKey]);
+
+    // Same signal that re-strokes measurements on zoom: overlays re-stroke
+    // their screen-constant widths here.
+    useEffect(() => {
+        overlaysRef.current.forEach((o) => o.onZoom?.(zoomDisplay));
+    }, [zoomDisplay]);
 
     // Hit-test: find the topmost measurement at the given UV point, within
     // the screen-px tolerance scaled into UV space.
@@ -1747,6 +1868,9 @@ export function PixiDrawingViewer({
         let pressUv: Point | null = null;
         let handleDraggingIdx: number | null = null;
         const LONG_PRESS_MS = 250;
+        // Overlay that consumed the current gesture's pointerdown — it owns
+        // every move/up until release. Null when the viewer handles input.
+        let overlayOwner: ViewerOverlay | null = null;
 
         const useBoxSelect = boxSelectMode || viewMode === 'select';
 
@@ -1789,6 +1913,20 @@ export function PixiDrawingViewer({
                 }
                 return;
             }
+
+            // Overlays get first refusal on the gesture (annotation tools).
+            // Middle-mouse (button 1) always pans, so only offer button 0.
+            if (e.button === 0 && !pinchingRef.current) {
+                const overlayUv = clientToUv(e.clientX, e.clientY);
+                for (const overlay of overlaysRef.current) {
+                    if (overlay.onPointerDown?.(e, overlayUv)) {
+                        overlayOwner = overlay;
+                        canvas.setPointerCapture(e.pointerId);
+                        return;
+                    }
+                }
+            }
+
             dragging = true;
             moved = false;
             startCx = e.clientX;
@@ -1854,6 +1992,26 @@ export function PixiDrawingViewer({
 
         const onPointerMove = (e: PointerEvent) => {
             const uv = clientToUv(e.clientX, e.clientY);
+
+            // Gesture owned by an overlay — route everything there.
+            if (overlayOwner) {
+                if (pinchingRef.current) {
+                    // A pinch stole the gesture mid-draw: abort the draft.
+                    overlayOwner.onPointerCancel?.();
+                    overlayOwner = null;
+                    return;
+                }
+                overlayOwner.onPointerMove?.(e, uv);
+                return;
+            }
+
+            // No gesture in progress: offer hover to overlays (select-tool
+            // hover cursor, polyline preview segment). Consumed = done.
+            if (!dragging && !pinchingRef.current) {
+                for (const overlay of overlaysRef.current) {
+                    if (overlay.onPointerMove?.(e, uv)) return;
+                }
+            }
 
             // Cancel pending long-press if user starts moving — that's a pan.
             if (longPressTimer != null) {
@@ -1989,6 +2147,19 @@ export function PixiDrawingViewer({
                 longPressTimer = null;
             }
             pressUv = null;
+
+            // Overlay-owned gesture ends here; the viewer never started one.
+            if (overlayOwner) {
+                const owner = overlayOwner;
+                overlayOwner = null;
+                try {
+                    canvas.releasePointerCapture(e.pointerId);
+                } catch {
+                    /* noop */
+                }
+                owner.onPointerUp?.(e, clientToUv(e.clientX, e.clientY));
+                return;
+            }
 
             if (!dragging) return;
             dragging = false;
@@ -2193,7 +2364,24 @@ export function PixiDrawingViewer({
             measure_rectangle: 'crosshair',
             measure_count: 'crosshair',
         };
-        canvas.style.cursor = cursorMap[viewMode] ?? 'default';
+        baseCursorRef.current = pinDropMode ? 'crosshair' : (cursorMap[viewMode] ?? 'default');
+        canvas.style.cursor = cursorOverrideRef.current ?? baseCursorRef.current;
+
+        // pointercancel aborts an overlay draft rather than committing it.
+        const onPointerCancelEvt = (e: PointerEvent) => {
+            if (overlayOwner) {
+                const owner = overlayOwner;
+                overlayOwner = null;
+                try {
+                    canvas.releasePointerCapture(e.pointerId);
+                } catch {
+                    /* noop */
+                }
+                owner.onPointerCancel?.();
+                return;
+            }
+            onPointerUp(e);
+        };
 
         const onPointerLeave = () => {
             setTooltipPos(null);
@@ -2210,17 +2398,23 @@ export function PixiDrawingViewer({
         canvas.addEventListener('pointerdown', onPointerDown);
         canvas.addEventListener('pointermove', onPointerMove);
         canvas.addEventListener('pointerup', onPointerUp);
-        canvas.addEventListener('pointercancel', onPointerUp);
+        canvas.addEventListener('pointercancel', onPointerCancelEvt);
         canvas.addEventListener('pointerleave', onPointerLeave);
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         return () => {
             canvas.removeEventListener('pointerdown', onPointerDown);
             canvas.removeEventListener('pointermove', onPointerMove);
             canvas.removeEventListener('pointerup', onPointerUp);
-            canvas.removeEventListener('pointercancel', onPointerUp);
+            canvas.removeEventListener('pointercancel', onPointerCancelEvt);
             canvas.removeEventListener('pointerleave', onPointerLeave);
             if (longPressTimer != null) {
                 window.clearTimeout(longPressTimer);
+            }
+            // Re-binding mid-gesture (e.g. viewMode change): abort any
+            // overlay-owned draft so it doesn't leak a stuck draft.
+            if (overlayOwner) {
+                overlayOwner.onPointerCancel?.();
+                overlayOwner = null;
             }
         };
         // We intentionally re-bind on viewMode/snapEnabled/etc. changes so the

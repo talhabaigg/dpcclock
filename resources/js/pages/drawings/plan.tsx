@@ -1,3 +1,6 @@
+import { AnnotationOverlayUi } from '@/components/annotations/drawing-annotations/annotation-overlay-ui';
+import type { LayerDef } from '@/components/annotations/drawing-annotations/layers-panel';
+import { useAnnotationLayer } from '@/components/annotations/drawing-annotations/use-annotation-layer';
 import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
 import { PlanVersionControl, type PlanOption } from '@/components/plan-version-control';
@@ -42,6 +45,7 @@ export default function DrawingPlan() {
     const permissions = auth?.permissions ?? [];
     const canViewTasks = permissions.includes('site-tasks.view');
     const canEditTasks = permissions.includes('site-tasks.edit');
+    const canAnnotate = permissions.includes('drawings.create');
 
     const [zoom, setZoom] = useState(1);
     const [viewControls, setViewControls] = useState<ViewControls | null>(null);
@@ -56,6 +60,23 @@ export default function DrawingPlan() {
         return param ? Number(param) : null;
     });
     const [pinMode, setPinMode] = useState(false);
+    const [tasksVisible, setTasksVisible] = useState(true);
+
+    // Annotation layer — pluggable overlay + toolbar groups + layers entry.
+    const ann = useAnnotationLayer({ drawingId: drawing.id, canEdit: canAnnotate, projectId: project?.id || drawing.project_id });
+    const annTool = ann.tool;
+    const annSetTool = ann.setTool;
+
+    // Pin-drop and annotation tools are mutually exclusive.
+    useEffect(() => {
+        if (annTool) setPinMode(false);
+    }, [annTool]);
+    const togglePinMode = () => {
+        setPinMode((v) => {
+            if (!v) annSetTool(null);
+            return !v;
+        });
+    };
 
     const displayName = drawing.display_name || drawing.title || drawing.sheet_number || 'Drawing';
     const projectName = project?.name || 'Project';
@@ -139,6 +160,12 @@ export default function DrawingPlan() {
         { title: displayName, href: `/drawings/${drawing.id}/plan` },
     ];
 
+    const layerDefs: LayerDef[] = [
+        ...(canViewTasks ? [{ id: 'tasks', label: 'Tasks', visible: tasksVisible, onToggle: setTasksVisible }] : []),
+        ann.layerDef,
+        ann.linkLayerDef,
+    ];
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={displayName} />
@@ -154,10 +181,11 @@ export default function DrawingPlan() {
                     onZoomChange={setZoom}
                     onViewControlsChange={setViewControls}
                     showBuiltInControls={false}
-                    pins={canViewTasks ? pins : undefined}
+                    pins={canViewTasks && tasksVisible ? pins : undefined}
                     selectedPinId={selectedTaskId}
                     onPinClick={(pin) => setSelectedTaskId(resolvePanelTask(pin.id))}
                     pinDropMode={pinMode && canEditTasks}
+                    overlays={[ann.overlay]}
                     onCanvasClick={(point) => {
                         setPinMode(false);
                         // The viewer fires this on pointerup; the browser's
@@ -167,7 +195,15 @@ export default function DrawingPlan() {
                         window.setTimeout(() => setPendingPin(point), 0);
                     }}
                 />
-                <PlanViewerToolbar controls={viewControls} pinMode={pinMode} onTogglePinMode={() => setPinMode((v) => !v)} canEdit={canEditTasks} />
+                <PlanViewerToolbar
+                    controls={viewControls}
+                    pinMode={pinMode}
+                    onTogglePinMode={togglePinMode}
+                    canEdit={canEditTasks}
+                    annotations={ann}
+                    layers={layerDefs}
+                />
+                <AnnotationOverlayUi api={ann} />
                 <PlanVersionControl planOptions={planOptions} currentDrawingId={drawing.id} />
                 {comparison && (
                     <div className="bg-background/95 absolute top-3 right-3 z-10 flex max-w-[min(34rem,calc(100%-5rem))] items-center gap-3 rounded-md border px-3 py-2 text-xs shadow-sm">

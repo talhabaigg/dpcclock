@@ -140,7 +140,9 @@
       "Bash(rm -rf labour_widget_design)",
       "Bash(mkdir labour_widget_design)",
       "Bash(unzip -q \"/Users/talhabaig/Downloads/Labour dashboard widget design-handoff.zip\" -d labour_widget_design)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Skill(run)",
+      "Skill(run:*)"
     ]
   }
 }

@@ -1,43 +1,48 @@
 <?php
 
-
+use App\Http\Controllers\AconexImportController;
 use App\Http\Controllers\AiTextController;
 use App\Http\Controllers\AllowanceTypeController;
-use App\Http\Controllers\WhsReportController;
+use App\Http\Controllers\AnnotationController;
 use App\Http\Controllers\BidAreaController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CashForecastController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ChecklistController;
+use App\Http\Controllers\ChecklistTemplateController;
 use App\Http\Controllers\ClockController;
 use App\Http\Controllers\CommentController;
-use App\Http\Controllers\CreditCardReceiptController;
-use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CompanyRevenueTargetController;
+use App\Http\Controllers\ComplianceDashboardController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\CostcodeController;
+use App\Http\Controllers\CostTypeController;
+use App\Http\Controllers\CreditCardReceiptController;
+use App\Http\Controllers\DailyPrestartController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardLayoutController;
+use App\Http\Controllers\DocumentTemplateController;
+use App\Http\Controllers\DrawingController;
+use App\Http\Controllers\DrawingMeasurementController;
+use App\Http\Controllers\DrawingObservationController;
+use App\Http\Controllers\EhReconciliationController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDocumentController;
+use App\Http\Controllers\EmployeeFileController;
+use App\Http\Controllers\EmployeeFileTypeController;
+use App\Http\Controllers\EmployeeTransferController;
+use App\Http\Controllers\EmploymentApplicationController;
+use App\Http\Controllers\FeatureFlagController;
+use App\Http\Controllers\FileComplianceDashboardController;
+use App\Http\Controllers\ForecastProjectController;
+use App\Http\Controllers\FormRequestController;
+use App\Http\Controllers\FormTemplateController;
 use App\Http\Controllers\GlAccountGroupController;
 use App\Http\Controllers\GlBudgetActualReportController;
 use App\Http\Controllers\GlMonthSummaryReportController;
 use App\Http\Controllers\GlTransactionDetailReportController;
-use App\Http\Controllers\DailyPrestartController;
-use App\Http\Controllers\PrestartAbsenteeController;
-use App\Http\Controllers\SwmsController;
-use App\Http\Controllers\SwmsSigningController;
-use App\Http\Controllers\SwmsVersionController;
-use App\Http\Controllers\ToolboxSignController;
-use App\Http\Controllers\ToolboxTalkController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DashboardLayoutController;
-use App\Http\Controllers\CostTypeController;
-use App\Http\Controllers\AconexImportController;
-use App\Http\Controllers\DrawingController;
-use App\Http\Controllers\DrawingMeasurementController;
-use App\Http\Controllers\DrawingObservationController;
-use App\Http\Controllers\FormRequestController;
-use App\Http\Controllers\FormTemplateController;
-use App\Http\Controllers\TakeoffConditionController;
-use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\InjuryController;
-use App\Http\Controllers\ForecastProjectController;
+use App\Http\Controllers\InternalSignController;
 use App\Http\Controllers\JobForecastController;
 use App\Http\Controllers\KioskAuthController;
 use App\Http\Controllers\KioskController;
@@ -47,60 +52,69 @@ use App\Http\Controllers\LabourForecastController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\LocationCostcodeController;
 use App\Http\Controllers\LocationFavouriteMaterialItemsController;
+use App\Http\Controllers\LocationSdsController;
 use App\Http\Controllers\MaterialItemController;
 use App\Http\Controllers\MissingSignOutReportController;
-use App\Http\Controllers\TimesheetVsDpcReportController;
+use App\Http\Controllers\ModelTriggerActionController;
+use App\Http\Controllers\NewSendController;
 use App\Http\Controllers\OncostController;
 use App\Http\Controllers\PayRateTemplateController;
-use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PendingPurchaseOrderController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\POComparisonReportController;
+use App\Http\Controllers\PpeFormController;
+use App\Http\Controllers\PpeRegisterController;
+use App\Http\Controllers\PrestartAbsenteeController;
 use App\Http\Controllers\ProductionUploadController;
 use App\Http\Controllers\ProjectCalendarController;
 use App\Http\Controllers\ProjectTaskController;
-use App\Http\Controllers\SiteTaskCategoryController;
-use App\Http\Controllers\SiteTaskController;
-use App\Http\Controllers\POComparisonReportController;
 use App\Http\Controllers\PurchasingController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\QueueStatusController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\SafetyDashboardController;
 use App\Http\Controllers\RequisitionHeaderTemplateController;
 use App\Http\Controllers\RequisitionNoteController;
+use App\Http\Controllers\RetentionReportController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SafetyDashboardController;
+use App\Http\Controllers\SafetyDataSheetController;
+use App\Http\Controllers\ScreeningInterviewController;
+use App\Http\Controllers\ShortLinkController;
+use App\Http\Controllers\SigningBatchController;
+use App\Http\Controllers\SigningRequestController;
+use App\Http\Controllers\SilicaRegisterController;
+use App\Http\Controllers\SiteTaskCategoryController;
+use App\Http\Controllers\SiteTaskController;
+use App\Http\Controllers\SiteTaskReportController;
 use App\Http\Controllers\SmartPricingController;
 use App\Http\Controllers\SupplierCategoryController;
 use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\TimesheetEventController;
+use App\Http\Controllers\SwmsController;
+use App\Http\Controllers\SwmsSigningController;
+use App\Http\Controllers\SwmsVersionController;
+use App\Http\Controllers\TakeoffConditionController;
 use App\Http\Controllers\TakeoffExportController;
+use App\Http\Controllers\TimesheetEventController;
+use App\Http\Controllers\TimesheetVsDpcReportController;
+use App\Http\Controllers\ToolboxSignController;
+use App\Http\Controllers\ToolboxTalkController;
+use App\Http\Controllers\TrainingRegisterController;
 use App\Http\Controllers\TurnoverForecastController;
 use App\Http\Controllers\UpdatePricingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariationController;
-use App\Http\Controllers\RetentionReportController;
-use App\Http\Controllers\WipReportController;
-use App\Http\Controllers\EmployeeTransferController;
-use App\Http\Controllers\WorkerScreeningController;
-use App\Http\Controllers\ChecklistController;
-use App\Http\Controllers\ChecklistTemplateController;
-use App\Http\Controllers\DocumentTemplateController;
-use App\Http\Controllers\EmploymentApplicationController;
-use App\Http\Controllers\NewSendController;
-use App\Http\Controllers\ScreeningInterviewController;
-use App\Http\Controllers\SigningRequestController;
 use App\Http\Controllers\VoiceCallController;
+use App\Http\Controllers\WhsDeliverableController;
+use App\Http\Controllers\WhsReportController;
+use App\Http\Controllers\WipReportController;
+use App\Http\Controllers\WorkerScreeningController;
 use App\Http\Controllers\WorktypeController;
-use App\Http\Controllers\EmployeeFileTypeController;
-use App\Http\Controllers\EmployeeDocumentController;
-use App\Http\Controllers\EmployeeFileController;
-use App\Http\Controllers\FeatureFlagController;
-use App\Http\Controllers\ComplianceDashboardController;
-use App\Http\Controllers\FileComplianceDashboardController;
-use App\Http\Controllers\LocationSdsController;
-use App\Http\Controllers\SafetyDataSheetController;
-use App\Http\Controllers\SilicaRegisterController;
-use App\Http\Controllers\TrainingRegisterController;
+use App\Models\Drawing;
 use App\Models\Employee;
+use App\Models\Kiosk;
+use App\Models\Location;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -126,7 +140,7 @@ Route::middleware('throttle:30,1')->group(function () {
     Route::post('/sign/{token}/viewed', [SigningRequestController::class, 'markViewed'])->name('signing.viewed');
     Route::post('/sign/{token}/sign', [SigningRequestController::class, 'submitSignature'])->name('signing.submit');
     Route::get('/sign/{token}/thank-you', [SigningRequestController::class, 'thankYou'])->name('signing.thank-you');
-    Route::get('/sign-batch/{token}', [\App\Http\Controllers\SigningBatchController::class, 'show'])
+    Route::get('/sign-batch/{token}', [SigningBatchController::class, 'show'])
         ->where('token', '[A-Za-z0-9]+')
         ->name('signing.batch');
 });
@@ -141,9 +155,9 @@ Route::middleware('throttle:60,1')->group(function () {
 
 // PPE/RPE Register — public PPE cabinet QR (location-bound, no auth, NO clock in/out access)
 Route::middleware('throttle:60,1')->group(function () {
-    Route::get('/ppe/{token}', [\App\Http\Controllers\PpeFormController::class, 'publicShow'])->name('ppe-sign.show');
-    Route::post('/ppe/{token}/verify-pin', [\App\Http\Controllers\PpeFormController::class, 'publicVerifyPin'])->name('ppe-sign.verify-pin')->middleware('throttle:20,1');
-    Route::post('/ppe/{token}/submit', [\App\Http\Controllers\PpeFormController::class, 'publicSubmit'])->name('ppe-sign.submit')->middleware('throttle:10,1');
+    Route::get('/ppe/{token}', [PpeFormController::class, 'publicShow'])->name('ppe-sign.show');
+    Route::post('/ppe/{token}/verify-pin', [PpeFormController::class, 'publicVerifyPin'])->name('ppe-sign.verify-pin')->middleware('throttle:20,1');
+    Route::post('/ppe/{token}/submit', [PpeFormController::class, 'publicSubmit'])->name('ppe-sign.submit')->middleware('throttle:10,1');
 });
 
 // SWMS bulk signing — public routes (token-based, no auth)
@@ -170,7 +184,7 @@ Route::middleware('throttle:120,1')->group(function () {
 
 // Generic short-link redirect (SMS-friendly URLs)
 Route::middleware('throttle:120,1')->group(function () {
-    Route::get('/l/{code}', [\App\Http\Controllers\ShortLinkController::class, 'redirect'])
+    Route::get('/l/{code}', [ShortLinkController::class, 'redirect'])
         ->where('code', '[A-Za-z0-9]+')
         ->name('short-link.redirect');
 });
@@ -231,9 +245,9 @@ Route::post('/requisition/update-status', [PurchasingController::class, 'updateS
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Internal document signing (authenticated user signs before doc goes to recipient)
-    Route::get('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'show'])->name('internal-sign.show');
-    Route::post('/internal-sign/{token}', [\App\Http\Controllers\InternalSignController::class, 'submit'])->name('internal-sign.submit');
-    Route::post('/internal-sign/{token}/batch', [\App\Http\Controllers\InternalSignController::class, 'submitBatch'])->name('internal-sign.submit-batch');
+    Route::get('/internal-sign/{token}', [InternalSignController::class, 'show'])->name('internal-sign.show');
+    Route::post('/internal-sign/{token}', [InternalSignController::class, 'submit'])->name('internal-sign.submit');
+    Route::post('/internal-sign/{token}/batch', [InternalSignController::class, 'submitBatch'])->name('internal-sign.submit-batch');
 
     // Dashboard - requires dashboard.view permission
     Route::get('dashboard', [DashboardController::class, 'index'])
@@ -276,81 +290,81 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Geocoding routes for map view — rate limited, requires employment-applications.view
     Route::middleware(['permission:employment-applications.view', 'throttle:60,1'])->group(function () {
 
-    Route::get('/geocode/suggest', function (\Illuminate\Http\Request $request) {
-        $request->validate(['input' => 'required|string|max:255']);
-        $apiKey = config('services.google.geocoding_key');
-        if (! $apiKey) {
-            return response()->json(['predictions' => []]);
-        }
+        Route::get('/geocode/suggest', function (Request $request) {
+            $request->validate(['input' => 'required|string|max:255']);
+            $apiKey = config('services.google.geocoding_key');
+            if (! $apiKey) {
+                return response()->json(['predictions' => []]);
+            }
 
-        $response = \Illuminate\Support\Facades\Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
-            'input' => $request->input('input'),
-            'key' => $apiKey,
-            'components' => 'country:au',
-            'types' => 'geocode',
-        ]);
-
-        $predictions = collect($response->json('predictions', []))->map(fn ($p) => [
-            'place_id' => $p['place_id'],
-            'description' => $p['description'],
-        ])->take(5);
-
-        return response()->json(['predictions' => $predictions]);
-    })->name('geocode.suggest');
-
-    // Geocode a place_id or address for map view
-    Route::get('/geocode', function (\Illuminate\Http\Request $request) {
-        $request->validate(['place_id' => 'nullable|string', 'address' => 'nullable|string|max:255']);
-        $apiKey = config('services.google.geocoding_key');
-        if (! $apiKey) {
-            return response()->json(['error' => 'Not configured'], 500);
-        }
-
-        $params = ['key' => $apiKey];
-        if ($request->filled('place_id')) {
-            $params['place_id'] = $request->place_id;
-        } elseif ($request->filled('address')) {
-            $params['address'] = $request->address . ', Australia';
-            $params['region'] = 'au';
-        } else {
-            return response()->json(['error' => 'Missing place_id or address'], 422);
-        }
-
-        $response = \Illuminate\Support\Facades\Http::get('https://maps.googleapis.com/maps/api/geocode/json', $params);
-        $data = $response->json();
-
-        if (($data['status'] ?? '') !== 'OK' || empty($data['results'])) {
-            return response()->json(['error' => 'Not found'], 404);
-        }
-
-        $result = $data['results'][0];
-
-        return response()->json([
-            'latitude' => $result['geometry']['location']['lat'],
-            'longitude' => $result['geometry']['location']['lng'],
-            'formatted_address' => $result['formatted_address'] ?? $request->address,
-        ]);
-    })->name('geocode');
-
-    // Geocoded project sites for map view — pre-existing coordinates, no Google call
-    Route::get('/locations/geocoded', function () {
-        $sites = \App\Models\Location::open()
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
-            ->select('id', 'name', 'fully_qualified_name', 'address_line1', 'city', 'state_code', 'latitude', 'longitude')
-            ->orderBy('name')
-            ->get()
-            ->map(fn ($s) => [
-                'id' => $s->id,
-                'name' => $s->name,
-                'fully_qualified_name' => $s->fully_qualified_name,
-                'address' => trim(implode(', ', array_filter([$s->address_line1, $s->city, $s->state_code]))),
-                'latitude' => (float) $s->latitude,
-                'longitude' => (float) $s->longitude,
+            $response = Http::get('https://maps.googleapis.com/maps/api/place/autocomplete/json', [
+                'input' => $request->input('input'),
+                'key' => $apiKey,
+                'components' => 'country:au',
+                'types' => 'geocode',
             ]);
 
-        return response()->json(['sites' => $sites]);
-    })->name('locations.geocoded');
+            $predictions = collect($response->json('predictions', []))->map(fn ($p) => [
+                'place_id' => $p['place_id'],
+                'description' => $p['description'],
+            ])->take(5);
+
+            return response()->json(['predictions' => $predictions]);
+        })->name('geocode.suggest');
+
+        // Geocode a place_id or address for map view
+        Route::get('/geocode', function (Request $request) {
+            $request->validate(['place_id' => 'nullable|string', 'address' => 'nullable|string|max:255']);
+            $apiKey = config('services.google.geocoding_key');
+            if (! $apiKey) {
+                return response()->json(['error' => 'Not configured'], 500);
+            }
+
+            $params = ['key' => $apiKey];
+            if ($request->filled('place_id')) {
+                $params['place_id'] = $request->place_id;
+            } elseif ($request->filled('address')) {
+                $params['address'] = $request->address.', Australia';
+                $params['region'] = 'au';
+            } else {
+                return response()->json(['error' => 'Missing place_id or address'], 422);
+            }
+
+            $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json', $params);
+            $data = $response->json();
+
+            if (($data['status'] ?? '') !== 'OK' || empty($data['results'])) {
+                return response()->json(['error' => 'Not found'], 404);
+            }
+
+            $result = $data['results'][0];
+
+            return response()->json([
+                'latitude' => $result['geometry']['location']['lat'],
+                'longitude' => $result['geometry']['location']['lng'],
+                'formatted_address' => $result['formatted_address'] ?? $request->address,
+            ]);
+        })->name('geocode');
+
+        // Geocoded project sites for map view — pre-existing coordinates, no Google call
+        Route::get('/locations/geocoded', function () {
+            $sites = Location::open()
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->select('id', 'name', 'fully_qualified_name', 'address_line1', 'city', 'state_code', 'latitude', 'longitude')
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'fully_qualified_name' => $s->fully_qualified_name,
+                    'address' => trim(implode(', ', array_filter([$s->address_line1, $s->city, $s->state_code]))),
+                    'latitude' => (float) $s->latitude,
+                    'longitude' => (float) $s->longitude,
+                ]);
+
+            return response()->json(['sites' => $sites]);
+        })->name('locations.geocoded');
 
     }); // end geocoding routes
 
@@ -479,12 +493,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Trigger actions (what auto-fires on which model trigger, to whom —
         // assign a form or send a notification)
         // URL avoids the `/app*` prefix because the prod nginx Reverb location block swallows it.
-        Route::get('/trigger-actions', [\App\Http\Controllers\ModelTriggerActionController::class, 'index'])->name('model-trigger-actions.index');
-        Route::get('/trigger-actions/create', [\App\Http\Controllers\ModelTriggerActionController::class, 'create'])->name('model-trigger-actions.create');
-        Route::get('/trigger-actions/{modelTriggerAction}/edit', [\App\Http\Controllers\ModelTriggerActionController::class, 'edit'])->name('model-trigger-actions.edit');
-        Route::post('/trigger-actions', [\App\Http\Controllers\ModelTriggerActionController::class, 'store'])->name('model-trigger-actions.store');
-        Route::put('/trigger-actions/{modelTriggerAction}', [\App\Http\Controllers\ModelTriggerActionController::class, 'update'])->name('model-trigger-actions.update');
-        Route::delete('/trigger-actions/{modelTriggerAction}', [\App\Http\Controllers\ModelTriggerActionController::class, 'destroy'])->name('model-trigger-actions.destroy');
+        Route::get('/trigger-actions', [ModelTriggerActionController::class, 'index'])->name('model-trigger-actions.index');
+        Route::get('/trigger-actions/create', [ModelTriggerActionController::class, 'create'])->name('model-trigger-actions.create');
+        Route::get('/trigger-actions/{modelTriggerAction}/edit', [ModelTriggerActionController::class, 'edit'])->name('model-trigger-actions.edit');
+        Route::post('/trigger-actions', [ModelTriggerActionController::class, 'store'])->name('model-trigger-actions.store');
+        Route::put('/trigger-actions/{modelTriggerAction}', [ModelTriggerActionController::class, 'update'])->name('model-trigger-actions.update');
+        Route::delete('/trigger-actions/{modelTriggerAction}', [ModelTriggerActionController::class, 'destroy'])->name('model-trigger-actions.destroy');
     });
 
     // Form Requests (admin actions)
@@ -645,7 +659,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/locations/load-job-data', [LocationController::class, 'loadJobData'])->name('locations.loadJobData')
         ->middleware('permission:locations.load-job-data');
     Route::get('/locations/external-id-report', [LocationController::class, 'externalIdValidationReport'])->name('locations.externalIdReport');
-    Route::get('/data-sync', fn () => \Inertia\Inertia::render('data-sync/index'))->name('data-sync.index')
+    Route::get('/data-sync', fn () => Inertia::render('data-sync/index'))->name('data-sync.index')
         ->middleware('permission:locations.load-job-data');
     Route::get('/locations/sync-status', [LocationController::class, 'syncStatus'])->name('locations.syncStatus')
         ->middleware('permission:locations.load-job-data');
@@ -813,10 +827,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/clocks/eh/sync', [ClockController::class, 'syncEhTimesheets'])->name('clocks.eh.sync');
         Route::get('/timesheets/sync/eh/all', [ClockController::class, 'syncTimesheetsForAll'])->name('timesheets.sync.all');
         Route::get('/timesheets/{employeeId}/{weekEnding}/sync/eh', [ClockController::class, 'syncTimesheet'])->name('timesheets.sync');
-        Route::get('/timesheets-reconcile', [\App\Http\Controllers\EhReconciliationController::class, 'index'])->name('timesheets.reconcile');
-        Route::post('/timesheets-reconcile/delete', [\App\Http\Controllers\EhReconciliationController::class, 'deleteClocks'])->name('timesheets.reconcile.delete');
-        Route::post('/timesheets-reconcile/repull', [\App\Http\Controllers\EhReconciliationController::class, 'repullWeek'])->name('timesheets.reconcile.repull');
-        Route::post('/timesheets-reconcile/auto', [\App\Http\Controllers\EhReconciliationController::class, 'autoReconcile'])->name('timesheets.reconcile.auto');
+        Route::get('/timesheets-reconcile', [EhReconciliationController::class, 'index'])->name('timesheets.reconcile');
+        Route::post('/timesheets-reconcile/delete', [EhReconciliationController::class, 'deleteClocks'])->name('timesheets.reconcile.delete');
+        Route::post('/timesheets-reconcile/repull', [EhReconciliationController::class, 'repullWeek'])->name('timesheets.reconcile.repull');
+        Route::post('/timesheets-reconcile/auto', [EhReconciliationController::class, 'autoReconcile'])->name('timesheets.reconcile.auto');
     });
     Route::get('/timesheets-converter', [ClockController::class, 'showTimesheetsConverter'])->name('timesheets.converter')
         ->middleware('permission:timesheets.convert');
@@ -903,7 +917,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/requisition/{id}/compare', [PurchasingController::class, 'getComparison'])->name('requisition.compare');
         Route::post('/requisition/{id}/compare/refresh', [PurchasingController::class, 'refreshComparison'])->name('requisition.compare.refresh');
     });
-
 
     // ============================================
     // MATERIAL ITEMS MANAGEMENT
@@ -1289,18 +1302,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/projects/{project}/drawings', [DrawingController::class, 'index'])->name('drawings.index');
         // Opening a drawing always lands on the basic plan viewer; the
         // takeoff/DPC/budget workspaces are reached via their own routes.
-        Route::get('/drawings/{drawing}', function (\App\Models\Drawing $drawing) {
+        Route::get('/drawings/{drawing}', function (Drawing $drawing) {
             return redirect()->route('drawings.plan', $drawing);
         })->name('drawings.show');
         Route::get('/drawings/{drawing}/plan', [DrawingController::class, 'plan'])->name('drawings.plan');
         Route::get('/drawings/{drawing}/variations', [DrawingController::class, 'variations'])->name('drawings.variations');
         Route::get('/drawings/{drawing}/download', [DrawingController::class, 'download'])->name('drawings.download');
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
+        Route::get('/drawings/{drawing}/annotations', [AnnotationController::class, 'index'])->name('drawings.annotations.index');
+        Route::get('/projects/{project}/drawings/link-targets', [AnnotationController::class, 'linkTargets'])->name('drawings.link-targets');
     });
     Route::middleware('permission:drawings.create')->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
+        Route::post('/drawings/{drawing}/annotations', [AnnotationController::class, 'store'])->name('drawings.annotations.store');
+        Route::patch('/annotations/{annotation}', [AnnotationController::class, 'update'])->name('annotations.update');
+        Route::delete('/annotations/{annotation}', [AnnotationController::class, 'destroy'])->name('annotations.destroy');
 
         // Import from Aconex
         Route::get('/projects/{project}/drawings/import-aconex', [AconexImportController::class, 'show'])->name('drawings.aconex.show');
@@ -1322,7 +1340,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --------------------------------------------
     Route::middleware('permission:site-tasks.view')->group(function () {
         Route::get('/projects/{project}/tasks', [SiteTaskController::class, 'board'])->name('site-tasks.board');
-        Route::post('/projects/{project}/site-tasks/report', [\App\Http\Controllers\SiteTaskReportController::class, 'generate'])->name('site-tasks.report');
+        Route::post('/projects/{project}/site-tasks/report', [SiteTaskReportController::class, 'generate'])->name('site-tasks.report');
         Route::get('/projects/{project}/site-tasks', [SiteTaskController::class, 'index'])->name('site-tasks.index');
         Route::get('/site-task-employees', [SiteTaskController::class, 'employees'])->name('site-tasks.employees');
         Route::get('/site-task-checklist-templates', [SiteTaskController::class, 'checklistTemplates'])->name('site-tasks.checklist-templates');
@@ -1687,15 +1705,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // PPE / RPE REGISTER (admin views — public form lives at /ppe/{token})
     // ============================================
     Route::middleware('permission:prestarts.view')->group(function () {
-        Route::get('/ppe-register', [\App\Http\Controllers\PpeRegisterController::class, 'selectLocation'])->name('ppe-register.select-location');
+        Route::get('/ppe-register', [PpeRegisterController::class, 'selectLocation'])->name('ppe-register.select-location');
 
         Route::prefix('/locations/{location}/ppe-register')->name('locations.ppe-register.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\PpeRegisterController::class, 'index'])->name('index');
-            Route::get('/qr', [\App\Http\Controllers\PpeRegisterController::class, 'qr'])->name('qr');
-            Route::get('/{ppeIssuance}', [\App\Http\Controllers\PpeRegisterController::class, 'show'])->name('show');
-            Route::delete('/{ppeIssuance}', [\App\Http\Controllers\PpeRegisterController::class, 'destroy'])->name('destroy')
+            Route::get('/', [PpeRegisterController::class, 'index'])->name('index');
+            Route::get('/qr', [PpeRegisterController::class, 'qr'])->name('qr');
+            Route::get('/{ppeIssuance}', [PpeRegisterController::class, 'show'])->name('show');
+            Route::delete('/{ppeIssuance}', [PpeRegisterController::class, 'destroy'])->name('destroy')
                 ->middleware('permission:prestarts.delete');
-            Route::post('/{ppeIssuance}/restore', [\App\Http\Controllers\PpeRegisterController::class, 'restore'])->name('restore')
+            Route::post('/{ppeIssuance}/restore', [PpeRegisterController::class, 'restore'])->name('restore')
                 ->middleware('permission:prestarts.delete');
         });
     });
@@ -1704,26 +1722,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // WHS DELIVERABLES (plant / electrical / asset / lifting register, scoped per project)
     // ============================================
     Route::middleware('permission:whs-deliverables.view')->group(function () {
-        Route::get('/whs-deliverables', [\App\Http\Controllers\WhsDeliverableController::class, 'selectLocation'])->name('whs-deliverables.select-location');
+        Route::get('/whs-deliverables', [WhsDeliverableController::class, 'selectLocation'])->name('whs-deliverables.select-location');
 
         Route::prefix('/locations/{location}/whs-deliverables')->name('locations.whs-deliverables.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\WhsDeliverableController::class, 'index'])->name('index');
-            Route::get('/register/{type}/pdf', [\App\Http\Controllers\WhsDeliverableController::class, 'registerPdf'])->name('register-pdf');
-            Route::get('/create', [\App\Http\Controllers\WhsDeliverableController::class, 'create'])->name('create')
+            Route::get('/', [WhsDeliverableController::class, 'index'])->name('index');
+            Route::get('/register/{type}/pdf', [WhsDeliverableController::class, 'registerPdf'])->name('register-pdf');
+            Route::get('/create', [WhsDeliverableController::class, 'create'])->name('create')
                 ->middleware('permission:whs-deliverables.create');
-            Route::post('/', [\App\Http\Controllers\WhsDeliverableController::class, 'store'])->name('store')
+            Route::post('/', [WhsDeliverableController::class, 'store'])->name('store')
                 ->middleware('permission:whs-deliverables.create');
-            Route::get('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'show'])->name('show');
-            Route::get('/{whsDeliverable}/edit', [\App\Http\Controllers\WhsDeliverableController::class, 'edit'])->name('edit')
+            Route::get('/{whsDeliverable}', [WhsDeliverableController::class, 'show'])->name('show');
+            Route::get('/{whsDeliverable}/edit', [WhsDeliverableController::class, 'edit'])->name('edit')
                 ->middleware('permission:whs-deliverables.edit');
-            Route::get('/{whsDeliverable}/photo', [\App\Http\Controllers\WhsDeliverableController::class, 'photo'])->name('photo');
-            Route::put('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'update'])->name('update')
+            Route::get('/{whsDeliverable}/photo', [WhsDeliverableController::class, 'photo'])->name('photo');
+            Route::put('/{whsDeliverable}', [WhsDeliverableController::class, 'update'])->name('update')
                 ->middleware('permission:whs-deliverables.edit');
-            Route::patch('/{whsDeliverable}/notify', [\App\Http\Controllers\WhsDeliverableController::class, 'toggleNotify'])->name('notify')
+            Route::patch('/{whsDeliverable}/notify', [WhsDeliverableController::class, 'toggleNotify'])->name('notify')
                 ->middleware('permission:whs-deliverables.edit');
-            Route::delete('/{whsDeliverable}', [\App\Http\Controllers\WhsDeliverableController::class, 'destroy'])->name('destroy')
+            Route::delete('/{whsDeliverable}', [WhsDeliverableController::class, 'destroy'])->name('destroy')
                 ->middleware('permission:whs-deliverables.delete');
-            Route::post('/{whsDeliverable}/restore', [\App\Http\Controllers\WhsDeliverableController::class, 'restore'])->name('restore')
+            Route::post('/{whsDeliverable}/restore', [WhsDeliverableController::class, 'restore'])->name('restore')
                 ->middleware('permission:whs-deliverables.delete');
         });
     });
@@ -1835,7 +1853,7 @@ Route::middleware('kiosk.access')->group(function () {
     Route::post('/clock/out', [ClockController::class, 'clockOut'])->name('clocks.out');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin', [KioskAuthController::class, 'showPinPage'])->name('kiosk.pin');
     Route::get('/kiosk/{kioskId}/employee/{employeeId}/pin/verify', function ($kioskId) {
-        $kiosk = \App\Models\Kiosk::where('eh_kiosk_id', $kioskId)->first();
+        $kiosk = Kiosk::where('eh_kiosk_id', $kioskId)->first();
 
         return redirect()->route('kiosks.show', ['kiosk' => $kiosk?->id ?? $kioskId]);
     });
@@ -1853,13 +1871,13 @@ Route::middleware('kiosk.access')->group(function () {
     Route::post('/kiosk/{kioskId}/prestart/guest/{signature}/sign-out', [DailyPrestartController::class, 'signOutKioskGuest'])->name('kiosk.prestart.guest.sign-out');
 
     // PPE/RPE issuance from kiosk iPad (device-cookie gated via kiosk.access)
-    Route::get('/kiosks/{kioskId}/ppe', [\App\Http\Controllers\PpeFormController::class, 'kioskShow'])->name('kiosk.ppe.show');
-    Route::post('/kiosks/{kioskId}/ppe/verify-pin', [\App\Http\Controllers\PpeFormController::class, 'kioskVerifyPin'])->name('kiosk.ppe.verify-pin')->middleware('throttle:20,1');
-    Route::post('/kiosks/{kioskId}/ppe/submit', [\App\Http\Controllers\PpeFormController::class, 'kioskSubmit'])->name('kiosk.ppe.submit')->middleware('throttle:10,1');
+    Route::get('/kiosks/{kioskId}/ppe', [PpeFormController::class, 'kioskShow'])->name('kiosk.ppe.show');
+    Route::post('/kiosks/{kioskId}/ppe/verify-pin', [PpeFormController::class, 'kioskVerifyPin'])->name('kiosk.ppe.verify-pin')->middleware('throttle:20,1');
+    Route::post('/kiosks/{kioskId}/ppe/submit', [PpeFormController::class, 'kioskSubmit'])->name('kiosk.ppe.submit')->middleware('throttle:10,1');
 
     // Session-authed PPE form — entered after PIN check via "Additional actions"; no second PIN
-    Route::get('/kiosks/{kioskId}/ppe/authed/{employeeId}', [\App\Http\Controllers\PpeFormController::class, 'kioskAuthedShow'])->name('kiosk.ppe.authed.show');
-    Route::post('/kiosks/{kioskId}/ppe/authed/{employeeId}/submit', [\App\Http\Controllers\PpeFormController::class, 'kioskAuthedSubmit'])->name('kiosk.ppe.authed.submit')->middleware('throttle:10,1');
+    Route::get('/kiosks/{kioskId}/ppe/authed/{employeeId}', [PpeFormController::class, 'kioskAuthedShow'])->name('kiosk.ppe.authed.show');
+    Route::post('/kiosks/{kioskId}/ppe/authed/{employeeId}/submit', [PpeFormController::class, 'kioskAuthedSubmit'])->name('kiosk.ppe.authed.submit')->middleware('throttle:10,1');
 });
 
 Route::get('/kiosk', function () {
