@@ -9,8 +9,9 @@ import type { Point } from '@/components/measurement-layer';
 
 export type AnnotationKind = 'freehand' | 'line' | 'arrow' | 'double_arrow' | 'polyline' | 'cloud' | 'rect' | 'ellipse' | 'text' | 'link';
 
-/** Active toolbar tool: a creation tool per kind, or the selector. */
-export type AnnotationTool = AnnotationKind | 'select';
+/** Active toolbar tool: a creation tool per kind, the selector, or the
+ *  lasso (freehand multi-select for bulk delete). */
+export type AnnotationTool = AnnotationKind | 'select' | 'lasso';
 
 export const STROKE_KINDS = ['freehand', 'line', 'arrow', 'double_arrow', 'polyline'] as const;
 export const SHAPE_KINDS = ['cloud', 'rect', 'ellipse'] as const;

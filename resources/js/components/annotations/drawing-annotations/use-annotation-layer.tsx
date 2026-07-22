@@ -5,9 +5,18 @@ import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ANNOTATION_COLORS } from '../photo-annotations';
-import { annotationBounds, findAnnotationAt, rdpSimplify, rectFromCorners, snapAngle, squareConstrain, uvToPdf } from './geometry';
+import {
+    annotationBounds,
+    annotationIntersectsRect,
+    findAnnotationAt,
+    rdpSimplify,
+    rectFromCorners,
+    snapAngle,
+    squareConstrain,
+    uvToPdf,
+} from './geometry';
 import type { LayerDef } from './layers-panel';
-import { drawAnnotation } from './render';
+import { drawAnnotation, drawLassoDraft } from './render';
 import {
     fromDto,
     LINK_COLOR,
@@ -44,7 +53,8 @@ const MIN_TEXT_BOX_PT = { w: 60, h: 24 };
 type Draft =
     | { mode: 'points'; kind: 'freehand' | 'line' | 'arrow' | 'double_arrow'; points: Point[] }
     | { mode: 'polyline'; points: Point[]; preview: Point | null }
-    | { mode: 'box'; kind: 'cloud' | 'rect' | 'ellipse' | 'text' | 'link'; start: Point; current: Point };
+    | { mode: 'box'; kind: 'cloud' | 'rect' | 'ellipse' | 'text' | 'link'; start: Point; current: Point }
+    | { mode: 'lasso'; start: Point; current: Point };
 
 export type TextDraftState = {
     /** UV rect of the box being edited/created. */
@@ -73,8 +83,8 @@ export type AnnotationUiState = {
     linkDraft: LinkDraftState | null;
     /** Tooltip over a hovered link dot: host-relative anchor + target name. */
     linkHover: { x: number; y: number; label: string } | null;
-    /** Host-relative anchor for the selection action chip. */
-    chip: { x: number; y: number } | null;
+    /** Host-relative anchor for the selection action chip + selection size. */
+    chip: { x: number; y: number; count: number } | null;
     hint: string | null;
 };
 
@@ -90,7 +100,7 @@ export type AnnotationLayerApi = {
     setFilled: (f: boolean) => void;
     canEdit: boolean;
     // selection
-    selectedId: number | null;
+    selectedIds: Set<number>;
     deleteSelected: () => void;
     // visibility / layers
     layerVisible: boolean;
@@ -126,6 +136,7 @@ const TOOL_HINTS: Record<string, string> = {
     text: 'Drag a box for the text, then type. Esc to exit.',
     link: 'Click where the link should go, then choose the plan. Esc to exit.',
     select: 'Click an annotation to select it. Delete removes it. Double-click text or links to edit.',
+    lasso: 'Drag a box around annotations to select them, then delete. Esc to exit.',
 };
 
 export function useAnnotationLayer({
@@ -144,7 +155,7 @@ export function useAnnotationLayer({
     const [tool, setToolState] = useState<AnnotationTool | null>(null);
     const [color, setColor] = useState<string>(ANNOTATION_COLORS[0].value);
     const [filled, setFilled] = useState(false);
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [layerVisible, setLayerVisible] = useState(true);
     const [hiddenColors, setHiddenColors] = useState<Set<string>>(new Set());
     const [textDraft, setTextDraft] = useState<TextDraftState | null>(null);
@@ -164,8 +175,8 @@ export function useAnnotationLayer({
     colorRef.current = color;
     const filledRef = useRef(filled);
     filledRef.current = filled;
-    const selectedIdRef = useRef(selectedId);
-    selectedIdRef.current = selectedId;
+    const selectedIdsRef = useRef(selectedIds);
+    selectedIdsRef.current = selectedIds;
     const layerVisibleRef = useRef(layerVisible);
     layerVisibleRef.current = layerVisible;
     const hiddenColorsRef = useRef(hiddenColors);
@@ -215,7 +226,7 @@ export function useAnnotationLayer({
             } else {
                 if (!layerVisibleRef.current || hidden.has(a.color)) continue;
             }
-            drawAnnotation(layer, a, { W, H, invScale, selected: a.id === selectedIdRef.current });
+            drawAnnotation(layer, a, { W, H, invScale, selected: selectedIdsRef.current.has(a.id) });
         }
 
         const draft = draftRef.current;
@@ -228,6 +239,8 @@ export function useAnnotationLayer({
                 if (pts.length >= 2) {
                     drawAnnotation(layer, draftAnnotation('polyline', { points: pts }, draftColor, false), { W, H, invScale });
                 }
+            } else if (draft.mode === 'lasso') {
+                drawLassoDraft(layer, rectFromCorners(draft.start, draft.current), W, H, invScale);
             } else if (draft.mode === 'box' && draft.kind !== 'link') {
                 // (Link is click-to-place — no drag preview to draw.)
                 const rect = rectFromCorners(draft.start, draft.current);
@@ -250,30 +263,33 @@ export function useAnnotationLayer({
     useEffect(() => {
         redraw();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [annotations, selectedId, layerVisible, hiddenColors, linksVisible]);
+    }, [annotations, selectedIds, layerVisible, hiddenColors, linksVisible]);
 
     // ── Selection chip anchoring ──────────────────────────────────────────
 
     const refreshChip = useCallback(() => {
         const ctx = ctxRef.current;
-        const id = selectedIdRef.current;
-        if (!ctx || id == null) {
+        const ids = selectedIdsRef.current;
+        const selected = ids.size ? annotationsRef.current.filter((x) => ids.has(x.id)) : [];
+        if (!ctx || selected.length === 0) {
             setChip((prev) => (prev == null ? prev : null));
             return;
         }
-        const a = annotationsRef.current.find((x) => x.id === id);
-        if (!a) {
-            setChip((prev) => (prev == null ? prev : null));
-            return;
+        // Anchor at the top-right of the union bounds of the selection.
+        let minY = Infinity;
+        let maxX = -Infinity;
+        for (const a of selected) {
+            const b = annotationBounds(a);
+            minY = Math.min(minY, b.y);
+            maxX = Math.max(maxX, b.x + b.w);
         }
-        const bounds = annotationBounds(a);
-        const anchor = ctx.uvToHost({ x: bounds.x + bounds.w, y: bounds.y });
+        const anchor = ctx.uvToHost({ x: maxX, y: minY });
         setChip((prev) => (prev && Math.abs(prev.x - anchor.x) < 1 && Math.abs(prev.y - anchor.y) < 1 ? prev : anchor));
     }, []);
 
     useEffect(() => {
         refreshChip();
-    }, [selectedId, annotations, refreshChip]);
+    }, [selectedIds, annotations, refreshChip]);
 
     // ── Persistence ───────────────────────────────────────────────────────
 
@@ -308,7 +324,13 @@ export function useAnnotationLayer({
                 })
                 .then((res) => {
                     setAnnotations((prev) => prev.map((x) => (x.id === tempId ? fromDto(res.annotation) : x)));
-                    setSelectedId((prev) => (prev === tempId ? res.annotation.id : prev));
+                    setSelectedIds((prev) => {
+                        if (!prev.has(tempId)) return prev;
+                        const next = new Set(prev);
+                        next.delete(tempId);
+                        next.add(res.annotation.id);
+                        return next;
+                    });
                     return res.annotation.id;
                 })
                 .catch(() => {
@@ -328,7 +350,12 @@ export function useAnnotationLayer({
         const existing = annotationsRef.current.find((a) => a.id === id);
         if (!existing) return;
         setAnnotations((prev) => prev.filter((a) => a.id !== id));
-        setSelectedId((prev) => (prev === id ? null : prev));
+        setSelectedIds((prev) => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
 
         if (id < 0) {
             // Still POSTing — chain the delete behind the create.
@@ -550,7 +577,7 @@ export function useAnnotationLayer({
                     const hit = findAnnotationAt(visible, uv, W, H, tolPt);
                     if (!hit) {
                         // Empty click clears selection but lets the viewer pan.
-                        if (selectedIdRef.current != null) setSelectedId(null);
+                        if (selectedIdsRef.current.size) setSelectedIds(new Set());
                         return false;
                     }
                     // Double-click re-opens the editor (text) or the target picker (link).
@@ -567,13 +594,17 @@ export function useAnnotationLayer({
                             return true;
                         }
                     }
-                    setSelectedId(hit.id);
+                    setSelectedIds(new Set([hit.id]));
                     return true;
                 }
 
                 if (!canEditRef.current) return false;
                 downPosRef.current = { x: e.clientX, y: e.clientY };
 
+                if (tool === 'lasso') {
+                    draftRef.current = { mode: 'lasso', start: uv, current: uv };
+                    return true;
+                }
                 if (tool === 'freehand' || tool === 'line' || tool === 'arrow' || tool === 'double_arrow') {
                     draftRef.current = { mode: 'points', kind: tool, points: [uv, uv] };
                     if (tool === 'freehand') draftRef.current = { mode: 'points', kind: tool, points: [uv] };
@@ -624,6 +655,11 @@ export function useAnnotationLayer({
                         redrawRef.current();
                         return true;
                     }
+                    if (draft.mode === 'lasso') {
+                        draft.current = uv;
+                        redrawRef.current();
+                        return true;
+                    }
                     if (draft.mode === 'polyline') {
                         let preview = uv;
                         if (e.shiftKey && draft.points.length > 0) preview = snapAngle(draft.points[draft.points.length - 1], preview, W, H);
@@ -644,7 +680,7 @@ export function useAnnotationLayer({
                 // dot hover (pointer cursor + name tooltip) when idle, and
                 // consume hover while a draw tool is armed so the viewer
                 // doesn't hover-highlight.
-                if (selectedIdRef.current != null) refreshChip();
+                if (selectedIdsRef.current.size) refreshChip();
                 if (!tool && linksVisibleRef.current) {
                     const { width: W, height: H } = ctx.pdfDims;
                     const tolPt = HIT_TOLERANCE_PX / Math.max(ctx.getScale(), 0.0001);
@@ -683,6 +719,27 @@ export function useAnnotationLayer({
 
                 const draft = draftRef.current;
                 if (!ctx || !draft) return;
+
+                if (draft.mode === 'lasso') {
+                    draftRef.current = null;
+                    const rect = rectFromCorners(draft.start, draft.current);
+                    const { width: W, height: H } = ctx.pdfDims;
+                    const minUv = 6 / Math.max(ctx.getScale(), 0.0001) / Math.min(W, H);
+                    // A bare click (no real drag) clears the selection instead.
+                    if (rect.w < minUv && rect.h < minUv) {
+                        setSelectedIds(new Set());
+                        redrawRef.current();
+                        return;
+                    }
+                    // Only select what's visible — hidden layers stay untouched.
+                    const visible = annotationsRef.current.filter((a) =>
+                        a.kind === 'link' ? linksVisibleRef.current : layerVisibleRef.current && !hiddenColorsRef.current.has(a.color),
+                    );
+                    const ids = visible.filter((a) => annotationIntersectsRect(a, rect)).map((a) => a.id);
+                    setSelectedIds(new Set(ids));
+                    redrawRef.current();
+                    return;
+                }
 
                 if (draft.mode === 'polyline') {
                     const down = downPosRef.current;
@@ -779,7 +836,7 @@ export function useAnnotationLayer({
             return t;
         });
         draftRef.current = null;
-        if (t && t !== 'select') setSelectedId(null);
+        if (t && t !== 'select' && t !== 'lasso') setSelectedIds(new Set());
         const ctx = ctxRef.current;
         if (ctx) ctx.setCursor(t == null ? null : t === 'select' ? 'default' : 'crosshair');
         redrawRef.current();
@@ -798,8 +855,8 @@ export function useAnnotationLayer({
             if (e.key === 'Escape') {
                 if (draftRef.current) {
                     cancelDraft();
-                } else if (selectedIdRef.current != null) {
-                    setSelectedId(null);
+                } else if (selectedIdsRef.current.size) {
+                    setSelectedIds(new Set());
                 } else if (toolRef.current) {
                     setTool(null);
                 }
@@ -817,8 +874,8 @@ export function useAnnotationLayer({
                 }
                 return;
             }
-            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIdRef.current != null && canEditRef.current) {
-                deleteAnnotation(selectedIdRef.current);
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIdsRef.current.size && canEditRef.current) {
+                for (const id of Array.from(selectedIdsRef.current)) deleteAnnotation(id);
             }
         };
         window.addEventListener('keydown', onKey);
@@ -874,7 +931,7 @@ export function useAnnotationLayer({
     );
 
     const deleteSelected = useCallback(() => {
-        if (selectedIdRef.current != null) deleteAnnotation(selectedIdRef.current);
+        for (const id of Array.from(selectedIdsRef.current)) deleteAnnotation(id);
     }, [deleteAnnotation]);
 
     const ui = useMemo<AnnotationUiState>(
@@ -882,10 +939,10 @@ export function useAnnotationLayer({
             textDraft,
             linkDraft,
             linkHover: linkDraft ? null : linkHover,
-            chip: selectedId != null ? chip : null,
+            chip: selectedIds.size && chip ? { ...chip, count: selectedIds.size } : null,
             hint: tool ? TOOL_HINTS[tool] : null,
         }),
-        [textDraft, linkDraft, linkHover, chip, selectedId, tool],
+        [textDraft, linkDraft, linkHover, chip, selectedIds, tool],
     );
 
     return {
@@ -898,7 +955,7 @@ export function useAnnotationLayer({
         filled,
         setFilled,
         canEdit,
-        selectedId,
+        selectedIds,
         deleteSelected,
         layerVisible,
         setLayerVisible,

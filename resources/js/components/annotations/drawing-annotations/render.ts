@@ -214,6 +214,18 @@ function drawLinkAnnotation(layer: Container, broken: boolean, cx: number, cy: n
     layer.addChild(glyph);
 }
 
+/** In-progress drag-select marquee: light fill + thin outline. */
+export function drawLassoDraft(layer: Container, rect: { x: number; y: number; w: number; h: number }, W: number, H: number, invScale: number): void {
+    const g = new Graphics();
+    const x = rect.x * W;
+    const y = rect.y * H;
+    const w = rect.w * W;
+    const h = rect.h * H;
+    g.rect(x, y, w, h).fill({ color: 0x2563eb, alpha: 0.08 });
+    g.rect(x, y, w, h).stroke({ color: 0x2563eb, width: 1.5 * invScale, alpha: 0.9 });
+    layer.addChild(g);
+}
+
 /**
  * Inert corner handles on the selection box — establishes the visual language
  * for a future move/resize feature (not draggable yet).

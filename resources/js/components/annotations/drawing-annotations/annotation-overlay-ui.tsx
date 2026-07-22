@@ -44,11 +44,12 @@ export function AnnotationOverlayUi({ api }: { api: AnnotationLayerApi }) {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                            title="Delete annotation"
+                            className="text-destructive hover:text-destructive h-7 gap-1 px-1.5"
+                            title={api.ui.chip.count > 1 ? `Delete ${api.ui.chip.count} annotations` : 'Delete annotation'}
                             onClick={api.deleteSelected}
                         >
                             <Trash2 className="h-3.5 w-3.5" />
+                            {api.ui.chip.count > 1 && <span className="text-xs font-semibold">{api.ui.chip.count}</span>}
                         </Button>
                     </div>
                 </div>

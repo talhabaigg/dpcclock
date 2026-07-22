@@ -224,6 +224,15 @@ export function hitTestAnnotation(a: DrawingAnnotation, uv: Point, W: number, H:
     return !inInner;
 }
 
+/**
+ * Drag-select membership: the annotation's bounding box overlaps the marquee
+ * rect (same rule as measurement box-select).
+ */
+export function annotationIntersectsRect(a: DrawingAnnotation, rect: UvRect): boolean {
+    const b = annotationBounds(a);
+    return b.x <= rect.x + rect.w && b.x + b.w >= rect.x && b.y <= rect.y + rect.h && b.y + b.h >= rect.y;
+}
+
 /** Topmost hit (reverse creation order); hidden annotations are skipped by the caller. */
 export function findAnnotationAt(annotations: DrawingAnnotation[], uv: Point, W: number, H: number, tolPt: number): DrawingAnnotation | null {
     for (let i = annotations.length - 1; i >= 0; i--) {

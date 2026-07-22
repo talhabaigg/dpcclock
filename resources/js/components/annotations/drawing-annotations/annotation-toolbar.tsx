@@ -2,7 +2,22 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolButton, ToolGroup, toolButtonClass } from '@/components/viewer-tool-rail';
 import { cn } from '@/lib/utils';
-import { Circle, Cloud, Link2, MousePointer2, MoveDiagonal, MoveUpRight, Pencil, Shapes, Signature, Slash, Spline, Square, Type } from 'lucide-react';
+import {
+    BoxSelect,
+    Circle,
+    Cloud,
+    Link2,
+    MousePointer2,
+    MoveDiagonal,
+    MoveUpRight,
+    Pencil,
+    Shapes,
+    Signature,
+    Slash,
+    Spline,
+    Square,
+    Type,
+} from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 import { ANNOTATION_COLORS } from '../photo-annotations';
 import type { AnnotationTool } from './types';
@@ -170,6 +185,17 @@ export function AnnotationToolGroups({ api, layout }: { api: AnnotationLayerApi;
             >
                 <MousePointer2 className="h-4 w-4" />
             </ToolButton>
+
+            {/* Drag-select multi-select */}
+            {api.canEdit && (
+                <ToolButton
+                    title="Drag select (drag a box around annotations, then delete)"
+                    active={api.tool === 'lasso'}
+                    onClick={() => api.setTool(api.tool === 'lasso' ? null : 'lasso')}
+                >
+                    <BoxSelect className="h-4 w-4" />
+                </ToolButton>
+            )}
         </ToolGroup>
     );
 }
