@@ -170,6 +170,12 @@ export type ViewerPin = {
 export type ViewControls = {
     zoomBy: (factor: number) => void;
     fitToScreen: () => void;
+    /**
+     * Centre the viewport on a point in PDF user space (points, origin
+     * bottom-left — the same basis measurements and detected changes use).
+     * `scale` is an absolute zoom level, clamped to the viewer's limits.
+     */
+    centerOn: (x: number, y: number, scale?: number) => void;
 };
 
 export type DrawingControls = {
@@ -1740,10 +1746,35 @@ export function PixiDrawingViewer({
         window.setTimeout(() => maybeRerasterize(), 100);
     }, [pdfDims, computeFitScale, onZoomChange, maybeRerasterize]);
 
+    // Jump the viewport to a PDF-space point. Callers work in PDF user space
+    // (y up from the bottom-left); the world container is y-down over the
+    // rasterized page, hence the flip.
+    const centerOn = useCallback(
+        (x: number, y: number, scale?: number) => {
+            const app = appRef.current;
+            const world = worldRef.current;
+            if (!app || !world || !pdfDims) return;
+
+            const minScale = minScaleRef.current;
+            const target = Math.max(minScale, Math.min(MAX_SCALE, scale ?? world.scale.x));
+
+            const worldX = x;
+            const worldY = pdfDims.height - y;
+
+            world.scale.set(target);
+            world.position.set(app.screen.width / 2 - worldX * target, app.screen.height / 2 - worldY * target);
+
+            setZoomDisplay(target);
+            onZoomChange?.(target);
+            window.setTimeout(() => maybeRerasterize(), 100);
+        },
+        [pdfDims, onZoomChange, maybeRerasterize],
+    );
+
     // Hand zoom/fit controls to the parent so it can render its own toolbar.
     useEffect(() => {
-        onViewControlsChange?.({ zoomBy: zoomByFactor, fitToScreen });
-    }, [onViewControlsChange, zoomByFactor, fitToScreen]);
+        onViewControlsChange?.({ zoomBy: zoomByFactor, fitToScreen, centerOn });
+    }, [onViewControlsChange, zoomByFactor, fitToScreen, centerOn]);
 
     // Keep minScaleRef in sync with the current viewport. If a resize would
     // make the current zoom smaller than the new minimum, snap up to fit.

@@ -22,6 +22,7 @@ use App\Http\Controllers\DailyPrestartController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardLayoutController;
 use App\Http\Controllers\DocumentTemplateController;
+use App\Http\Controllers\DrawingComparisonController;
 use App\Http\Controllers\DrawingController;
 use App\Http\Controllers\DrawingMeasurementController;
 use App\Http\Controllers\DrawingObservationController;
@@ -1311,6 +1312,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/drawings/{drawing}/revisions', [DrawingController::class, 'getRevisions'])->name('drawings.revisions');
         Route::get('/drawings/{drawing}/annotations', [AnnotationController::class, 'index'])->name('drawings.annotations.index');
         Route::get('/projects/{project}/drawings/link-targets', [AnnotationController::class, 'linkTargets'])->name('drawings.link-targets');
+        // Revision change detection. `show` reads the cache (viewer polls it
+        // while an analysis runs); `analyze` starts one for a revision pair.
+        Route::get('/drawings/{drawing}/comparison', [DrawingComparisonController::class, 'show'])->name('drawings.comparison.show');
+        Route::post('/drawings/{drawing}/comparison', [DrawingComparisonController::class, 'analyze'])->name('drawings.comparison.analyze');
     });
     Route::middleware('permission:drawings.create')->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');

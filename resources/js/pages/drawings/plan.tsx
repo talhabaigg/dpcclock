@@ -1,6 +1,7 @@
 import { AnnotationOverlayUi } from '@/components/annotations/drawing-annotations/annotation-overlay-ui';
 import type { LayerDef } from '@/components/annotations/drawing-annotations/layers-panel';
 import { useAnnotationLayer } from '@/components/annotations/drawing-annotations/use-annotation-layer';
+import { ChangeDetectionPanel } from '@/components/drawings/change-detection-panel';
 import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
 import { PlanVersionControl, type PlanOption } from '@/components/plan-version-control';
@@ -226,6 +227,19 @@ export default function DrawingPlan() {
                     <div className="bg-destructive text-destructive-foreground absolute top-14 right-3 z-10 max-w-sm rounded-md px-3 py-2 text-xs shadow-sm">
                         Comparison could not be rendered: {comparisonError}
                     </div>
+                )}
+                {comparison && !comparisonError && (
+                    <ChangeDetectionPanel
+                        drawingId={comparison.new.id}
+                        oldDrawingId={comparison.old.id}
+                        // Detected changes carry PDF-point coordinates, so the
+                        // viewer can jump straight to one. Zoom in far enough to
+                        // read the affected text rather than just centring it.
+                        onLocate={(item) => {
+                            if (item.x === null || item.y === null) return;
+                            viewControls?.centerOn(item.x, item.y, 3);
+                        }}
+                    />
                 )}
                 {pinMode && (
                     <div className="bg-primary/90 text-primary-foreground pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded px-3 py-1 text-[11px] shadow">
