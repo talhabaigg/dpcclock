@@ -30,10 +30,19 @@ namespace App\Services\Drawings;
  */
 class DrawingRasterDiffService
 {
-    /** Width in pixels the sheet is normalised to before comparison. */
-    private const RASTER_WIDTH = 1400;
+    /**
+     * Width in pixels the sheet is normalised to before comparison.
+     *
+     * Sized against what has to be visible, not against speed. At 1400px an A1
+     * sheet renders at 0.6mm per pixel, so a partition line is thinner than a
+     * pixel and a 100mm wall relocation moves it 1.7px — inside a single cell,
+     * which is why real wall changes were being missed entirely. At 2800px the
+     * same move is 3.3px and clears the threshold. The extra cost is about half
+     * a second of arithmetic.
+     */
+    private const RASTER_WIDTH = 2800;
 
-    /** Cell edge in pixels. At A1/1400px this is roughly 14mm on the sheet. */
+    /** Cell edge in pixels. At A1/2800px this is roughly 2.4mm on the sheet. */
     private const CELL = 8;
 
     /** Luminance below which a pixel counts as ink (0-255). */
@@ -43,16 +52,52 @@ class DrawingRasterDiffService
     private const MAX_SHIFT = 24;
 
     /** Minimum absolute ink-pixel change before a cell is considered changed. */
-    private const MIN_DELTA = 6;
+    private const MIN_DELTA = 4;
 
     /** Minimum change as a fraction of the cell's ink, so dense hatching is stable. */
-    private const RATIO = 0.35;
+    private const RATIO = 0.22;
 
     /** Components smaller than this are antialiasing artefacts, not changes. */
     private const MIN_CELLS = 3;
 
     /** Boxes closer than this (px) describe one change and are merged. */
-    private const MERGE_GAP = 28;
+    private const MERGE_GAP = 14;
+
+    /**
+     * Largest edge, in pixels, a merged region is allowed to reach.
+     *
+     * Without this, merging runs away on a heavily revised sheet: 88 components
+     * fused into 11 regions each covering a large part of the drawing. A region
+     * that big is useless downstream — cropping it hands the vision model a
+     * zoomed-out view where nothing is legible, which is exactly why its
+     * descriptions came back vague. A merge that would exceed this is refused,
+     * so regions stay at a size a person (or a model) can actually read.
+     */
+    private const MAX_REGION_EDGE = 420;
+
+    /**
+     * Erosion radius, in pixels at WALL_DENSITY, used to isolate heavy strokes.
+     *
+     * Architectural drawings encode meaning in line weight: walls are drawn
+     * heavy while dimensions, leaders, hatching, tags and text are thin.
+     * Eroding a binary ink mask by this much destroys everything thinner and
+     * leaves wall geometry standing. Verified visually at 300 DPI on a tower
+     * setout sheet - text, room tags, stair treads and hatching all disappear,
+     * partitions stay crisp.
+     */
+    private const WALL_ERODE = 2.5;
+
+    /** Render density the erosion is performed at, in DPI. */
+    private const WALL_DENSITY = 300;
+
+    /**
+     * Wall geometry is sparse compared with a full-ink sheet, so a change of a
+     * few pixels in a cell is already meaningful and the relative floor has to
+     * come down or genuine wall moves fall under it.
+     */
+    private const WALL_MIN_DELTA = 3;
+
+    private const WALL_RATIO = 0.12;
 
     public function __construct(private readonly DrawingRasterizer $rasterizer) {}
 
@@ -68,7 +113,7 @@ class DrawingRasterDiffService
      * @param  float  $pageHeight  page box height in points
      * @return array{regions: list<array{x: float, y: float, w: float, h: float, cells: int}>, offset: array{0: int, 1: int}}|null
      */
-    public function diff(string $oldPdfPath, string $newPdfPath, float $pageWidth, float $pageHeight): ?array
+    public function diff(string $oldPdfPath, string $newPdfPath, float $pageWidth, float $pageHeight, bool $wallsOnly = false): ?array
     {
         if ($pageWidth <= 0 || $pageHeight <= 0) {
             return null;
@@ -77,8 +122,11 @@ class DrawingRasterDiffService
         $width = self::RASTER_WIDTH;
         $height = (int) max(1, round($width * ($pageHeight / $pageWidth)));
 
-        $old = $this->rasterizer->render($oldPdfPath, $width, $height);
-        $new = $this->rasterizer->render($newPdfPath, $width, $height);
+        $density = $wallsOnly ? self::WALL_DENSITY : 100;
+        $erode = $wallsOnly ? self::WALL_ERODE : null;
+
+        $old = $this->rasterizer->render($oldPdfPath, $width, $height, $density, $erode);
+        $new = $this->rasterizer->render($newPdfPath, $width, $height, $density, $erode);
 
         if ($old === null || $new === null) {
             return null;
@@ -89,7 +137,7 @@ class DrawingRasterDiffService
 
         [$dx, $dy] = $this->register($oldInk, $newInk, $width, $height);
 
-        $regions = $this->regions($oldInk, $newInk, $width, $height, $dx, $dy);
+        $regions = $this->regions($oldInk, $newInk, $width, $height, $dx, $dy, $wallsOnly);
 
         // Raster space maps linearly onto the real page box, so unlike the text
         // layer these coordinates are always true page positions.
@@ -224,8 +272,11 @@ class DrawingRasterDiffService
      *
      * @return list<array{cells: int, x0: int, y0: int, x1: int, y1: int}>
      */
-    private function regions(string $oldInk, string $newInk, int $width, int $height, int $dx, int $dy): array
+    private function regions(string $oldInk, string $newInk, int $width, int $height, int $dx, int $dy, bool $wallsOnly = false): array
     {
+        $minDelta = $wallsOnly ? self::WALL_MIN_DELTA : self::MIN_DELTA;
+        $ratio = $wallsOnly ? self::WALL_RATIO : self::RATIO;
+
         $cellsWide = (int) ceil($width / self::CELL);
         $cellsHigh = (int) ceil($height / self::CELL);
         $total = $cellsWide * $cellsHigh;
@@ -265,7 +316,7 @@ class DrawingRasterDiffService
             $delta = abs($newCount[$cell] - $oldCount[$cell]);
             $peak = max($newCount[$cell], $oldCount[$cell]);
 
-            if ($delta >= self::MIN_DELTA && $delta >= self::RATIO * $peak) {
+            if ($delta >= $minDelta && $delta >= $ratio * $peak) {
                 $changed[$cell] = true;
             }
         }
@@ -277,7 +328,62 @@ class DrawingRasterDiffService
             fn (array $c) => $c['cells'] >= self::MIN_CELLS,
         ));
 
-        return $this->mergeNearby($components);
+        return $this->splitOversized($this->mergeNearby($components));
+    }
+
+    /**
+     * Break regions larger than the readable cap into a grid of tiles.
+     *
+     * Refusing to merge past the cap is not enough on its own: a single
+     * contiguous change — a whole new detail block dropped onto a blank part of
+     * the sheet — arrives as one component already larger than the cap. Cropping
+     * it whole produces an image too zoomed-out to read, so it is tiled into
+     * pieces that each fit. The change is not lost, it is just reported at a
+     * scale someone can actually look at.
+     *
+     * @param  list<array{cells: int, x0: int, y0: int, x1: int, y1: int}>  $components
+     * @return list<array{cells: int, x0: int, y0: int, x1: int, y1: int}>
+     */
+    private function splitOversized(array $components): array
+    {
+        $out = [];
+
+        foreach ($components as $component) {
+            $width = $component['x1'] - $component['x0'];
+            $height = $component['y1'] - $component['y0'];
+
+            if ($width <= self::MAX_REGION_EDGE && $height <= self::MAX_REGION_EDGE) {
+                $out[] = $component;
+
+                continue;
+            }
+
+            $cols = (int) ceil($width / self::MAX_REGION_EDGE);
+            $rows = (int) ceil($height / self::MAX_REGION_EDGE);
+            $tileWidth = (int) ceil($width / $cols);
+            $tileHeight = (int) ceil($height / $rows);
+
+            // Cells are spread evenly across the tiles rather than recounted;
+            // the count is only ever used for ordering, and re-running the
+            // flood fill per tile would cost more than the precision is worth.
+            $share = max(1, (int) round($component['cells'] / max(1, $cols * $rows)));
+
+            for ($row = 0; $row < $rows; $row++) {
+                for ($col = 0; $col < $cols; $col++) {
+                    $out[] = [
+                        'cells' => $share,
+                        'x0' => $component['x0'] + $col * $tileWidth,
+                        'y0' => $component['y0'] + $row * $tileHeight,
+                        'x1' => min($component['x1'], $component['x0'] + ($col + 1) * $tileWidth),
+                        'y1' => min($component['y1'], $component['y0'] + ($row + 1) * $tileHeight),
+                    ];
+                }
+            }
+        }
+
+        usort($out, fn (array $a, array $b) => $b['cells'] <=> $a['cells']);
+
+        return array_values($out);
     }
 
     /**
@@ -368,6 +474,14 @@ class DrawingRasterDiffService
                     $gapY = max(0, max($a['y0'], $b['y0']) - min($a['y1'], $b['y1']));
 
                     if ($gapX > self::MERGE_GAP || $gapY > self::MERGE_GAP) {
+                        continue;
+                    }
+
+                    // Refuse a merge that would produce an unreadable region.
+                    $mergedWidth = max($a['x1'], $b['x1']) - min($a['x0'], $b['x0']);
+                    $mergedHeight = max($a['y1'], $b['y1']) - min($a['y0'], $b['y0']);
+
+                    if ($mergedWidth > self::MAX_REGION_EDGE || $mergedHeight > self::MAX_REGION_EDGE) {
                         continue;
                     }
 

@@ -29,7 +29,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 4;
+    public const PIPELINE_VERSION = 6;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -307,7 +307,13 @@ class DrawingComparisonService
         }
 
         try {
-            $result = $this->rasterDiffer->diff($old->path, $new->path, $pageBox[0], $pageBox[1]);
+            $result = $this->rasterDiffer->diff(
+                $old->path,
+                $new->path,
+                $pageBox[0],
+                $pageBox[1],
+                (bool) config('drawings.comparison.walls_only', true),
+            );
         } catch (\Throwable $e) {
             Log::warning('Raster comparison failed; keeping text results', ['error' => $e->getMessage()]);
 

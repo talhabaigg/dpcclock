@@ -24,7 +24,7 @@ class DrawingRasterizer
      *
      * @return array{data: string, width: int, height: int}|null
      */
-    public function render(string $pdfPath, int $targetWidth, int $targetHeight, int $density = 100): ?array
+    public function render(string $pdfPath, int $targetWidth, int $targetHeight, int $density = 100, ?float $erode = null): ?array
     {
         $binary = $this->findMagick();
 
@@ -36,22 +36,46 @@ class DrawingRasterizer
 
         $output = tempnam(sys_get_temp_dir(), 'drawraster_');
 
+        $command = [
+            $binary,
+            '-density', (string) $density,
+            $pdfPath.'[0]',
+            '-colorspace', 'gray',
+            // Flatten transparency to white; without this an alpha channel
+            // renders as black and the whole sheet reads as solid ink.
+            '-alpha', 'remove',
+            '-alpha', 'off',
+        ];
+
+        if ($erode !== null) {
+            // Stroke-weight filter. Architectural drawings carry their meaning
+            // in line weight: walls are drawn heavy, while dimensions, leaders,
+            // hatching, tags and text are thin. Eroding a binary ink mask
+            // destroys anything thinner than the structuring element and leaves
+            // the heavy strokes standing, so what survives is essentially the
+            // wall geometry alone.
+            //
+            // This must happen at full render resolution — erosion at the
+            // downsampled size would eat the walls too — hence the resize after.
+            array_push($command,
+                '-threshold', '70%',
+                // Erosion shrinks white; ink has to be white for the pass.
+                '-negate',
+                '-morphology', 'Erode', 'Disk:'.$erode,
+                '-negate',
+            );
+        }
+
+        array_push($command,
+            // "!" forces the exact geometry, so the byte count is known and
+            // both revisions land on identical grids.
+            '-resize', "{$targetWidth}x{$targetHeight}!",
+            '-depth', '8',
+            'gray:'.$output,
+        );
+
         try {
-            $result = Process::timeout(120)->run([
-                $binary,
-                '-density', (string) $density,
-                $pdfPath.'[0]',
-                '-colorspace', 'gray',
-                // Flatten transparency to white; without this an alpha channel
-                // renders as black and the whole sheet reads as solid ink.
-                '-alpha', 'remove',
-                '-alpha', 'off',
-                // "!" forces the exact geometry, so the byte count is known and
-                // both revisions land on identical grids.
-                '-resize', "{$targetWidth}x{$targetHeight}!",
-                '-depth', '8',
-                'gray:'.$output,
-            ]);
+            $result = Process::timeout(300)->run($command);
 
             if (! $result->successful()) {
                 Log::warning('PDF rasterization failed', [

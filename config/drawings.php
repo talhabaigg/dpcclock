@@ -55,6 +55,13 @@ return [
         // "changed area" row so nothing is lost, just not described.
         'max_regions_for_vision' => env('DRAWING_COMPARISON_MAX_REGIONS', 25),
 
+        // Restrict geometry detection to heavy line work (walls) by filtering
+        // the raster on stroke weight before diffing. Architectural drawings
+        // encode meaning in line weight, so this isolates partitions from the
+        // dimensions, tags, hatching and text that otherwise dominate the
+        // result. Turn off to detect every geometry change regardless of weight.
+        'walls_only' => env('DRAWING_COMPARISON_WALLS_ONLY', true),
+
         // Explicit path to the ImageMagick binary. Leave null to discover
         // `magick` (v7) or `convert` (v6) on PATH.
         'magick_path' => env('DRAWING_COMPARISON_MAGICK_PATH'),
