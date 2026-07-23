@@ -100,7 +100,20 @@ const SIGNIFICANCE_LABEL: Record<string, string> = {
     none: 'Not ranked',
 };
 
+/**
+ * Only the two groups worth a decision are shown by default.
+ *
+ * On a heavily revised sheet the other two are the overwhelming majority and
+ * almost never why anyone opened this. They stay reachable rather than
+ * discarded — "not ranked" in particular means unassessed, not unimportant.
+ */
 const GROUP_ORDER = ['high', 'medium', 'low', 'none'] as const;
+
+const PRIMARY_GROUPS = ['high', 'medium'] as const;
+
+function isPrimary(item: ChangeItem): boolean {
+    return item.significance === 'high' || item.significance === 'medium';
+}
 
 function changeTypeLabel(item: ChangeItem): string {
     switch (item.change_type) {
@@ -143,7 +156,7 @@ export function ChangeDetectionPanel({
     const [loading, setLoading] = useState(true);
     const [starting, setStarting] = useState(false);
     const [open, setOpen] = useState(true);
-    const [showLow, setShowLow] = useState(false);
+    const [showAll, setShowAll] = useState(false);
     const [clouding, setClouding] = useState(false);
     const [showSummary, setShowSummary] = useState(false);
     const [listTab, setListTab] = useState('geometry');
@@ -203,7 +216,7 @@ export function ChangeDetectionPanel({
             setResult(res.comparison);
             // A re-run clears the old rows, so drop any view state that
             // referred to them.
-            setShowLow(false);
+            setShowAll(false);
             setReviewing(false);
             setReviewIndex(0);
         } catch {
@@ -279,11 +292,13 @@ export function ChangeDetectionPanel({
     // ahead of text, so priority is automatic rather than something the
     // reviewer has to impose. Decided cards keep their place so Previous can
     // reach them — second thoughts are the usual reason to go back.
-    const queue = [...all].sort((a, b) => {
-        const bySig = rank(a) - rank(b);
-        if (bySig !== 0) return bySig;
-        return (a.source === 'raster' ? 0 : 1) - (b.source === 'raster' ? 0 : 1);
-    });
+    const queue = [...all]
+        .filter((item) => showAll || isPrimary(item))
+        .sort((a, b) => {
+            const bySig = rank(a) - rank(b);
+            if (bySig !== 0) return bySig;
+            return (a.source === 'raster' ? 0 : 1) - (b.source === 'raster' ? 0 : 1);
+        });
 
     const undecided = queue.filter((item) => item.triage_status === null).length;
     const reviewed = queue.length - undecided;
@@ -291,12 +306,12 @@ export function ChangeDetectionPanel({
 
     queueRef.current = queue;
 
-    const visualRanked = [...visual].sort(bySignificance);
-    const textRanked = [...textual].sort(bySignificance);
-    // Drafting-only rows stay behind a toggle: they are the bulk on most
-    // sheets and almost never the reason someone opened this.
-    const textVisible = showLow ? textRanked : textRanked.filter((item) => item.significance !== 'low');
-    const hiddenLowCount = textRanked.length - textVisible.length;
+    const visualAll = [...visual].sort(bySignificance);
+    const textAll = [...textual].sort(bySignificance);
+
+    const visualRanked = showAll ? visualAll : visualAll.filter(isPrimary);
+    const textVisible = showAll ? textAll : textAll.filter(isPrimary);
+    const hiddenCount = visualAll.length + textAll.length - visualRanked.length - textVisible.length;
     // Only changes that are both ranked worth seeing and actually locatable can
     // become clouds — the rest have nowhere trustworthy to draw.
     const cloudable = all.filter((item) => item.locatable && (item.significance === 'high' || item.significance === 'medium')).length;
@@ -449,7 +464,7 @@ export function ChangeDetectionPanel({
                                             Geometry ({visualRanked.length})
                                         </TabsTrigger>
                                         <TabsTrigger value="text" className="flex-1 text-xs">
-                                            Text ({textRanked.length})
+                                            Text ({textVisible.length})
                                         </TabsTrigger>
                                     </TabsList>
 
@@ -457,7 +472,7 @@ export function ChangeDetectionPanel({
                                         {visualRanked.length === 0 && (
                                             <p className="text-muted-foreground py-2 text-center text-xs">No geometry changes found.</p>
                                         )}
-                                        {GROUP_ORDER.map((level) => {
+                                        {(showAll ? GROUP_ORDER : PRIMARY_GROUPS).map((level) => {
                                             const group = visualRanked.filter((item) => (item.significance ?? 'none') === level);
                                             if (group.length === 0) return null;
 
@@ -478,7 +493,7 @@ export function ChangeDetectionPanel({
                                         {textVisible.length === 0 && (
                                             <p className="text-muted-foreground py-2 text-center text-xs">No text changes found.</p>
                                         )}
-                                        {GROUP_ORDER.map((level) => {
+                                        {(showAll ? GROUP_ORDER : PRIMARY_GROUPS).map((level) => {
                                             const group = textVisible.filter((item) => (item.significance ?? 'none') === level);
                                             if (group.length === 0) return null;
 
@@ -493,19 +508,14 @@ export function ChangeDetectionPanel({
                                                 </div>
                                             );
                                         })}
-                                        {hiddenLowCount > 0 && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-7 w-full text-xs"
-                                                onClick={() => setShowLow(true)}
-                                            >
-                                                Show {hiddenLowCount} drafting-only change{hiddenLowCount === 1 ? '' : 's'}
-                                            </Button>
-                                        )}
                                     </TabsContent>
                                 </Tabs>
+                            )}
+
+                            {!reviewing && hiddenCount > 0 && (
+                                <Button type="button" size="sm" variant="ghost" className="h-7 w-full text-xs" onClick={() => setShowAll(true)}>
+                                    Show {hiddenCount} drafting-only and unassessed change{hiddenCount === 1 ? '' : 's'}
+                                </Button>
                             )}
 
                             {!reviewing && canCloud && cloudable > 0 && (
@@ -584,12 +594,6 @@ export function ChangeDetectionPanel({
                                     disabled={clouding}
                                 >
                                     {clouding ? 'Clouding…' : `Cloud ${cloudable} change${cloudable === 1 ? '' : 's'} on the drawing`}
-                                </Button>
-                            )}
-
-                            {!reviewing && hiddenLowCount > 0 && (
-                                <Button type="button" size="sm" variant="ghost" className="h-7 w-full text-xs" onClick={() => setShowLow(true)}>
-                                    Show {hiddenLowCount} drafting-only {hiddenLowCount === 1 ? 'change' : 'changes'}
                                 </Button>
                             )}
                         </div>
