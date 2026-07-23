@@ -1322,6 +1322,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/projects/{project}/drawings', [DrawingController::class, 'store'])->name('drawings.store');
         Route::patch('/drawings/{drawing}', [DrawingController::class, 'update'])->name('drawings.update');
         Route::post('/drawings/{drawing}/annotations', [AnnotationController::class, 'store'])->name('drawings.annotations.store');
+        // Writes annotations, so it sits with drawings.create rather than view.
+        Route::post('/drawings/{drawing}/comparison/clouds', [DrawingComparisonController::class, 'cloud'])->name('drawings.comparison.cloud');
         Route::patch('/annotations/{annotation}', [AnnotationController::class, 'update'])->name('annotations.update');
         Route::delete('/annotations/{annotation}', [AnnotationController::class, 'destroy'])->name('annotations.destroy');
 

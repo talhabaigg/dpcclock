@@ -244,6 +244,10 @@ export default function DrawingPlan() {
                             const scale = w > 0 && h > 0 ? Math.min(6, Math.max(1.5, 500 / Math.max(w, h))) : 3;
                             viewControls?.centerOn(item.x + w / 2, item.y + h / 2, scale);
                         }}
+                        canCloud={canAnnotate}
+                        // Clouds are written straight to the annotation table,
+                        // so the layer has to refetch to show them.
+                        onClouded={() => void ann.reload?.()}
                     />
                 )}
                 {pinMode && (

@@ -107,10 +107,14 @@ export function ChangeDetectionPanel({
     drawingId,
     oldDrawingId,
     onLocate,
+    canCloud = false,
+    onClouded,
 }: {
     drawingId: number;
     oldDrawingId: number;
     onLocate?: (item: ChangeItem) => void;
+    canCloud?: boolean;
+    onClouded?: () => void;
 }) {
     const [result, setResult] = useState<ComparisonResult | null>(null);
     const [loading, setLoading] = useState(true);
@@ -118,6 +122,7 @@ export function ChangeDetectionPanel({
     const [open, setOpen] = useState(true);
     const [showLow, setShowLow] = useState(false);
     const [showAllUnranked, setShowAllUnranked] = useState(false);
+    const [clouding, setClouding] = useState(false);
 
     // Cleared on unmount so a poll can't fire against a torn-down component.
     const pollRef = useRef<number | null>(null);
@@ -170,6 +175,21 @@ export function ChangeDetectionPanel({
         }
     };
 
+    const cloudChanges = async () => {
+        setClouding(true);
+        try {
+            const res = await api.post<{ message: string; created: number }>(`/drawings/${drawingId}/comparison/clouds`, {
+                compare_old: oldDrawingId,
+            });
+            toast.success(res.message);
+            if (res.created > 0) onClouded?.();
+        } catch {
+            toast.error('Could not cloud the changes');
+        } finally {
+            setClouding(false);
+        }
+    };
+
     const running = result?.status === 'pending' || result?.status === 'running';
     const all = result?.items ?? [];
 
@@ -189,6 +209,9 @@ export function ChangeDetectionPanel({
     // failed. Showing hundreds of them unbounded is what made this panel
     // unusable, so only a sample renders until asked for the rest.
     const unrankedShown = showAllUnranked ? unranked : unranked.slice(0, UNRANKED_PREVIEW);
+    // Only changes that are both ranked worth seeing and actually locatable can
+    // become clouds — the rest have nowhere trustworthy to draw.
+    const cloudable = all.filter((item) => item.locatable && (item.significance === 'high' || item.significance === 'medium')).length;
 
     return (
         <div className="bg-background/95 absolute top-16 right-3 z-10 flex max-h-[calc(100%-5rem)] w-[22rem] flex-col rounded-md border shadow-sm backdrop-blur">
@@ -326,6 +349,19 @@ export function ChangeDetectionPanel({
                                         <RegionRow key={region.id} region={region} index={index + 1} onLocate={onLocate} />
                                     ))}
                                 </div>
+                            )}
+
+                            {canCloud && cloudable > 0 && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => void cloudChanges()}
+                                    disabled={clouding}
+                                >
+                                    {clouding ? 'Clouding…' : `Cloud ${cloudable} change${cloudable === 1 ? '' : 's'} on the drawing`}
+                                </Button>
                             )}
 
                             {hiddenLowCount > 0 && (

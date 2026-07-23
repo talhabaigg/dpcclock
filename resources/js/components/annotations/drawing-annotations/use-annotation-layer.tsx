@@ -91,6 +91,8 @@ export type AnnotationUiState = {
 export type AnnotationLayerApi = {
     overlay: ViewerOverlay;
     annotations: DrawingAnnotation[];
+    /** Refetch from the server, for callers that write annotations out-of-band. */
+    reload: () => Promise<void>;
     // toolbar state
     tool: AnnotationTool | null;
     setTool: (t: AnnotationTool | null) => void;
@@ -262,7 +264,6 @@ export function useAnnotationLayer({
     // Redraw when any render-relevant state changes.
     useEffect(() => {
         redraw();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [annotations, selectedIds, layerVisible, hiddenColors, linksVisible]);
 
     // ── Selection chip anchoring ──────────────────────────────────────────
@@ -293,20 +294,21 @@ export function useAnnotationLayer({
 
     // ── Persistence ───────────────────────────────────────────────────────
 
-    useEffect(() => {
+    // Exposed so callers that write annotations server-side (clouding detected
+    // revision changes) can pull them in without a page reload.
+    const reload = useCallback(async () => {
         if (!enabled) return;
-        let cancelled = false;
-        api.get<{ annotations: AnnotationDto[] }>(`/drawings/${drawingId}/annotations`)
-            .then((res) => {
-                if (!cancelled) setAnnotations(res.annotations.map(fromDto));
-            })
-            .catch(() => {
-                if (!cancelled) toast.error('Failed to load annotations');
-            });
-        return () => {
-            cancelled = true;
-        };
+        try {
+            const res = await api.get<{ annotations: AnnotationDto[] }>(`/drawings/${drawingId}/annotations`);
+            setAnnotations(res.annotations.map(fromDto));
+        } catch {
+            toast.error('Failed to load annotations');
+        }
     }, [drawingId, enabled]);
+
+    useEffect(() => {
+        void reload();
+    }, [reload]);
 
     const createAnnotation = useCallback(
         (a: Omit<DrawingAnnotation, 'id'>) => {
@@ -947,6 +949,7 @@ export function useAnnotationLayer({
 
     return {
         overlay,
+        reload,
         annotations,
         tool,
         setTool,

@@ -29,7 +29,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 3;
+    public const PIPELINE_VERSION = 4;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -162,7 +162,7 @@ class DrawingComparisonService
 
             $interpretation = $this->interpret($changes, $titleBlock, $regions, $textComparable);
 
-            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable, $vision);
+            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable, $vision, $pageBox);
 
             return $comparison->fresh(['items']);
         } catch (\Throwable $e) {
@@ -576,6 +576,7 @@ class DrawingComparisonService
         bool $textLocatable = false,
         bool $textComparable = true,
         array $vision = [],
+        ?array $pageBox = null,
     ): void {
         $structured = $interpretation['structured'] ?? [];
 
@@ -588,7 +589,7 @@ class DrawingComparisonService
             }
         }
 
-        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable, $textComparable, $vision) {
+        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable, $textComparable, $vision, $pageBox) {
             $comparison->items()->delete();
 
             $high = 0;
@@ -695,6 +696,8 @@ class DrawingComparisonService
                 'coordinates_reliable' => $textLocatable,
                 'pipeline_version' => self::PIPELINE_VERSION,
                 'text_comparable' => $textComparable,
+                'page_width' => $pageBox[0] ?? null,
+                'page_height' => $pageBox[1] ?? null,
                 'summary' => $structured['summary'] ?? $this->fallbackSummary($changes, count($regions)),
                 'revision_notes' => $structured['revision_notes'] ?? [],
                 'changes_total' => count($changes) + count($regions),
