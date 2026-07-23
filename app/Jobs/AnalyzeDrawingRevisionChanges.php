@@ -26,13 +26,18 @@ class AnalyzeDrawingRevisionChanges implements ShouldBeUnique, ShouldQueue
 
     public int $backoff = 30;
 
-    public int $timeout = 300;
+    /**
+     * The vision pass reads regions one at a time, so a heavily revised sheet
+     * legitimately runs for several minutes — an observed 13-region sheet took
+     * ~3.5. Timing out mid-run wastes every model call already paid for.
+     */
+    public int $timeout = 1800;
 
     /**
      * Lock lifetime. Comfortably longer than the job timeout so a hard kill
      * cannot leave the pair locked indefinitely.
      */
-    public int $uniqueFor = 600;
+    public int $uniqueFor = 2400;
 
     public function __construct(public int $comparisonId)
     {

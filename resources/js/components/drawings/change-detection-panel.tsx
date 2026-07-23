@@ -173,11 +173,12 @@ export function ChangeDetectionPanel({
     const running = result?.status === 'pending' || result?.status === 'running';
     const all = result?.items ?? [];
 
-    // Two detectors, two kinds of row. Text changes carry an exact before/after
-    // and a ranking; geometry regions are places on the sheet where line work
-    // changed, with nothing yet claimed about what changed there.
-    const items = all.filter((item) => item.source !== 'raster');
-    const regions = all.filter((item) => item.source === 'raster');
+    // Rows are grouped by what is known about them, not by which detector
+    // found them. A geometry region the vision pass read is a described,
+    // ranked change and belongs beside the text changes; one it could not read
+    // is only a place to go and look, and is listed separately.
+    const items = all.filter((item) => item.source !== 'raster' || item.description !== null);
+    const regions = all.filter((item) => item.source === 'raster' && item.description === null);
 
     const visible = showLow ? items : items.filter((item) => item.significance !== 'low');
     const hiddenLowCount = items.length - visible.length;
@@ -319,7 +320,7 @@ export function ChangeDetectionPanel({
                                         Changed areas ({regions.length})
                                     </p>
                                     <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                        Line work changed here. Nothing has read these yet — open each to see what it is.
+                                        Line work changed here, but it could not be read reliably — open each to see what it is.
                                     </p>
                                     {regions.map((region, index) => (
                                         <RegionRow key={region.id} region={region} index={index + 1} onLocate={onLocate} />
@@ -386,6 +387,11 @@ function ChangeRow({ item, onLocate }: { item: ChangeItem; onLocate?: (item: Cha
                     {changeTypeLabel(item)}
                 </Badge>
                 {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
+                {item.source === 'raster' && (
+                    <Badge variant="outline" className="ml-auto h-4 shrink-0 px-1.5 text-[10px]" title="Read from the drawing image">
+                        visual
+                    </Badge>
+                )}
             </span>
 
             <span className="mt-1 block leading-snug">{item.description ?? describeRaw(item)}</span>

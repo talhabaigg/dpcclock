@@ -29,7 +29,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 2;
+    public const PIPELINE_VERSION = 3;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -43,11 +43,19 @@ class DrawingComparisonService
      */
     private const TOKENISATION_TOLERANCE = 1.25;
 
+    /**
+     * Below this, a vision read is recorded but its description is discarded.
+     * A guess presented in the same voice as a confident reading is worse than
+     * no description at all.
+     */
+    private const MIN_VISION_CONFIDENCE = 0.4;
+
     public function __construct(
         private readonly PdfTextExtractor $extractor,
         private readonly DrawingTextDiffService $differ,
         private readonly DrawingRasterDiffService $rasterDiffer,
         private readonly DrawingRasterizer $rasterizer,
+        private readonly DrawingRegionVisionService $vision,
     ) {}
 
     /**
@@ -147,9 +155,14 @@ class DrawingComparisonService
                 ]);
             }
 
-            $interpretation = $this->interpret($changes, $titleBlock, count($regions), $textComparable);
+            // Read the regions before summarising, so the roll-up can talk
+            // about what is actually in them rather than only counting them.
+            $vision = $this->describeRegions($oldSource, $newSource, $regions, $pageBox);
+            $regions = $this->applyVerdicts($regions, $vision['verdicts']);
 
-            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable);
+            $interpretation = $this->interpret($changes, $titleBlock, $regions, $textComparable);
+
+            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable, $vision);
 
             return $comparison->fresh(['items']);
         } catch (\Throwable $e) {
@@ -168,6 +181,73 @@ class DrawingComparisonService
             $oldSource?->close();
             $newSource?->close();
         }
+    }
+
+    /**
+     * Read the detected regions with the vision pass. Never fatal — a region
+     * with no verdict keeps its factual "changed area" row.
+     *
+     * @param  list<array<string, mixed>>  $regions
+     * @return array{verdicts: array<int, array<string, mixed>>, input_tokens: int, output_tokens: int}
+     */
+    private function describeRegions(
+        DrawingSourceFile $old,
+        DrawingSourceFile $new,
+        array $regions,
+        ?array $pageBox,
+    ): array {
+        $empty = ['verdicts' => [], 'input_tokens' => 0, 'output_tokens' => 0];
+
+        if ($regions === [] || $pageBox === null || ! $this->vision->isAvailable()) {
+            return $empty;
+        }
+
+        try {
+            return $this->vision->describe($old->path, $new->path, $regions, $pageBox[0], $pageBox[1]);
+        } catch (\Throwable $e) {
+            Log::warning('Region vision pass failed; keeping undescribed regions', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $empty;
+        }
+    }
+
+    /**
+     * Fold vision verdicts back onto their regions.
+     *
+     * @param  list<array<string, mixed>>  $regions
+     * @param  array<int, array<string, mixed>>  $verdicts
+     * @return list<array<string, mixed>>
+     */
+    private function applyVerdicts(array $regions, array $verdicts): array
+    {
+        foreach ($verdicts as $index => $verdict) {
+            if (! isset($regions[$index])) {
+                continue;
+            }
+
+            // A read the model itself flagged as barely legible is worse than
+            // silence: it reads with the same authority as a confident one.
+            // Keep the row, drop the claim.
+            $confidence = isset($verdict['confidence']) ? (float) $verdict['confidence'] : 0.0;
+
+            if ($confidence < self::MIN_VISION_CONFIDENCE) {
+                $regions[$index]['confidence'] = $confidence;
+
+                continue;
+            }
+
+            $regions[$index] = array_merge($regions[$index], [
+                'element' => $verdict['element'] ?? null,
+                'description' => $verdict['description'] ?? null,
+                'trade_impact' => $verdict['trade_impact'] ?? [],
+                'significance' => $verdict['significance'] ?? null,
+                'confidence' => $confidence,
+            ]);
+        }
+
+        return $regions;
     }
 
     /**
@@ -249,7 +329,7 @@ class DrawingComparisonService
      * @param  list<array<string, mixed>>  $changes
      * @return array{structured: array<string, mixed>, model: string, input_tokens: int, output_tokens: int}|null
      */
-    private function interpret(array $changes, string $titleBlock, int $regionCount, bool $textComparable): ?array
+    private function interpret(array $changes, string $titleBlock, array $regions, bool $textComparable): ?array
     {
         if (! config('drawings.comparison.enabled', true)) {
             return null;
@@ -299,7 +379,7 @@ class DrawingComparisonService
             }
         }
 
-        $summary = $this->summarise($changes, $ranked, $titleBlock, $regionCount, $textComparable, $provider, $model, $timeout);
+        $summary = $this->summarise($changes, $ranked, $titleBlock, $regions, $textComparable, $provider, $model, $timeout);
 
         if ($summary !== null) {
             $inputTokens += $summary['input_tokens'];
@@ -380,7 +460,7 @@ class DrawingComparisonService
         array $changes,
         array $ranked,
         string $titleBlock,
-        int $regionCount,
+        array $regions,
         bool $textComparable,
         Lab $provider,
         string $model,
@@ -407,12 +487,7 @@ class DrawingComparisonService
         // the size of the revision.
         $lines = array_column(array_slice($digest, 0, 60), 'line');
 
-        // Geometry regions are counted, never described - the model has not
-        // seen them, and describing unseen line work is exactly the
-        // fabrication this design exists to avoid.
-        $geometry = $regionCount > 0
-            ? "\n\nGEOMETRY REGIONS: a pixel comparison found {$regionCount} area(s) where drawn content changed. Some overlap the text changes above; others are line work with no text. You have not seen them - say only that they exist and need a visual check."
-            : '';
+        $geometry = $this->geometryBriefing($regions);
 
         $caveat = $textComparable
             ? ''
@@ -449,6 +524,44 @@ class DrawingComparisonService
     }
 
     /**
+     * What to tell the summary about the geometry regions.
+     *
+     * Regions that were read are quoted; regions that were not are counted and
+     * explicitly marked as unseen. The distinction matters — the summary is
+     * allowed to state what was read and must not invent what was not.
+     *
+     * @param  list<array<string, mixed>>  $regions
+     */
+    private function geometryBriefing(array $regions): string
+    {
+        if ($regions === []) {
+            return '';
+        }
+
+        $described = array_filter($regions, fn (array $r) => ($r['description'] ?? null) !== null);
+        $unread = count($regions) - count($described);
+
+        $briefing = "\n\nGEOMETRY REGIONS: a pixel comparison found ".count($regions).' area(s) where drawn content changed.';
+
+        if ($described !== []) {
+            $order = ['high' => 0, 'medium' => 1, 'low' => 2];
+            usort($described, fn (array $a, array $b) => ($order[$a['significance'] ?? ''] ?? 3) <=> ($order[$b['significance'] ?? ''] ?? 3));
+
+            $briefing .= " These were examined directly and are reliable:\n";
+
+            foreach (array_slice($described, 0, 20) as $region) {
+                $briefing .= sprintf("- [%s] %s\n", $region['significance'] ?? 'unranked', $region['description']);
+            }
+        }
+
+        if ($unread > 0) {
+            $briefing .= "\n{$unread} further area(s) were not examined. Say they exist and need a visual check; never describe what is in them.";
+        }
+
+        return $briefing;
+    }
+
+    /**
      * Write the diff and its interpretation, replacing any previous attempt.
      *
      * @param  list<array<string, mixed>>  $changes
@@ -462,6 +575,7 @@ class DrawingComparisonService
         ?array $interpretation,
         bool $textLocatable = false,
         bool $textComparable = true,
+        array $vision = [],
     ): void {
         $structured = $interpretation['structured'] ?? [];
 
@@ -474,7 +588,7 @@ class DrawingComparisonService
             }
         }
 
-        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable, $textComparable) {
+        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable, $textComparable, $vision) {
             $comparison->items()->delete();
 
             $high = 0;
@@ -523,6 +637,10 @@ class DrawingComparisonService
             // and a size, which is enough to go and look. Phase 3's vision pass
             // over these crops is what fills in the description.
             foreach ($regions as $region) {
+                if (($region['significance'] ?? null) === 'high') {
+                    $high++;
+                }
+
                 $rows[] = [
                     'drawing_comparison_id' => $comparison->id,
                     'source' => DrawingChangeItem::SOURCE_RASTER,
@@ -538,11 +656,16 @@ class DrawingComparisonService
                     'locatable' => true,
                     'count_old' => null,
                     'count_new' => null,
-                    'element' => 'changed area',
-                    'description' => null,
-                    'trade_impact' => null,
-                    'significance' => null,
-                    'confidence' => null,
+                    // Populated when the vision pass read this region with
+                    // enough confidence; otherwise it stays a plain, locatable
+                    // "changed area" the user can go and look at.
+                    'element' => $region['element'] ?? 'changed area',
+                    'description' => $region['description'] ?? null,
+                    'trade_impact' => isset($region['trade_impact'])
+                        ? json_encode(array_values((array) $region['trade_impact']))
+                        : null,
+                    'significance' => $region['significance'] ?? null,
+                    'confidence' => isset($region['confidence']) ? (float) $region['confidence'] : null,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
@@ -562,6 +685,9 @@ class DrawingComparisonService
             if ($regions !== []) {
                 $methods[] = 'raster';
             }
+            if (array_filter($regions, fn (array $r) => ($r['description'] ?? null) !== null) !== []) {
+                $methods[] = 'vision';
+            }
 
             $comparison->update([
                 'status' => DrawingComparison::STATUS_COMPLETE,
@@ -574,8 +700,8 @@ class DrawingComparisonService
                 'changes_total' => count($changes) + count($regions),
                 'changes_high' => $high,
                 'model' => $interpretation['model'] ?? null,
-                'input_tokens' => $interpretation['input_tokens'] ?? null,
-                'output_tokens' => $interpretation['output_tokens'] ?? null,
+                'input_tokens' => ($interpretation['input_tokens'] ?? 0) + ($vision['input_tokens'] ?? 0),
+                'output_tokens' => ($interpretation['output_tokens'] ?? 0) + ($vision['output_tokens'] ?? 0),
                 'analyzed_at' => now(),
             ]);
         });

@@ -139,6 +139,15 @@ class DrawingRasterizer
     }
 
     /**
+     * The resolved ImageMagick binary, for callers that build their own
+     * commands (region cropping).
+     */
+    public function magickBinary(): ?string
+    {
+        return $this->findMagick();
+    }
+
+    /**
      * Locate the ImageMagick binary. `magick` is v7; `convert` is the v6 name.
      */
     private function findMagick(): ?string

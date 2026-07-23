@@ -31,7 +31,7 @@ return [
         // are still stored, just without an AI description.
         'max_changes_for_ai' => env('DRAWING_COMPARISON_MAX_CHANGES', 160),
 
-        // Seconds to allow for the interpretation call.
+        // Seconds to allow for each individual model call.
         'timeout' => env('DRAWING_COMPARISON_TIMEOUT', 120),
 
         // Queue the analysis job runs on.
@@ -41,6 +41,19 @@ return [
         // cannot see — a wall that moved, a door removed without its tag
         // changing. Requires ImageMagick; degrades to text-only when absent.
         'raster_enabled' => env('DRAWING_COMPARISON_RASTER', true),
+
+        // Phase 3: read each detected geometry region by cropping it from both
+        // revisions and showing the pair to a vision model. This is the only
+        // step that asks a model what changed rather than to interpret an
+        // already-found difference, and it is bounded to the largest regions.
+        'vision_enabled' => env('DRAWING_COMPARISON_VISION', true),
+
+        // Model used for region reads. Defaults to the main comparison model.
+        'vision_model' => env('DRAWING_COMPARISON_VISION_MODEL'),
+
+        // Largest N regions actually read. The rest keep their factual
+        // "changed area" row so nothing is lost, just not described.
+        'max_regions_for_vision' => env('DRAWING_COMPARISON_MAX_REGIONS', 25),
 
         // Explicit path to the ImageMagick binary. Leave null to discover
         // `magick` (v7) or `convert` (v6) on PATH.
