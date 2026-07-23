@@ -37,7 +37,18 @@ class DrawingRegionCropper
     private const MIN_EDGE = 120.0;
 
     /** Longest edge of the generated preview, in pixels. */
-    private const PREVIEW_WIDTH = 560;
+    private const PREVIEW_WIDTH = 460;
+
+    /**
+     * Interpolated frames inserted between the two states.
+     *
+     * A hard two-frame cut makes the eye hunt for what moved. Blending through
+     * intermediates lets it track the thing that shifts. This is a dissolve,
+     * not motion tracking — ImageMagick interpolates pixels, it does not follow
+     * a wall from one position to another — but it reads far better than a
+     * flash. Kept low because frame count drives file size directly.
+     */
+    private const MORPH_FRAMES = 3;
 
     /** Disk previews are written to. Private — drawings are not public. */
     public const DISK = 'local';
@@ -220,11 +231,18 @@ class DrawingRegionCropper
                 }
             }
 
+            // Each end frame is repeated so the morph produces a hold there —
+            // interpolating between two identical images yields identical
+            // frames — then the sequence is mirrored so it eases back rather
+            // than snapping to the start.
             $result = Process::timeout(120)->run([
                 $binary,
+                $frames[0], $frames[0], $frames[1], $frames[1],
+                '-morph', (string) self::MORPH_FRAMES,
+                '(', '-clone', '-2-1', ')',
+                '-set', 'delay', '6',
                 '-loop', '0',
-                '-delay', '90', $frames[0],
-                '-delay', '90', $frames[1],
+                '-colors', '48',
                 '-layers', 'OptimizeFrame',
                 $absolute,
             ]);

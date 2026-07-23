@@ -30,7 +30,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 9;
+    public const PIPELINE_VERSION = 10;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -155,6 +155,13 @@ class DrawingComparisonService
             $oldText = $this->extractor->extractFromPath($oldSource->path);
             $newText = $this->extractor->extractFromPath($newSource->path);
             $pageBox = $this->rasterizer->probePageBox($newSource->path);
+
+            // The page box need not start at (0, 0); shift the text layer onto
+            // page coordinates before anything reasons about position.
+            if ($pageBox !== null) {
+                $oldText = $this->rebaseText($oldText, $pageBox[2] ?? 0.0, $pageBox[3] ?? 0.0);
+                $newText = $this->rebaseText($newText, $pageBox[2] ?? 0.0, $pageBox[3] ?? 0.0);
+            }
 
             $textComparable = $oldText !== null && $newText !== null
                 && $this->textIsComparable($oldText, $newText);
@@ -286,6 +293,37 @@ class DrawingComparisonService
         }
 
         return $regions;
+    }
+
+    /**
+     * Move an extraction from PDF user space onto page space.
+     *
+     * A page box is not required to start at (0, 0), and CAD exports routinely
+     * do not — an observed A1 sheet is [-1191.97 -841.89 1191.97 841.89],
+     * centred on the origin. Text extracted from it therefore carried negative
+     * coordinates that looked like a broken transform, and the whole text layer
+     * was written off as unlocatable on those sheets. It was only ever offset.
+     *
+     * @param  array<string, mixed>|null  $extraction
+     * @return array<string, mixed>|null
+     */
+    private function rebaseText(?array $extraction, float $originX, float $originY): ?array
+    {
+        if ($extraction === null || ($originX === 0.0 && $originY === 0.0)) {
+            return $extraction;
+        }
+
+        foreach ($extraction['items'] as $index => $item) {
+            $extraction['items'][$index]['x'] = $item['x'] - $originX;
+            $extraction['items'][$index]['y'] = $item['y'] - $originY;
+        }
+
+        $extraction['min_x'] -= $originX;
+        $extraction['max_x'] -= $originX;
+        $extraction['min_y'] -= $originY;
+        $extraction['max_y'] -= $originY;
+
+        return $extraction;
     }
 
     /**

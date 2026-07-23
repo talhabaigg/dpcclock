@@ -117,7 +117,14 @@ class DrawingRasterizer
      * is the point geometry — the same trick DrawingProcessingService uses, but
      * without re-downloading a file the caller already has.
      *
-     * @return array{0: float, 1: float}|null
+     * Returns the origin as well as the size, because a page box is not
+     * required to start at (0, 0) and CAD exports routinely do not: an observed
+     * A1 sheet carries [-1191.97 -841.89 1191.97 841.89], centred on the
+     * origin. Anything comparing PDF user-space coordinates against the page
+     * has to subtract that offset first or every position is out by half a
+     * sheet.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float}|null [width, height, originX, originY]
      */
     public function probePageBox(string $pdfPath): ?array
     {
@@ -149,12 +156,59 @@ class DrawingRasterizer
             $width = (float) $parts[0];
             $height = (float) $parts[1];
 
-            return $width > 0 && $height > 0 ? [$width, $height] : null;
+            if ($width <= 0 || $height <= 0) {
+                return null;
+            }
+
+            [$originX, $originY] = $this->pageOrigin($pdfPath);
+
+            return [$width, $height, $originX, $originY];
         } catch (\Throwable $e) {
             Log::warning('Page box probe failed', ['error' => $e->getMessage()]);
 
             return null;
         }
+    }
+
+    /**
+     * Lower-left corner of the page box, in points.
+     *
+     * ImageMagick reports the page size but not where it starts, so the box is
+     * read from the file. Falls back to (0, 0), which is the common case and a
+     * safe assumption when the box cannot be parsed.
+     *
+     * @return array{0: float, 1: float}
+     */
+    private function pageOrigin(string $pdfPath): array
+    {
+        try {
+            // The box appears in the first few KB of any normal PDF; reading
+            // the whole file to find it would be wasteful on 4MB drawings.
+            $handle = fopen($pdfPath, 'rb');
+
+            if ($handle === false) {
+                return [0.0, 0.0];
+            }
+
+            $head = fread($handle, 65536);
+            fclose($handle);
+
+            if ($head === false) {
+                return [0.0, 0.0];
+            }
+
+            // CropBox wins where present — it is what both the renderer and
+            // pdf.js actually lay out against.
+            foreach (['CropBox', 'MediaBox'] as $key) {
+                if (preg_match('/\/'.$key.'\s*\[\s*(-?[\d.]+)\s+(-?[\d.]+)/', $head, $m) === 1) {
+                    return [(float) $m[1], (float) $m[2]];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fall through to the default.
+        }
+
+        return [0.0, 0.0];
     }
 
     public function isAvailable(): bool
