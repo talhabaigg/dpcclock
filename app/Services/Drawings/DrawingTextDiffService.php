@@ -34,6 +34,21 @@ class DrawingTextDiffService
     private const EDIT_SIMILARITY = 0.5;
 
     /**
+     * Above this many instances of the same label, individual instances stop
+     * being distinguishable and only the population is reported.
+     */
+    private const LOW_MULTIPLICITY = 3;
+
+    /**
+     * Points within which two dimension/tag edits are treated as the same area
+     * of revision. Roughly a 5m square of building at 1:100 on A1.
+     */
+    private const CLUSTER_RADIUS = 150.0;
+
+    /** Below this many low-information edits, listing them individually is fine. */
+    private const CLUSTER_MIN_MEMBERS = 6;
+
+    /**
      * @param  array{items: list<array<string, mixed>>}  $old
      * @param  array{items: list<array<string, mixed>>}  $new
      * @return list<array{change_type: string, text_old: ?string, text_new: ?string, page_number: int, x: float, y: float, w: float, h: float}>
@@ -56,15 +71,171 @@ class DrawingTextDiffService
             $oldItems[$index]['y'] = $item['y'] + $offsetY;
         }
 
-        [$moved, $unmatchedOld, $unmatchedNew] = $this->matchByText($oldItems, $newItems);
+        [$moved, $unmatchedOld, $unmatchedNew, $aggregates] = $this->matchByText($oldItems, $newItems);
 
-        $changes = $moved;
+        $changes = array_merge($moved, $aggregates);
 
         foreach ($this->pairEdits($unmatchedOld, $unmatchedNew) as $change) {
             $changes[] = $change;
         }
 
-        return $changes;
+        return $this->clusterLowInformation($changes);
+    }
+
+    /**
+     * Collapse dimension and tag churn into one row per area of the sheet.
+     *
+     * A partition revision legitimately changes dozens of dimensions. Listing
+     * them individually — "2492 removed, 3176 added, 2633 removed" — is
+     * technically accurate and useless: the values only mean anything while
+     * you are looking at that spot on the drawing, where the drawing already
+     * tells you. What a reader needs is "dimensions were revised here". On the
+     * sheet that prompted this, 83 of 155 remaining rows were four-digit
+     * dimensions.
+     *
+     * Text carrying actual meaning — room names, notes, partition types — is
+     * never clustered; those stay as individual rows.
+     *
+     * @param  list<array<string, mixed>>  $changes
+     * @return list<array<string, mixed>>
+     */
+    private function clusterLowInformation(array $changes): array
+    {
+        $keep = [];
+        $cluster = [];
+
+        foreach ($changes as $change) {
+            $isPopulationRow = $change['count_old'] !== null;
+            $isAddOrRemove = in_array($change['change_type'], ['added', 'removed'], true);
+            $text = (string) ($change['text_new'] ?? $change['text_old'] ?? '');
+
+            if (! $isPopulationRow && $isAddOrRemove && $this->isLowInformation($text)) {
+                $cluster[] = $change;
+
+                continue;
+            }
+
+            $keep[] = $change;
+        }
+
+        if (count($cluster) < self::CLUSTER_MIN_MEMBERS) {
+            // Too few to be churn; individual rows are more informative.
+            return array_merge($keep, $cluster);
+        }
+
+        foreach ($this->groupByProximity($cluster) as $group) {
+            $keep[] = $this->clusterRow($group);
+        }
+
+        return $keep;
+    }
+
+    /**
+     * Whether a string carries meaning on its own. Pure numbers are dimensions;
+     * one- to three-character strings are grid, door and type tags.
+     */
+    private function isLowInformation(string $text): bool
+    {
+        $trimmed = trim($text);
+
+        if ($trimmed === '') {
+            return true;
+        }
+
+        return preg_match('/^[\d.,\-\/ ]+$/', $trimmed) === 1 || mb_strlen($trimmed) <= 3;
+    }
+
+    /**
+     * Greedy spatial grouping by bounding-box gap, run to a fixed point.
+     *
+     * @param  list<array<string, mixed>>  $changes
+     * @return list<list<array<string, mixed>>>
+     */
+    private function groupByProximity(array $changes): array
+    {
+        $groups = array_map(fn (array $c) => [
+            'members' => [$c],
+            'x0' => $c['x'], 'y0' => $c['y'],
+            'x1' => $c['x'] + $c['w'], 'y1' => $c['y'] + $c['h'],
+        ], $changes);
+
+        $merged = true;
+
+        while ($merged) {
+            $merged = false;
+
+            for ($i = 0; $i < count($groups) && ! $merged; $i++) {
+                for ($j = $i + 1; $j < count($groups); $j++) {
+                    $a = $groups[$i];
+                    $b = $groups[$j];
+
+                    $gapX = max(0, max($a['x0'], $b['x0']) - min($a['x1'], $b['x1']));
+                    $gapY = max(0, max($a['y0'], $b['y0']) - min($a['y1'], $b['y1']));
+
+                    if ($gapX > self::CLUSTER_RADIUS || $gapY > self::CLUSTER_RADIUS) {
+                        continue;
+                    }
+
+                    $groups[$i] = [
+                        'members' => array_merge($a['members'], $b['members']),
+                        'x0' => min($a['x0'], $b['x0']), 'y0' => min($a['y0'], $b['y0']),
+                        'x1' => max($a['x1'], $b['x1']), 'y1' => max($a['y1'], $b['y1']),
+                    ];
+
+                    array_splice($groups, $j, 1);
+                    $merged = true;
+                    break;
+                }
+            }
+        }
+
+        return array_map(fn (array $g) => $g['members'], $groups);
+    }
+
+    /**
+     * One row standing in for a cluster of dimension or tag churn.
+     *
+     * @param  list<array<string, mixed>>  $group
+     * @return array<string, mixed>
+     */
+    private function clusterRow(array $group): array
+    {
+        $removed = 0;
+        $added = 0;
+        $allNumeric = true;
+
+        foreach ($group as $change) {
+            if ($change['change_type'] === 'added') {
+                $added++;
+            } else {
+                $removed++;
+            }
+
+            $text = trim((string) ($change['text_new'] ?? $change['text_old'] ?? ''));
+
+            if (preg_match('/^[\d.,\-\/ ]+$/', $text) !== 1) {
+                $allNumeric = false;
+            }
+        }
+
+        $x0 = min(array_column($group, 'x'));
+        $y0 = min(array_column($group, 'y'));
+        $x1 = max(array_map(fn (array $c) => $c['x'] + $c['w'], $group));
+        $y1 = max(array_map(fn (array $c) => $c['y'] + $c['h'], $group));
+
+        return [
+            'change_type' => $added > 0 && $removed > 0 ? 'modified' : ($added > 0 ? 'added' : 'removed'),
+            'text_old' => null,
+            'text_new' => null,
+            'count_old' => $removed,
+            'count_new' => $added,
+            'element_hint' => $allNumeric ? 'dimensions' : 'tags and dimensions',
+            'page_number' => (int) ($group[0]['page_number'] ?? 1),
+            'x' => (float) $x0,
+            'y' => (float) $y0,
+            'w' => (float) ($x1 - $x0),
+            'h' => (float) ($y1 - $y0),
+        ];
     }
 
     /**
@@ -151,63 +322,176 @@ class DrawingTextDiffService
         $moved = [];
         $unmatchedOld = [];
         $unmatchedNew = [];
+        $aggregates = [];
 
-        foreach ($oldByText as $key => $oldGroup) {
+        $keys = array_unique(array_merge(array_keys($oldByText), array_keys($newByText)));
+
+        foreach ($keys as $key) {
+            $oldGroup = $oldByText[$key] ?? [];
             $newGroup = $newByText[$key] ?? [];
+            $oldCount = count($oldGroup);
+            $newCount = count($newGroup);
 
-            // Only a label that appears exactly once on each sheet has an
-            // identity we can track. Grid bubbles, level markers and repeated
-            // dimensions occur dozens of times; pairing them by proximity picks
-            // an arbitrary partner and reports a move that never happened. On a
-            // real sheet that noise swamped every genuine change, so ambiguous
-            // labels are matched (to keep them out of added/removed) but their
-            // displacement is never reported.
-            $trackable = count($oldGroup) === 1 && count($newGroup) === 1;
+            $multiplicity = max($oldCount, $newCount);
 
-            // Greedy nearest-neighbour within the same text. Optimal assignment
-            // would need Hungarian; greedy is correct whenever copies of the
-            // same label are further apart than they moved, which on a plan
-            // they always are.
-            foreach ($oldGroup as $oldItem) {
-                $bestIndex = null;
-                $bestDistance = null;
-
-                foreach ($newGroup as $index => $candidate) {
-                    $distance = $this->distance($oldItem, $candidate);
-
-                    if ($bestDistance === null || $distance < $bestDistance) {
-                        $bestDistance = $distance;
-                        $bestIndex = $index;
-                    }
+            // A label appearing once per sheet has an identity: it is *that*
+            // room name, *that* note. A label appearing twenty-six times —
+            // grid bubbles, door tags, partition types — does not. There is no
+            // fact of the matter about which "C" became which "C", so
+            // reporting per instance manufactures changes: on a real sheet
+            // that produced 401 "added" rows, 264 of them three characters or
+            // shorter. For those, the only honest statement is the population.
+            if ($multiplicity > self::LOW_MULTIPLICITY) {
+                if ($oldCount !== $newCount) {
+                    $aggregates[] = $this->countChange($key, $oldGroup, $newGroup);
                 }
 
-                if ($bestIndex === null) {
-                    $unmatchedOld[] = $oldItem;
-
-                    continue;
-                }
-
-                $match = $newGroup[$bestIndex];
-                unset($newGroup[$bestIndex]);
-
-                if ($trackable && $bestDistance > self::MOVE_TOLERANCE) {
-                    $moved[] = $this->change('moved', $oldItem, $match);
-                }
-                // Within tolerance, or not uniquely identifiable: unchanged.
-                // Emit nothing — silence here is the whole point, otherwise
-                // every label on the sheet reports.
+                // Equal counts: instances were reshuffled at most. Nothing to say.
+                continue;
             }
 
-            $newByText[$key] = $newGroup;
-        }
+            if ($multiplicity === 1) {
+                $this->matchUnique($oldGroup, $newGroup, $moved, $unmatchedOld, $unmatchedNew);
 
-        foreach ($newByText as $remaining) {
-            foreach ($remaining as $item) {
-                $unmatchedNew[] = $item;
+                continue;
             }
+
+            // A handful of instances. Which one moved is still ambiguous, so
+            // movement stays unreported, but an appearance or disappearance is
+            // specific enough to be worth surfacing — this is what keeps a
+            // dimension edit reading as "2400 changed to 2700" when 2700
+            // happens to occur elsewhere on the sheet too.
+            $this->matchFewInstances($oldGroup, $newGroup, $unmatchedOld, $unmatchedNew);
         }
 
-        return [$moved, $unmatchedOld, $unmatchedNew];
+        return [$moved, $unmatchedOld, $unmatchedNew, $aggregates];
+    }
+
+    /**
+     * Handle a label that occurs at most once on each sheet, where individual
+     * identity is meaningful.
+     *
+     * @param  list<array<string, mixed>>  $oldGroup
+     * @param  list<array<string, mixed>>  $newGroup
+     * @param  list<array<string, mixed>>  $moved
+     * @param  list<array<string, mixed>>  $unmatchedOld
+     * @param  list<array<string, mixed>>  $unmatchedNew
+     */
+    private function matchUnique(
+        array $oldGroup,
+        array $newGroup,
+        array &$moved,
+        array &$unmatchedOld,
+        array &$unmatchedNew,
+    ): void {
+        $oldItem = $oldGroup[0] ?? null;
+        $newItem = $newGroup[0] ?? null;
+
+        if ($oldItem !== null && $newItem !== null) {
+            if ($this->distance($oldItem, $newItem) > self::MOVE_TOLERANCE) {
+                $moved[] = $this->change('moved', $oldItem, $newItem);
+            }
+
+            // Within tolerance: unchanged. Emit nothing — silence here is the
+            // whole point, otherwise every label on the sheet reports.
+            return;
+        }
+
+        if ($oldItem !== null) {
+            $unmatchedOld[] = $oldItem;
+
+            return;
+        }
+
+        if ($newItem !== null) {
+            $unmatchedNew[] = $newItem;
+        }
+    }
+
+    /**
+     * Handle a label with a small number of instances: pair them up by
+     * proximity and pass whatever is left over on as an appearance or a
+     * disappearance. Movement is deliberately not reported — with more than one
+     * instance there is no telling which one moved.
+     *
+     * @param  list<array<string, mixed>>  $oldGroup
+     * @param  list<array<string, mixed>>  $newGroup
+     * @param  list<array<string, mixed>>  $unmatchedOld
+     * @param  list<array<string, mixed>>  $unmatchedNew
+     */
+    private function matchFewInstances(
+        array $oldGroup,
+        array $newGroup,
+        array &$unmatchedOld,
+        array &$unmatchedNew,
+    ): void {
+        // Greedy nearest-neighbour. Optimal assignment would need Hungarian;
+        // greedy is right whenever copies of a label sit further apart than
+        // they moved, which on a plan they do.
+        foreach ($oldGroup as $oldItem) {
+            $bestIndex = null;
+            $bestDistance = null;
+
+            foreach ($newGroup as $index => $candidate) {
+                $distance = $this->distance($oldItem, $candidate);
+
+                if ($bestDistance === null || $distance < $bestDistance) {
+                    $bestDistance = $distance;
+                    $bestIndex = $index;
+                }
+            }
+
+            if ($bestIndex === null) {
+                $unmatchedOld[] = $oldItem;
+
+                continue;
+            }
+
+            unset($newGroup[$bestIndex]);
+        }
+
+        foreach ($newGroup as $item) {
+            $unmatchedNew[] = $item;
+        }
+    }
+
+    /**
+     * One row describing how the population of a repeated label changed.
+     *
+     * Anchored on the bounding box of every instance on the busier sheet — the
+     * instances themselves are scattered, so framing where the label lives is
+     * the most specific claim the data supports.
+     *
+     * @param  list<array<string, mixed>>  $oldGroup
+     * @param  list<array<string, mixed>>  $newGroup
+     * @return array<string, mixed>
+     */
+    private function countChange(string $label, array $oldGroup, array $newGroup): array
+    {
+        $oldCount = count($oldGroup);
+        $newCount = count($newGroup);
+        $anchorGroup = $newCount >= $oldCount ? $newGroup : $oldGroup;
+
+        $minX = min(array_column($anchorGroup, 'x'));
+        $minY = min(array_column($anchorGroup, 'y'));
+        $maxX = max(array_map(fn (array $i) => $i['x'] + $i['w'], $anchorGroup));
+        $maxY = max(array_map(fn (array $i) => $i['y'] + $i['h'], $anchorGroup));
+
+        $text = $anchorGroup[0]['text'] ?? $label;
+
+        return [
+            'change_type' => $newCount > $oldCount ? 'added' : 'removed',
+            'text_old' => $oldCount > 0 ? $text : null,
+            'text_new' => $newCount > 0 ? $text : null,
+            'count_old' => $oldCount,
+            'count_new' => $newCount,
+            'element_hint' => null,
+            'page_number' => (int) ($anchorGroup[0]['page'] ?? 1),
+            'x' => (float) $minX,
+            'y' => (float) $minY,
+            'w' => (float) ($maxX - $minX),
+            'h' => (float) ($maxY - $minY),
+        ];
     }
 
     /**
@@ -287,6 +571,11 @@ class DrawingTextDiffService
             'change_type' => $type,
             'text_old' => $oldItem['text'] ?? null,
             'text_new' => $newItem['text'] ?? null,
+            // Only population changes carry counts; a single-instance change
+            // reports itself, not a tally.
+            'count_old' => null,
+            'count_new' => null,
+            'element_hint' => null,
             'page_number' => (int) ($anchor['page'] ?? 1),
             'x' => (float) $anchor['x'],
             'y' => (float) $anchor['y'],

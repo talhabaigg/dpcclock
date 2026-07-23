@@ -20,6 +20,8 @@ class DrawingChangeItem extends Model
         'change_type',
         'text_old',
         'text_new',
+        'count_old',
+        'count_new',
         'page_number',
         'x',
         'y',
@@ -36,6 +38,8 @@ class DrawingChangeItem extends Model
     protected $casts = [
         'trade_impact' => 'array',
         'page_number' => 'integer',
+        'count_old' => 'integer',
+        'count_new' => 'integer',
         'x' => 'float',
         'y' => 'float',
         'w' => 'float',

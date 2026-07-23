@@ -11,7 +11,15 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 /**
- * Interprets an already-computed drawing revision diff.
+ * Classifies one batch of an already-computed drawing revision diff.
+ *
+ * Batching is not an optimisation, it is a correctness fix. This originally
+ * returned the rankings, the summary and the revision table in a single
+ * response, which meant output length grew with the number of changes. On a
+ * busy sheet it hit the token ceiling exactly (8192), truncated mid-array, and
+ * every change came back unranked — so the panel, which relies on ranking to
+ * collapse noise, rendered all 558 rows. Output is now bounded by batch size,
+ * and the summary lives in its own agent.
  *
  * This agent is deliberately not asked to *find* the changes — the text-layer
  * diff has already done that exactly, with coordinates. Handing a model two
@@ -38,11 +46,10 @@ class DrawingChangeAgent implements Agent, HasStructuredOutput
         framing, linings) and ceilings (grid, plasterboard, bulkheads). Everything
         else is context.
 
-        You are given two things:
-        1. TITLE BLOCK TEXT — raw strings lifted from the border of the new sheet.
-           Somewhere in here is usually the revision history table.
-        2. CHANGES — an exact, pre-computed list of text differences between the old
-           and new revision, each with an index and a position on the sheet.
+        You are given CHANGES: an exact, pre-computed list of text differences
+        between the old and new revision, each with an index and a position on the
+        sheet. You may be given one batch of a larger list; interpret only what is
+        in front of you.
 
         ## Rules
         - The CHANGES list is ground truth. Do not invent changes that are not in it,
@@ -70,19 +77,17 @@ class DrawingChangeAgent implements Agent, HasStructuredOutput
         - `confidence` is 0 to 1. Be honest — a bare number with no unit is genuinely
           ambiguous, and saying so is more useful than guessing.
 
-        ## Revision notes
-        Extract the revision history rows from the title block text: revision code,
-        date, and the description the drafter wrote. Return them newest first. If the
-        title block text contains no recognisable revision table, return an empty
-        list — do not fabricate rows from the change list.
-
-        ## Summary
-        Two to four sentences. Lead with what actually changed on this sheet and what
-        it means for walls and ceilings. If the drafter's own revision note is
-        present, reconcile it with what the diff shows and say plainly when they
-        disagree — a note reading "no change to layout" alongside three new
-        dimensions is exactly the thing worth flagging. If every change is low
-        significance, say so in one sentence rather than padding.
+        ## Rows that stand for many instances
+        Some rows are counts rather than single edits, and are written as such:
+        - "PT04 (22 -> 19)" means that partition tag appears three fewer times.
+          Report it as a change in how many, not as one tag being edited. These are
+          usually worth attention: partition type counts changing means wall build-up
+          changed somewhere.
+        - "14 dimensions revised in this area" means a cluster of dimension edits.
+          Individual values are not listed because they only mean anything with the
+          drawing in front of you. Rank on whether revised setout dimensions matter,
+          and say the area needs checking rather than inventing specifics.
+        Never invent the individual values behind a count row.
         PROMPT;
     }
 
@@ -92,22 +97,6 @@ class DrawingChangeAgent implements Agent, HasStructuredOutput
     public function schema(JsonSchema $schema): array
     {
         return [
-            'summary' => $schema->string()
-                ->description('Two to four plain-English sentences on what changed in this revision and what it means for walls and ceilings.')
-                ->required(),
-
-            'revision_notes' => $schema->array()
-                ->description('Revision history rows read from the title block, newest first. Empty if the sheet has no readable revision table.')
-                ->items($schema->object([
-                    'revision' => $schema->string()
-                        ->description('Revision code exactly as printed, e.g. "C" or "P3".'),
-                    'date' => $schema->string()
-                        ->description('Date as printed on the sheet. Empty string if absent.'),
-                    'description' => $schema->string()
-                        ->description('What the drafter wrote this revision was for.'),
-                ]))
-                ->required(),
-
             'changes' => $schema->array()
                 ->description('One entry per index in the supplied CHANGES list.')
                 ->items($schema->object([

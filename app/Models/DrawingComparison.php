@@ -20,6 +20,8 @@ class DrawingComparison extends Model
         'status',
         'error',
         'methods',
+        'pipeline_version',
+        'text_comparable',
         'coordinates_reliable',
         'summary',
         'revision_notes',
@@ -34,6 +36,8 @@ class DrawingComparison extends Model
 
     protected $casts = [
         'methods' => 'array',
+        'pipeline_version' => 'integer',
+        'text_comparable' => 'boolean',
         'coordinates_reliable' => 'boolean',
         'revision_notes' => 'array',
         'changes_total' => 'integer',

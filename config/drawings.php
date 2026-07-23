@@ -29,7 +29,7 @@ return [
         // heavily revised sheet can produce hundreds; beyond this the roll-up
         // stops getting better and only gets more expensive. Rows past the cap
         // are still stored, just without an AI description.
-        'max_changes_for_ai' => env('DRAWING_COMPARISON_MAX_CHANGES', 120),
+        'max_changes_for_ai' => env('DRAWING_COMPARISON_MAX_CHANGES', 160),
 
         // Seconds to allow for the interpretation call.
         'timeout' => env('DRAWING_COMPARISON_TIMEOUT', 120),

@@ -3,6 +3,7 @@
 namespace App\Services\Drawings;
 
 use App\Ai\Agents\DrawingChangeAgent;
+use App\Ai\Agents\DrawingRevisionSummaryAgent;
 use App\Models\Drawing;
 use App\Models\DrawingChangeItem;
 use App\Models\DrawingComparison;
@@ -20,6 +21,28 @@ use Laravel\Ai\Enums\Lab;
  */
 class DrawingComparisonService
 {
+    /**
+     * Bump when detection changes in a way that would give a different answer.
+     *
+     * Comparisons are cached on the revision pair, which is correct while the
+     * algorithm is fixed — and silently wrong the moment it improves, because
+     * every sheet a user has already opened keeps serving the old result. A
+     * stale row is re-run on next view.
+     */
+    public const PIPELINE_VERSION = 2;
+
+    /**
+     * Changes classified per model call. Keeps output length bounded no matter
+     * how heavily revised the sheet is — see DrawingChangeAgent.
+     */
+    private const CLASSIFY_BATCH = 40;
+
+    /**
+     * Ratio of mean text-run lengths beyond which the two PDFs are considered
+     * to tokenise text too differently to diff at token level.
+     */
+    private const TOKENISATION_TOLERANCE = 1.25;
+
     public function __construct(
         private readonly PdfTextExtractor $extractor,
         private readonly DrawingTextDiffService $differ,
@@ -40,7 +63,10 @@ class DrawingComparisonService
             ['status' => DrawingComparison::STATUS_PENDING, 'created_by' => $userId],
         );
 
-        if ($comparison->status === DrawingComparison::STATUS_FAILED) {
+        $stale = $comparison->status === DrawingComparison::STATUS_COMPLETE
+            && (int) $comparison->pipeline_version !== self::PIPELINE_VERSION;
+
+        if ($comparison->status === DrawingComparison::STATUS_FAILED || $stale) {
             $comparison->update([
                 'status' => DrawingComparison::STATUS_PENDING,
                 'error' => null,
@@ -56,7 +82,8 @@ class DrawingComparisonService
      */
     public function analyze(DrawingComparison $comparison): DrawingComparison
     {
-        if ($comparison->status === DrawingComparison::STATUS_COMPLETE) {
+        if ($comparison->status === DrawingComparison::STATUS_COMPLETE
+            && (int) $comparison->pipeline_version === self::PIPELINE_VERSION) {
             return $comparison;
         }
 
@@ -90,6 +117,9 @@ class DrawingComparisonService
             $newText = $this->extractor->extractFromPath($newSource->path);
             $pageBox = $this->rasterizer->probePageBox($newSource->path);
 
+            $textComparable = $oldText !== null && $newText !== null
+                && $this->textIsComparable($oldText, $newText);
+
             $changes = $oldText !== null && $newText !== null
                 ? $this->differ->diff($oldText, $newText)
                 : [];
@@ -117,9 +147,9 @@ class DrawingComparisonService
                 ]);
             }
 
-            $interpretation = $this->interpret($changes, $titleBlock, count($regions));
+            $interpretation = $this->interpret($changes, $titleBlock, count($regions), $textComparable);
 
-            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable);
+            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable);
 
             return $comparison->fresh(['items']);
         } catch (\Throwable $e) {
@@ -138,6 +168,46 @@ class DrawingComparisonService
             $oldSource?->close();
             $newSource?->close();
         }
+    }
+
+    /**
+     * Whether the two PDFs break text into comparable runs.
+     *
+     * A PDF may emit "COMMS" as one run or as five, and CAD exporters differ —
+     * two revisions of one sheet measured 836 runs (5% single character) versus
+     * 1140 (16%). Diffing across that boundary manufactures changes: one pair
+     * claimed the letter "C" went from 4 occurrences to 71. Reassembling runs
+     * into lines would fix it properly, but needs real glyph advance widths,
+     * and these sheets use CID fonts with no Widths table to read them from.
+     * So the mismatch is detected and declared instead of papered over.
+     *
+     * @param  array{items: list<array<string, mixed>>}  $old
+     * @param  array{items: list<array<string, mixed>>}  $new
+     */
+    private function textIsComparable(array $old, array $new): bool
+    {
+        $meanRun = function (array $extraction): float {
+            $items = $extraction['items'];
+
+            if ($items === []) {
+                return 0.0;
+            }
+
+            $chars = array_sum(array_map(fn (array $i) => mb_strlen((string) $i['text']), $items));
+
+            return $chars / count($items);
+        };
+
+        $oldMean = $meanRun($old);
+        $newMean = $meanRun($new);
+
+        if ($oldMean <= 0 || $newMean <= 0) {
+            return false;
+        }
+
+        $ratio = max($oldMean, $newMean) / min($oldMean, $newMean);
+
+        return $ratio <= self::TOKENISATION_TOLERANCE;
     }
 
     /**
@@ -168,12 +238,18 @@ class DrawingComparisonService
     }
 
     /**
-     * Ask the model to interpret the diff and read the revision table.
+     * Rank the changes and write the roll-up.
+     *
+     * Two stages on purpose. Classification runs in bounded batches so a busy
+     * sheet cannot exhaust the output budget mid-array; the summary then works
+     * from an already-ranked digest, so its length never scales with the number
+     * of changes. Doing both in one call is what previously left every row on a
+     * 523-change sheet unranked.
      *
      * @param  list<array<string, mixed>>  $changes
      * @return array{structured: array<string, mixed>, model: string, input_tokens: int, output_tokens: int}|null
      */
-    private function interpret(array $changes, string $titleBlock, int $regionCount = 0): ?array
+    private function interpret(array $changes, string $titleBlock, int $regionCount, bool $textComparable): ?array
     {
         if (! config('drawings.comparison.enabled', true)) {
             return null;
@@ -181,60 +257,189 @@ class DrawingComparisonService
 
         $model = (string) config('drawings.comparison.model');
         $provider = str_starts_with($model, 'claude') ? Lab::Anthropic : Lab::OpenAI;
-        $limit = (int) config('drawings.comparison.max_changes_for_ai', 120);
+        $limit = (int) config('drawings.comparison.max_changes_for_ai', 160);
+        $timeout = (int) config('drawings.comparison.timeout', 120);
 
-        $sent = array_slice($changes, 0, $limit);
+        $sent = array_slice($changes, 0, $limit, true);
 
-        $lines = [];
-        foreach ($sent as $index => $change) {
-            $lines[] = sprintf(
-                '%d. [%s] old=%s new=%s at (%.0f, %.0f)',
+        $ranked = [];
+        $inputTokens = 0;
+        $outputTokens = 0;
+
+        foreach (array_chunk($sent, self::CLASSIFY_BATCH, true) as $batch) {
+            $lines = [];
+
+            foreach ($batch as $index => $change) {
+                $lines[] = $this->describeForModel($index, $change);
+            }
+
+            try {
+                $response = DrawingChangeAgent::make()->prompt(
+                    prompt: "CHANGES:\n".implode("\n", $lines),
+                    provider: $provider,
+                    model: $model,
+                    timeout: $timeout,
+                );
+
+                $inputTokens += $response->usage->promptTokens;
+                $outputTokens += $response->usage->completionTokens;
+
+                foreach ($response->toArray()['changes'] ?? [] as $entry) {
+                    if (isset($entry['index']) && is_numeric($entry['index'])) {
+                        $ranked[(int) $entry['index']] = $entry;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // One failed batch must not discard the others. The diff itself
+                // is exact regardless; only ranking is lost for those rows.
+                Log::warning('Drawing change classification batch failed', [
+                    'model' => $model,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $summary = $this->summarise($changes, $ranked, $titleBlock, $regionCount, $textComparable, $provider, $model, $timeout);
+
+        if ($summary !== null) {
+            $inputTokens += $summary['input_tokens'];
+            $outputTokens += $summary['output_tokens'];
+        }
+
+        if ($ranked === [] && $summary === null) {
+            return null;
+        }
+
+        return [
+            'structured' => [
+                'changes' => $ranked,
+                'summary' => $summary['structured']['summary'] ?? null,
+                'revision_notes' => $summary['structured']['revision_notes'] ?? [],
+            ],
+            'model' => $model,
+            'input_tokens' => $inputTokens,
+            'output_tokens' => $outputTokens,
+        ];
+    }
+
+    /**
+     * Render one change for the model, distinguishing a specific edit from a
+     * row that stands for many instances.
+     *
+     * @param  array<string, mixed>  $change
+     */
+    private function describeForModel(int $index, array $change): string
+    {
+        if ($change === []) {
+            return "{$index}. (unavailable)";
+        }
+
+        $label = (string) ($change['text_new'] ?? $change['text_old'] ?? '');
+
+        if (($change['element_hint'] ?? null) !== null) {
+            return sprintf(
+                '%d. [area] %d %s removed and %d added within one region at (%.0f, %.0f)',
                 $index,
-                $change['change_type'],
-                $this->quote($change['text_old']),
-                $this->quote($change['text_new']),
+                (int) $change['count_old'],
+                $change['element_hint'],
+                (int) $change['count_new'],
                 $change['x'],
                 $change['y'],
             );
         }
 
-        $truncated = count($changes) > count($sent)
-            ? sprintf("\n(%d further changes were found but are not listed here.)", count($changes) - count($sent))
+        if (($change['count_old'] ?? null) !== null) {
+            return sprintf(
+                '%d. [count] %s appears %d times, was %d',
+                $index,
+                $this->quote($label),
+                (int) $change['count_new'],
+                (int) $change['count_old'],
+            );
+        }
+
+        return sprintf(
+            '%d. [%s] old=%s new=%s at (%.0f, %.0f)',
+            $index,
+            $change['change_type'],
+            $this->quote($change['text_old']),
+            $this->quote($change['text_new']),
+            $change['x'],
+            $change['y'],
+        );
+    }
+
+    /**
+     * Roll-up pass over the ranked results.
+     *
+     * @param  list<array<string, mixed>>  $changes
+     * @param  array<int, array<string, mixed>>  $ranked
+     * @return array{structured: array<string, mixed>, input_tokens: int, output_tokens: int}|null
+     */
+    private function summarise(
+        array $changes,
+        array $ranked,
+        string $titleBlock,
+        int $regionCount,
+        bool $textComparable,
+        Lab $provider,
+        string $model,
+        int $timeout,
+    ): ?array {
+        $order = ['high' => 0, 'medium' => 1, 'low' => 2];
+
+        $digest = [];
+        foreach ($ranked as $index => $entry) {
+            $digest[] = [
+                'rank' => $order[$entry['significance'] ?? ''] ?? 3,
+                'line' => sprintf(
+                    '- [%s] %s',
+                    $entry['significance'] ?? 'unranked',
+                    $entry['description'] ?? $this->describeForModel($index, $changes[$index] ?? []),
+                ),
+            ];
+        }
+
+        usort($digest, fn (array $a, array $b) => $a['rank'] <=> $b['rank']);
+
+        // Only the most significant rows reach the summary. Feeding it every
+        // low-significance drafting edit is what made output length scale with
+        // the size of the revision.
+        $lines = array_column(array_slice($digest, 0, 60), 'line');
+
+        // Geometry regions are counted, never described - the model has not
+        // seen them, and describing unseen line work is exactly the
+        // fabrication this design exists to avoid.
+        $geometry = $regionCount > 0
+            ? "\n\nGEOMETRY REGIONS: a pixel comparison found {$regionCount} area(s) where drawn content changed. Some overlap the text changes above; others are line work with no text. You have not seen them - say only that they exist and need a visual check."
             : '';
 
-        // The geometry count is context for the summary only. The model has not
-        // seen these regions, so it is told to count them, not describe them —
-        // describing unseen geometry is exactly the hallucination this design
-        // avoids.
-        $geometry = $regionCount > 0
-            ? "\n\nGEOMETRY REGIONS: a pixel comparison found {$regionCount} area(s) of the sheet where drawn content changed. Some of these will be the text changes above; others are line work with no text attached. You have not seen them — state only that they exist and need a visual check, and never describe what is in them."
-            : '';
+        $caveat = $textComparable
+            ? ''
+            : "\n\nTEXT COMPARABILITY: these two PDFs encode text into very differently sized runs, so the text differences above are unreliable for this pair and may include artefacts of the export rather than real design changes. Say this plainly and lean on the geometry regions instead.";
 
         $prompt = "TITLE BLOCK TEXT:\n"
             .($titleBlock !== '' ? $titleBlock : '(none readable)')
-            ."\n\nCHANGES:\n"
-            .($lines !== [] ? implode("\n", $lines) : '(no text differences found)')
-            .$truncated
-            .$geometry;
+            ."\n\nRANKED CHANGES:\n"
+            .($lines !== [] ? implode("\n", $lines) : '(none)')
+            .$geometry
+            .$caveat;
 
         try {
-            $response = DrawingChangeAgent::make()->prompt(
+            $response = DrawingRevisionSummaryAgent::make()->prompt(
                 prompt: $prompt,
                 provider: $provider,
                 model: $model,
-                timeout: (int) config('drawings.comparison.timeout', 120),
+                timeout: $timeout,
             );
 
             return [
                 'structured' => $response->toArray(),
-                'model' => $model,
                 'input_tokens' => $response->usage->promptTokens,
                 'output_tokens' => $response->usage->completionTokens,
             ];
         } catch (\Throwable $e) {
-            // A failed interpretation must not lose the diff. The raw changes
-            // are still exact and still worth showing, just without ranking.
-            Log::warning('Drawing change interpretation failed; keeping raw diff', [
+            Log::warning('Drawing revision summary failed; keeping ranked changes', [
                 'model' => $model,
                 'error' => $e->getMessage(),
             ]);
@@ -256,6 +461,7 @@ class DrawingComparisonService
         array $regions,
         ?array $interpretation,
         bool $textLocatable = false,
+        bool $textComparable = true,
     ): void {
         $structured = $interpretation['structured'] ?? [];
 
@@ -268,7 +474,7 @@ class DrawingComparisonService
             }
         }
 
-        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable) {
+        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable, $textComparable) {
             $comparison->items()->delete();
 
             $high = 0;
@@ -294,8 +500,12 @@ class DrawingComparisonService
                     'y' => $change['y'],
                     'w' => $change['w'],
                     'h' => $change['h'],
+                    'count_old' => $change['count_old'] ?? null,
+                    'count_new' => $change['count_new'] ?? null,
                     'locatable' => $textLocatable,
-                    'element' => $entry['element'] ?? null,
+                    // Fall back to the diff's own idea of what this row is, so
+                    // an unranked row still says "dimensions" rather than nothing.
+                    'element' => $entry['element'] ?? $change['element_hint'] ?? null,
                     'description' => $entry['description'] ?? null,
                     'trade_impact' => isset($entry['trade_impact'])
                         ? json_encode(array_values((array) $entry['trade_impact']))
@@ -326,6 +536,8 @@ class DrawingComparisonService
                     'h' => $region['h'],
                     // Measured off the rendered page, so always a true position.
                     'locatable' => true,
+                    'count_old' => null,
+                    'count_new' => null,
                     'element' => 'changed area',
                     'description' => null,
                     'trade_impact' => null,
@@ -355,6 +567,8 @@ class DrawingComparisonService
                 'status' => DrawingComparison::STATUS_COMPLETE,
                 'methods' => $methods,
                 'coordinates_reliable' => $textLocatable,
+                'pipeline_version' => self::PIPELINE_VERSION,
+                'text_comparable' => $textComparable,
                 'summary' => $structured['summary'] ?? $this->fallbackSummary($changes, count($regions)),
                 'revision_notes' => $structured['revision_notes'] ?? [],
                 'changes_total' => count($changes) + count($regions),

@@ -13,6 +13,9 @@ export type ChangeItem = {
     change_type: 'added' | 'removed' | 'modified' | 'moved';
     text_old: string | null;
     text_new: string | null;
+    /** Populated on rows standing for many instances rather than one edit. */
+    count_old: number | null;
+    count_new: number | null;
     element: string | null;
     description: string | null;
     trade_impact: string[];
@@ -45,6 +48,11 @@ export type ComparisonResult = {
      * is unavailable.
      */
     coordinates_reliable: boolean;
+    /**
+     * False when the two PDFs split text into runs so differently that a
+     * token-level diff is untrustworthy. The geometry regions are unaffected.
+     */
+    text_comparable: boolean;
     summary: string | null;
     revision_notes: RevisionNote[];
     changes_total: number;
@@ -54,6 +62,9 @@ export type ComparisonResult = {
 };
 
 const SIGNIFICANCE_ORDER = ['high', 'medium', 'low'] as const;
+
+/** How many unranked rows render before the rest are collapsed. */
+const UNRANKED_PREVIEW = 15;
 
 const SIGNIFICANCE_LABEL: Record<string, string> = {
     high: 'Affects what gets built',
@@ -106,6 +117,7 @@ export function ChangeDetectionPanel({
     const [starting, setStarting] = useState(false);
     const [open, setOpen] = useState(true);
     const [showLow, setShowLow] = useState(false);
+    const [showAllUnranked, setShowAllUnranked] = useState(false);
 
     // Cleared on unmount so a poll can't fire against a torn-down component.
     const pollRef = useRef<number | null>(null);
@@ -171,6 +183,11 @@ export function ChangeDetectionPanel({
     const hiddenLowCount = items.length - visible.length;
     // Text coordinates are unusable on some CAD exports; regions never are.
     const textLocatable = items.some((item) => item.locatable);
+    const unranked = visible.filter((item) => item.significance === null);
+    // Unranked rows are the fallback path: ranking was skipped, capped, or
+    // failed. Showing hundreds of them unbounded is what made this panel
+    // unusable, so only a sample renders until asked for the rest.
+    const unrankedShown = showAllUnranked ? unranked : unranked.slice(0, UNRANKED_PREVIEW);
 
     return (
         <div className="bg-background/95 absolute top-16 right-3 z-10 flex max-h-[calc(100%-5rem)] w-[22rem] flex-col rounded-md border shadow-sm backdrop-blur">
@@ -238,6 +255,13 @@ export function ChangeDetectionPanel({
                                 </div>
                             )}
 
+                            {items.length > 0 && result.text_comparable === false && (
+                                <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
+                                    These two PDFs encode their text differently, so the text changes below are unreliable for this pair and may
+                                    include export artefacts. The changed areas are unaffected — they come from comparing the drawn image.
+                                </p>
+                            )}
+
                             {items.length > 0 && !textLocatable && (
                                 <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
                                     This sheet stores its text in a nested coordinate space, so the text changes below can't be located on the plan.
@@ -267,14 +291,25 @@ export function ChangeDetectionPanel({
 
                             {/* Un-ranked rows: the diff succeeded but interpretation
                                 did not. Still exact, so still shown. */}
-                            {visible.some((item) => item.significance === null) && (
+                            {unranked.length > 0 && (
                                 <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">Unranked</p>
-                                    {visible
-                                        .filter((item) => item.significance === null)
-                                        .map((item) => (
-                                            <ChangeRow key={item.id} item={item} onLocate={onLocate} />
-                                        ))}
+                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                        Not ranked ({unranked.length})
+                                    </p>
+                                    {unrankedShown.map((item) => (
+                                        <ChangeRow key={item.id} item={item} onLocate={onLocate} />
+                                    ))}
+                                    {unranked.length > unrankedShown.length && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 w-full text-xs"
+                                            onClick={() => setShowAllUnranked(true)}
+                                        >
+                                            Show {unranked.length - unrankedShown.length} more
+                                        </Button>
+                                    )}
                                 </div>
                             )}
 
@@ -355,6 +390,13 @@ function ChangeRow({ item, onLocate }: { item: ChangeItem; onLocate?: (item: Cha
 
             <span className="mt-1 block leading-snug">{item.description ?? describeRaw(item)}</span>
 
+            {/* Population rows carry the tally rather than a before/after string. */}
+            {item.count_old !== null && item.count_new !== null && (
+                <span className="text-muted-foreground mt-1 block text-[10px] tabular-nums">
+                    {item.count_old} → {item.count_new}
+                </span>
+            )}
+
             {/* Always show the underlying strings — the description is the
                 model's reading of them, and the reader may want the source. */}
             {(item.text_old || item.text_new) && (
@@ -380,6 +422,22 @@ function ChangeRow({ item, onLocate }: { item: ChangeItem; onLocate?: (item: Cha
 
 /** Fallback text when the interpretation pass produced no description. */
 function describeRaw(item: ChangeItem): string {
+    // Rows standing for many instances: state the tally, never invent the
+    // individual values behind it.
+    if (item.count_old !== null && item.count_new !== null) {
+        const label = item.text_new ?? item.text_old;
+
+        if (label === null) {
+            const removed = item.count_old;
+            const added = item.count_new;
+            const parts = [removed > 0 ? `${removed} removed` : null, added > 0 ? `${added} added` : null].filter(Boolean);
+
+            return `${item.element ?? 'Labels'} revised in this area — ${parts.join(', ')}`;
+        }
+
+        return `"${label}" now appears ${item.count_new} times, was ${item.count_old}`;
+    }
+
     switch (item.change_type) {
         case 'added':
             return `"${item.text_new}" added`;
