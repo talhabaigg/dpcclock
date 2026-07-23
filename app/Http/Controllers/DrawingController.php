@@ -16,29 +16,24 @@ use App\Models\Variation;
 use App\Services\ChangeOrderGenerator;
 use App\Services\TakeoffCostCalculator;
 use App\Services\VariationCostCalculator;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DrawingController extends Controller
 {
     use ProductionStatusTrait;
+
     /**
      * List active drawings for a project, grouped by sheet_number.
      */
     public function index(Request $request, Location $project): Response
     {
-        // Pre-compute revision counts per sheet_number in a single query
-        $revisionCounts = Drawing::where('project_id', $project->id)
-            ->whereNotNull('sheet_number')
-            ->selectRaw('sheet_number, COUNT(*) as total')
-            ->groupBy('sheet_number')
-            ->pluck('total', 'sheet_number');
-
         $drawings = Drawing::where('project_id', $project->id)
             ->where('status', Drawing::STATUS_ACTIVE)
             ->with('media')
@@ -56,7 +51,29 @@ class DrawingController extends Controller
             ->orderBy('sheet_number')
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($drawing) use ($revisionCounts) {
+            // One row per sheet, not per revision. Every revision of a sheet is
+            // left active by the Aconex import, so listing them raw showed the
+            // same drawing several times over; the index is a list of drawings,
+            // and which revision is current belongs inside it.
+            ->groupBy(fn (Drawing $drawing) => $drawing->sheet_number ?: 'drawing-'.$drawing->id)
+            ->map(function ($versions) {
+                // Newest first, by the same rule the plan viewer uses: import
+                // order lies when an older revision was imported after a newer
+                // one, so Aconex's version sequence wins where both sides have
+                // one and revision comparison covers manual uploads.
+                return $versions->sort(function (Drawing $x, Drawing $y) {
+                    if ($x->aconex_version_number !== null && $y->aconex_version_number !== null) {
+                        return $y->aconex_version_number <=> $x->aconex_version_number;
+                    }
+
+                    return Drawing::compareRevisions($y->revision_number, $x->revision_number)
+                        ?: ($y->created_at <=> $x->created_at);
+                })->values();
+            })
+            ->map(function ($versions) {
+                /** @var Drawing $drawing */
+                $drawing = $versions->first();
+
                 return [
                     'id' => $drawing->id,
                     'sheet_number' => $drawing->sheet_number,
@@ -66,11 +83,12 @@ class DrawingController extends Controller
                     'status' => $drawing->status,
                     'created_at' => $drawing->created_at,
                     'thumbnail_url' => $drawing->thumbnail_url,
-                    'takeoff_count' => $drawing->takeoff_count,
-                    'pinned_task_count' => $drawing->pinned_task_count,
-                    'revision_count' => $drawing->sheet_number
-                        ? ($revisionCounts[$drawing->sheet_number] ?? 1)
-                        : 1,
+                    // Summed across revisions: work pinned on an earlier
+                    // revision still belongs to this sheet, and hiding it
+                    // behind the grouping would make the row look untouched.
+                    'takeoff_count' => $versions->sum('takeoff_count'),
+                    'pinned_task_count' => $versions->sum('pinned_task_count'),
+                    'revision_count' => $versions->count(),
                     // Aconex provenance — surfaced as a "Source" column in the list view.
                     'is_aconex' => $drawing->aconex_document_id !== null,
                     'aconex_version_number' => $drawing->aconex_version_number,
@@ -80,7 +98,9 @@ class DrawingController extends Controller
                         && $drawing->previous_revision_id !== null
                         && $drawing->created_at?->gt(now()->subDays(7)),
                 ];
-            });
+            })
+            ->sortBy(fn (array $row) => $row['sheet_number'] ?? $row['display_name'])
+            ->values();
 
         return Inertia::render('projects/drawings/index', [
             'project' => [
@@ -407,6 +427,7 @@ class DrawingController extends Controller
                 'perimeter_value' => 0.0,
             ]);
             $pseudo->setRelation('condition', $c);
+
             return $perUnitCosts[$cid] = $calculator->compute($pseudo);
         };
 
@@ -481,6 +502,7 @@ class DrawingController extends Controller
             $cid = (int) $condition->id;
             if ($condition->pricing_method === 'detailed') {
                 $sellRateByCondition[$cid] = null;
+
                 continue;
             }
             // Use the aggregated cost when there's a qty; otherwise fall back
@@ -614,6 +636,7 @@ class DrawingController extends Controller
         usort($conditionSummaries, fn ($a, $b) => ($a['condition_number'] ?? 0) <=> ($b['condition_number'] ?? 0));
         usort($conditionAreaRows, function ($a, $b) {
             $byNum = ($a['condition_number'] ?? 0) <=> ($b['condition_number'] ?? 0);
+
             return $byNum !== 0 ? $byNum : strcmp($a['area_name'], $b['area_name']);
         });
 
@@ -1536,7 +1559,7 @@ class DrawingController extends Controller
                 ->orderBy('work_date')
                 ->get()
                 ->map(fn ($e) => [
-                    'work_date' => \Carbon\Carbon::parse($e->work_date)->toDateString(),
+                    'work_date' => Carbon::parse($e->work_date)->toDateString(),
                     'used_hours' => (float) $e->total_used,
                 ]);
         }
@@ -1623,7 +1646,7 @@ class DrawingController extends Controller
     /**
      * Load a drawing with its project, revisions, and observations.
      *
-     * @return array{0: Drawing, 1: \Illuminate\Support\Collection, 2: \Illuminate\Support\Collection}
+     * @return array{0: Drawing, 1: Collection, 2: Collection}
      */
     private function loadDrawingWithRevisions(Drawing $drawing): array
     {
@@ -1789,5 +1812,4 @@ class DrawingController extends Controller
             'revisions' => $revisions,
         ]);
     }
-
 }
