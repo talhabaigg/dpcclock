@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\Drawings\DrawingRegionCropper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * One analysis run over an ordered pair of drawing revisions.
@@ -29,7 +31,6 @@ class DrawingComparison extends Model
         'text_comparable',
         'page_width',
         'page_height',
-        'coordinates_reliable',
         'summary',
         'revision_notes',
         'changes_total',
@@ -47,7 +48,6 @@ class DrawingComparison extends Model
         'text_comparable' => 'boolean',
         'page_width' => 'float',
         'page_height' => 'float',
-        'coordinates_reliable' => 'boolean',
         'revision_notes' => 'array',
         'changes_total' => 'integer',
         'changes_high' => 'integer',
@@ -67,6 +67,21 @@ class DrawingComparison extends Model
     const STATUS_COMPLETE = 'complete';
 
     const STATUS_FAILED = 'failed';
+
+    protected static function booted(): void
+    {
+        // Previews are files, not rows. Deleting the comparison has to take
+        // them with it or they accumulate silently — a run of forty regions is
+        // several megabytes, and nothing else ever looks at that directory.
+        //
+        // Note this covers deletes that go through Eloquent. A drawing removed
+        // at the database level cascades to this table without firing model
+        // events, so `drawings:prune-change-previews` exists to sweep those up.
+        static::deleting(function (self $comparison) {
+            Storage::disk(DrawingRegionCropper::DISK)
+                ->deleteDirectory("drawing-change-previews/{$comparison->id}");
+        });
+    }
 
     public function oldDrawing(): BelongsTo
     {
