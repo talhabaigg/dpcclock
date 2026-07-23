@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -161,13 +161,18 @@ export function ChangeDetectionPanel({
         };
     }, [result?.status, fetchResult]);
 
-    const analyze = async () => {
+    const analyze = async (force = false) => {
         setStarting(true);
         try {
             const res = await api.post<{ comparison: ComparisonResult }>(`/drawings/${drawingId}/comparison`, {
                 compare_old: oldDrawingId,
+                force,
             });
             setResult(res.comparison);
+            // A re-run clears the old rows, so drop any expanded state that
+            // referred to them.
+            setShowLow(false);
+            setShowAllUnranked(false);
         } catch {
             toast.error('Could not start change detection');
         } finally {
@@ -350,6 +355,24 @@ export function ChangeDetectionPanel({
                                     ))}
                                 </div>
                             )}
+
+                            <div className="flex items-center justify-between gap-2 border-t pt-2">
+                                <span className="text-muted-foreground text-[11px]">
+                                    {result.analyzed_at ? `Analysed ${new Date(result.analyzed_at).toLocaleString()}` : 'Analysed'}
+                                </span>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 shrink-0 gap-1.5 text-xs"
+                                    onClick={() => void analyze(true)}
+                                    disabled={starting}
+                                    title="Discard these results and analyse the two revisions again"
+                                >
+                                    <RotateCw className="h-3.5 w-3.5" />
+                                    {starting ? 'Restarting…' : 'Run again'}
+                                </Button>
+                            </div>
 
                             {canCloud && cloudable > 0 && (
                                 <Button

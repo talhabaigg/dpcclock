@@ -58,7 +58,13 @@ class DrawingComparisonController extends Controller
             return response()->json(['message' => 'Invalid comparison pair.'], 422);
         }
 
-        $comparison = $this->service->findOrCreate($old, $drawing, $request->user()?->id);
+        // `force` discards a cached result and analyses again. Normally the
+        // cache is the point — a revision pair never changes — but it also
+        // means detection improvements never reach a pair someone has already
+        // opened, and there is no way to retry a run that came back poor.
+        $force = $request->boolean('force');
+
+        $comparison = $this->service->findOrCreate($old, $drawing, $request->user()?->id, $force);
 
         // Already answered — hand back the cache rather than re-queueing.
         if ($comparison->status !== DrawingComparison::STATUS_COMPLETE) {

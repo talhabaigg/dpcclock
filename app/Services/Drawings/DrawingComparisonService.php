@@ -64,7 +64,7 @@ class DrawingComparisonService
      * Never re-runs a completed pair. A previously failed pair is reset to
      * pending so a retry is possible without a new row.
      */
-    public function findOrCreate(Drawing $old, Drawing $new, ?int $userId = null): DrawingComparison
+    public function findOrCreate(Drawing $old, Drawing $new, ?int $userId = null, bool $force = false): DrawingComparison
     {
         $comparison = DrawingComparison::firstOrCreate(
             ['old_drawing_id' => $old->id, 'new_drawing_id' => $new->id],
@@ -74,14 +74,39 @@ class DrawingComparisonService
         $stale = $comparison->status === DrawingComparison::STATUS_COMPLETE
             && (int) $comparison->pipeline_version !== self::PIPELINE_VERSION;
 
-        if ($comparison->status === DrawingComparison::STATUS_FAILED || $stale) {
-            $comparison->update([
-                'status' => DrawingComparison::STATUS_PENDING,
-                'error' => null,
-            ]);
+        if ($force || $comparison->status === DrawingComparison::STATUS_FAILED || $stale) {
+            $this->reset($comparison);
         }
 
         return $comparison;
+    }
+
+    /**
+     * Throw away a comparison's results and mark it for a fresh run.
+     *
+     * The items go now rather than at the end of the next run so the panel
+     * reflects the reset immediately — otherwise a re-run appears to do
+     * nothing for several minutes while the old list sits there.
+     */
+    public function reset(DrawingComparison $comparison): void
+    {
+        DB::transaction(function () use ($comparison) {
+            $comparison->items()->delete();
+
+            $comparison->update([
+                'status' => DrawingComparison::STATUS_PENDING,
+                'error' => null,
+                'summary' => null,
+                'revision_notes' => [],
+                'methods' => [],
+                'changes_total' => 0,
+                'changes_high' => 0,
+                'model' => null,
+                'input_tokens' => null,
+                'output_tokens' => null,
+                'analyzed_at' => null,
+            ]);
+        });
     }
 
     /**
