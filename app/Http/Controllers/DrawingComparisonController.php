@@ -10,6 +10,7 @@ use App\Models\DrawingComparison;
 use App\Models\SiteTask;
 use App\Models\SiteTaskCategory;
 use App\Services\Drawings\DrawingComparisonService;
+use App\Services\Drawings\DrawingPreviewRegenerator;
 use App\Services\Drawings\DrawingRegionCropper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DrawingComparisonController extends Controller
 {
-    public function __construct(private readonly DrawingComparisonService $service) {}
+    public function __construct(
+        private readonly DrawingComparisonService $service,
+        private readonly DrawingPreviewRegenerator $previews,
+    ) {}
 
     /**
      * Cached result for a revision pair, or null when nothing has run yet.
@@ -96,20 +100,29 @@ class DrawingComparisonController extends Controller
 
         // The item must genuinely belong to a comparison ending at this
         // drawing, or the drawing in the URL means nothing for authorisation.
-        if ($comparison === null || $comparison->new_drawing_id !== $drawing->id || ! $item->preview_path) {
+        if ($comparison === null || $comparison->new_drawing_id !== $drawing->id) {
+            return response()->json(['message' => 'Preview not found.'], 404);
+        }
+
+        // Previews are swept on dismissal and on a timer, so a missing file is
+        // the normal case rather than an error. Rebuilding takes seconds — the
+        // two source pages have to be rasterized again — which is why this
+        // happens per change on open rather than for every region up front.
+        $path = $this->previews->ensure($item);
+
+        if ($path === null) {
             return response()->json(['message' => 'Preview not found.'], 404);
         }
 
         $disk = Storage::disk(DrawingRegionCropper::DISK);
 
-        if (! $disk->exists($item->preview_path)) {
-            return response()->json(['message' => 'Preview not found.'], 404);
-        }
-
-        return $disk->response($item->preview_path, null, [
+        return $disk->response($path, null, [
             'Content-Type' => 'image/gif',
-            // Immutable: a comparison's previews are regenerated under a fresh
-            // path when it is re-run, so a cached one is never stale.
+            // Safe to hold: a rebuild of the same change from the same two
+            // revisions is byte-for-byte what it replaced, and a re-run puts
+            // its previews under a fresh comparison. Worth holding, too — a
+            // browser cache hit is the only way to reopen a change without
+            // paying for the rebuild again.
             'Cache-Control' => 'private, max-age=86400',
         ]);
     }
@@ -142,6 +155,10 @@ class DrawingComparisonController extends Controller
                 'triaged_at' => now(),
                 'triaged_by' => $request->user()?->id,
             ]);
+
+            // Nothing is going to look at this animation again. The row keeps
+            // the coordinates, so reopening a dismissed change still draws it.
+            $this->previews->forget($item);
 
             return response()->json(['item' => $this->formatItem($item->fresh(), $comparison)]);
         }
@@ -264,18 +281,19 @@ class DrawingComparisonController extends Controller
             'type' => 'comment',
         ]);
 
-        if (! $item->preview_path) {
+        // Rebuilt if the sweep already took it: this copy is the permanent
+        // record of the change, and it is the one place a preview stops being
+        // a cache. Everything after this point reads from the task's media.
+        $path = $this->previews->ensure($item);
+
+        if ($path === null) {
             return;
         }
 
         $disk = Storage::disk(DrawingRegionCropper::DISK);
 
-        if (! $disk->exists($item->preview_path)) {
-            return;
-        }
-
         try {
-            $comment->addMedia($disk->path($item->preview_path))
+            $comment->addMedia($disk->path($path))
                 ->preservingOriginal()
                 ->usingFileName('change-'.$item->id.'-before-after.gif')
                 ->toMediaCollection('attachments');
@@ -475,7 +493,12 @@ class DrawingComparisonController extends Controller
             'confidence' => $item->confidence,
             'page_number' => $item->page_number,
             'locatable' => (bool) $item->locatable,
-            'preview_url' => $item->preview_path
+            // Offered whenever the change can be drawn, not only when a file is
+            // already sitting there. A region past the run's preview budget
+            // never got one, and every preview is eventually swept — in both
+            // cases the endpoint draws it on request, so withholding the URL
+            // would hide an image that is perfectly available.
+            'preview_url' => $item->preview_path !== null || $this->previews->isRebuildable($item, $comparison)
                 ? route('drawings.comparison.preview', ['drawing' => $comparison->new_drawing_id, 'item' => $item->id])
                 : null,
             'triage_status' => $item->triage_status,

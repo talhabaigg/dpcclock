@@ -141,3 +141,11 @@ Schedule::call(function () {
     ->dailyAt('05:30')
     ->timezone('Australia/Brisbane')
     ->withoutOverlapping();
+
+// Change previews are a cache, not a record: dismissed ones go immediately,
+// the rest expire and are redrawn from the stored coordinates on next open.
+// Hourly, because the page renders it also sweeps are the large half.
+Schedule::command('drawings:prune-change-previews')
+    ->name('prune-drawing-change-previews')
+    ->hourly()
+    ->withoutOverlapping();

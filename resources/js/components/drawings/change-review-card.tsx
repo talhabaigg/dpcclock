@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Check, ChevronLeft, ChevronRight, MapPin, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Loader2, MapPin, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -74,12 +74,20 @@ export function ChangeReviewCard({
     const [note, setNote] = useState('');
     const [saving, setSaving] = useState<'accept' | 'dismiss' | null>(null);
 
+    // Animations are dropped once a change is ruled on, and expire a day after
+    // it is detected. Reopening one redraws it from the stored coordinates,
+    // which means rasterizing the two sheets again — seconds, not milliseconds,
+    // and the first change opened on a sheet pays the most. Without a visible
+    // wait the card just looks broken for that time.
+    const [imageState, setImageState] = useState<'loading' | 'ready' | 'missing'>('loading');
+
     // Each change is its own decision — carrying the previous card's wording
     // forward would quietly attach the wrong text to a task.
     useEffect(() => {
         setDescription(item.description ?? 'Change detected on revision comparison');
         setNote('');
         setSaving(null);
+        setImageState('loading');
     }, [item.id, item.description]);
 
     // Held in a ref so an inline callback from the parent does not re-fire the
@@ -147,8 +155,24 @@ export function ChangeReviewCard({
                         </span>
                     )}
                 </div>
-                {item.preview_url ? (
-                    <img src={item.preview_url} alt={`Before and after of ${title}`} className="w-full" />
+                {item.preview_url && imageState !== 'missing' ? (
+                    <div className="relative">
+                        {/* Kept mounted while loading so the browser actually
+                            starts the request; the placeholder sits over it. */}
+                        <img
+                            src={item.preview_url}
+                            alt={`Before and after of ${title}`}
+                            className={cn('w-full', imageState !== 'ready' && 'invisible')}
+                            onLoad={() => setImageState('ready')}
+                            onError={() => setImageState('missing')}
+                        />
+                        {imageState === 'loading' && (
+                            <div className="bg-muted/40 absolute inset-0 flex min-h-40 flex-col items-center justify-center gap-2">
+                                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+                                <p className="text-muted-foreground text-[11px]">Redrawing this change…</p>
+                            </div>
+                        )}
+                    </div>
                 ) : (
                     <div className="text-muted-foreground px-2 py-10 text-center text-[11px]">No before/after image for this change</div>
                 )}
