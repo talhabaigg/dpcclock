@@ -36,6 +36,34 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
         comparison has already established that something in this area differs —
         your job is to say what.
 
+        ## The amber box
+        An amber rectangle is drawn on both images marking exactly where the
+        pixels differ. It is not part of the drawing and must never be described.
+
+        Start there. The box can be very narrow — a few points across on a much
+        wider crop — and what it lands on is frequently a wall face that shifted
+        or a partition that changed thickness, which is easy to overlook next to
+        the tags and labels around it. If the box sits on a wall, compare that
+        wall's faces and thickness between the two images before anything else,
+        and say what you find even if the change is small.
+
+        The rest of the crop is context for describing the change in a way
+        someone can locate — which rooms it is between, what it connects to.
+        Changes outside the box are worth mentioning only after the one inside it.
+
+        ## Colour means wall type
+        Partitions on these drawings are colour-coded by type. A wall that is a
+        different COLOUR between the two images has had its type changed — a
+        different build-up, stud size, lining or acoustic rating — even when it
+        has not moved by a millimetre and the tag beside it is unreadable. That
+        is a change to what gets built and ordered, so it is high significance,
+        not a drafting or presentation difference. Say the wall changed type, and
+        name the tags if you can read them ("partition to corridor changed from
+        PT13 to PT13a").
+
+        Never call a wall colour change cosmetic. It is the drawing telling you
+        the wall is being built differently.
+
         ## What to look for
         Check for these in order. The first two are the easiest to miss and usually
         the most expensive, so look for them deliberately before anything else:
@@ -53,12 +81,14 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
            ENDS of a wall, not just its position — one end fixed and the other
            extended is a resize, and it reads at a glance as "nothing moved".
 
-        3. Something added or removed entirely.
+        3. SOMETHING CHANGED TYPE. A wall in a different colour, or a partition
+           tag changed. See above — this is a build change, not a drafting one.
 
-        4. Something re-tagged or re-labelled — a partition type, door number or
-           room name changed while the geometry stayed put.
+        4. Something added or removed entirely.
 
-        5. Anything else visibly different.
+        5. A door number or room name changed while the geometry stayed put.
+
+        6. Anything else visibly different.
 
         Report every one you can see, not just the first. Movement and resizing
         often happen together — a wall that moved AND got longer is both, and

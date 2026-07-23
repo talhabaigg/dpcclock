@@ -166,24 +166,28 @@ class DrawingRegionVisionService
         $newCrop = null;
 
         try {
-            $oldCrop = $this->cropper->crop($oldPage, $region, $pageWidth, $pageHeight);
-            $newCrop = $this->cropper->crop($newPage, $region, $pageWidth, $pageHeight);
+            $marker = $this->cropper->markerRect($region, $pageWidth, $pageHeight);
+
+            // Both the crops shown to the model and the frames shown to the
+            // user carry the marker.
+            //
+            // Withholding it was a mistake. The crop is padded far wider than
+            // the region so the change has context, which leaves the model
+            // hunting a whole junction for a difference that can be a few
+            // points across — one observed region was 7pt wide in a 204pt
+            // crop, and the model described the tags it could see and missed
+            // the wall face entirely. The pixel comparison is ground truth
+            // about WHERE something differs; it says nothing about what, so
+            // handing it over narrows the question without answering it.
+            $oldCrop = $this->cropper->crop($oldPage, $region, $pageWidth, $pageHeight, $marker);
+            $newCrop = $this->cropper->crop($newPage, $region, $pageWidth, $pageHeight, $marker);
 
             if ($oldCrop === null || $newCrop === null) {
                 return null;
             }
 
             $preview = $previewPath !== null
-                ? $this->cropper->animate(
-                    $oldCrop,
-                    $newCrop,
-                    $previewPath,
-                    // Mark the changed area inside the frame. The crop is
-                    // deliberately much wider than the region, so without this
-                    // the animation and the box on the sheet look like
-                    // different places.
-                    $this->cropper->markerRect($region, $pageWidth, $pageHeight),
-                )
+                ? $this->cropper->animate($oldCrop, $newCrop, $previewPath)
                 : null;
 
             if (! $readByModel) {

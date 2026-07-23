@@ -111,7 +111,7 @@ class DrawingRegionCropper
      * @param  array{x: float, y: float, w: float, h: float}  $region  in PDF points
      * @return string|null path to a temporary PNG, or null if it could not be cut
      */
-    public function crop(string $preparedPath, array $region, float $pageWidth, float $pageHeight): ?string
+    public function crop(string $preparedPath, array $region, float $pageWidth, float $pageHeight, ?array $marker = null): ?string
     {
         $binary = $this->rasterizer->magickBinary();
 
@@ -132,7 +132,7 @@ class DrawingRegionCropper
         $output = tempnam(sys_get_temp_dir(), 'drawcrop_').'.png';
 
         try {
-            $result = Process::timeout(120)->run([
+            $command = [
                 $binary,
                 $preparedPath,
                 '-crop', "{$cropW}x{$cropH}+{$cropX}+{$cropY}",
@@ -140,8 +140,15 @@ class DrawingRegionCropper
                 // some encoders then honour by re-padding the image back to
                 // full sheet size. Resetting the page discards it.
                 '+repage',
-                $output,
-            ]);
+            ];
+
+            if ($marker !== null) {
+                array_push($command, ...$this->markerDraw($marker));
+            }
+
+            $command[] = $output;
+
+            $result = Process::timeout(120)->run($command);
 
             if (! $result->successful() || ! file_exists($output) || filesize($output) === 0) {
                 Log::warning('Region crop failed', [
@@ -179,7 +186,7 @@ class DrawingRegionCropper
      * @param  array{0: float, 1: float, 2: float, 3: float}|null  $marker  region rect within the crop, in crop pixels
      * @return string|null path relative to the storage disk, or null on failure
      */
-    public function animate(string $oldCrop, string $newCrop, string $relativePath, ?array $marker = null): ?string
+    public function animate(string $oldCrop, string $newCrop, string $relativePath): ?string
     {
         $binary = $this->rasterizer->magickBinary();
 
@@ -209,27 +216,6 @@ class DrawingRegionCropper
                     $binary,
                     $source,
                 ];
-
-                if ($marker !== null) {
-                    // Drawn before the resize so the coordinates are still in
-                    // the crop's own pixel space.
-                    //
-                    // Amber rather than red: drawings already use red for
-                    // revision clouds and the drafter's own markup, so a red
-                    // box reads as part of the drawing rather than as ours.
-                    // The glow is a wide, soft, semi-transparent pass under a
-                    // crisp one — it lifts the box off dense line work without
-                    // hiding what sits beneath it.
-                    $rect = sprintf('rectangle %.0f,%.0f %.0f,%.0f', ...$marker);
-
-                    array_push($command,
-                        '-fill', 'none',
-                        '-stroke', 'rgba(245,158,11,0.28)', '-strokewidth', '11', '-draw', $rect,
-                        '-stroke', 'rgba(245,158,11,0.45)', '-strokewidth', '6', '-draw', $rect,
-                        '-stroke', '#F59E0B', '-strokewidth', '2.5', '-draw', $rect,
-                        '-stroke', 'none',
-                    );
-                }
 
                 array_push($command,
                     // Both frames are pinned to one exact canvas. A GIF whose
@@ -299,6 +285,30 @@ class DrawingRegionCropper
 
             return null;
         }
+    }
+
+    /**
+     * Amber marker draw operations: a wide soft pass under a crisp one.
+     *
+     * Amber rather than red because drawings already use red for revision
+     * clouds and the drafter's own markup, so a red box reads as part of the
+     * drawing. The glow lifts it off dense line work without hiding what sits
+     * beneath.
+     *
+     * @param  array{0: float, 1: float, 2: float, 3: float}  $marker
+     * @return list<string>
+     */
+    private function markerDraw(array $marker): array
+    {
+        $rect = sprintf('rectangle %.0f,%.0f %.0f,%.0f', ...$marker);
+
+        return [
+            '-fill', 'none',
+            '-stroke', 'rgba(245,158,11,0.28)', '-strokewidth', '11', '-draw', $rect,
+            '-stroke', 'rgba(245,158,11,0.45)', '-strokewidth', '6', '-draw', $rect,
+            '-stroke', '#F59E0B', '-strokewidth', '2.5', '-draw', $rect,
+            '-stroke', 'none',
+        ];
     }
 
     /**
