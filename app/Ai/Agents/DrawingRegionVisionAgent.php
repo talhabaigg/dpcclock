@@ -42,10 +42,13 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
           a useful answer. Inventing a plausible-sounding wall change is not.
         - Ignore differences that are only line weight, anti-aliasing, or a slight
           shift of the whole crop — those are rendering artefacts, not design changes.
-        - Describe it the way a site foreman would need it: what is different, and
-          where in the crop it is ("the partition along the north side of the
-          corridor", not "the line at coordinates 340,120").
-        - Do not describe the whole drawing. Only the difference.
+        - TWENTY WORDS MAXIMUM. This is a list someone scans, not prose. State the
+          change and stop. "Partition between store and corridor removed" is a
+          complete answer; the reader can open the image for the rest.
+        - Name the thing the way a site foreman would ("the partition on the north
+          side of the corridor", never "the line at coordinates 340,120").
+        - Do not describe the whole drawing, restate the room, or explain your
+          reasoning. Only the difference.
 
         ## Significance
         - high   — changes what gets built or ordered: walls added, removed or
@@ -73,7 +76,7 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
                 ->required(),
 
             'description' => $schema->string()
-                ->description('One or two sentences a site foreman would understand, saying what is different between the two images.')
+                ->description('What changed, in 20 words or fewer. A scannable line, not a sentence of prose.')
                 ->required(),
 
             'trade_impact' => $schema->array()

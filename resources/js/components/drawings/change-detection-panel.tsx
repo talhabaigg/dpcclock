@@ -136,6 +136,7 @@ export function ChangeDetectionPanel({
     const [showAllUnranked, setShowAllUnranked] = useState(false);
     const [clouding, setClouding] = useState(false);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [showSummary, setShowSummary] = useState(false);
 
     // Held in a ref so a parent that passes an inline callback does not
     // re-fire the effect on every render.
@@ -299,21 +300,6 @@ export function ChangeDetectionPanel({
 
                     {result?.status === 'complete' && (
                         <div className="space-y-3">
-                            {result.summary && <p className="text-xs leading-relaxed">{result.summary}</p>}
-
-                            {result.revision_notes.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">Revision history</p>
-                                    {result.revision_notes.map((note, index) => (
-                                        <div key={`${note.revision}-${index}`} className="text-xs">
-                                            <span className="font-medium">Rev {note.revision}</span>
-                                            {note.date && <span className="text-muted-foreground"> · {note.date}</span>}
-                                            {note.description && <div className="text-muted-foreground">{note.description}</div>}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
                             {textual.length > 0 && result.text_comparable === false && (
                                 <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
                                     These two PDFs encode their text differently, so the text changes below are unreliable for this pair and may
@@ -408,6 +394,36 @@ export function ChangeDetectionPanel({
                                         >
                                             Show {unranked.length - unrankedShown.length} more
                                         </Button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Context, not the headline. The changes are what
+                                the reader came for; the roll-up is background
+                                and sits out of the way until asked for. */}
+                            {(result.summary || result.revision_notes.length > 0) && (
+                                <div className="space-y-1.5 border-t pt-2">
+                                    <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-left text-[11px] font-medium tracking-wide uppercase transition-colors"
+                                        onClick={() => setShowSummary((v) => !v)}
+                                    >
+                                        {showSummary ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                        Summary &amp; revision history
+                                    </button>
+
+                                    {showSummary && (
+                                        <div className="space-y-2">
+                                            {result.summary && <p className="text-xs leading-relaxed">{result.summary}</p>}
+
+                                            {result.revision_notes.map((note, index) => (
+                                                <div key={`${note.revision}-${index}`} className="text-xs">
+                                                    <span className="font-medium">Rev {note.revision}</span>
+                                                    {note.date && <span className="text-muted-foreground"> · {note.date}</span>}
+                                                    {note.description && <div className="text-muted-foreground">{note.description}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
                             )}

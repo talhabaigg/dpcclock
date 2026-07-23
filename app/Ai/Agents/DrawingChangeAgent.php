@@ -58,9 +58,10 @@ class DrawingChangeAgent implements Agent, HasStructuredOutput
         - `element` is what the text labels, in the drawing's own vocabulary: "room
           name", "door tag", "dimension", "ceiling height", "general note",
           "partition type", "drawing number", "revision stamp", etc.
-        - `description` is one plain sentence a site foreman would understand. Say
-          what changed, not that something changed. "Ceiling height in Meeting Room
-          2.04 raised from 2700 to 2850" — not "a dimension was modified".
+        - `description` is TWENTY WORDS MAXIMUM. This is a list someone scans, not
+          prose. Say what changed, not that something changed: "Ceiling height in
+          Meeting Room 2.04 raised 2700 to 2850" — not "a dimension was modified",
+          and not a sentence explaining why it matters.
         - `trade_impact` lists only trades whose scope or quantity is actually
           affected. Use "walls", "ceilings", or "other". An empty list is correct and
           expected for drafting-only edits.
@@ -105,7 +106,7 @@ class DrawingChangeAgent implements Agent, HasStructuredOutput
                     'element' => $schema->string()
                         ->description('What the changed text labels, e.g. "room name", "dimension", "door tag".'),
                     'description' => $schema->string()
-                        ->description('One sentence a site foreman would understand, stating what changed.'),
+                        ->description('What changed, in 20 words or fewer. A scannable line, not a sentence of prose.'),
                     'trade_impact' => $schema->array()
                         ->description('Affected trades. Empty when the change is drafting-only.')
                         ->items($schema->string()->enum(['walls', 'ceilings', 'other'])),
