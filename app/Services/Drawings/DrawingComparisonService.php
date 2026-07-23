@@ -9,6 +9,7 @@ use App\Models\DrawingChangeItem;
 use App\Models\DrawingComparison;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Enums\Lab;
 
 /**
@@ -29,7 +30,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 7;
+    public const PIPELINE_VERSION = 8;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -90,6 +91,11 @@ class DrawingComparisonService
      */
     public function reset(DrawingComparison $comparison): void
     {
+        // Previews are files on disk, not rows; dropping the items alone would
+        // leak them on every re-run.
+        Storage::disk(DrawingRegionCropper::DISK)
+            ->deleteDirectory("drawing-change-previews/{$comparison->id}");
+
         DB::transaction(function () use ($comparison) {
             $comparison->items()->delete();
 
@@ -182,8 +188,8 @@ class DrawingComparisonService
 
             // Read the regions before summarising, so the roll-up can talk
             // about what is actually in them rather than only counting them.
-            $vision = $this->describeRegions($oldSource, $newSource, $regions, $pageBox);
-            $regions = $this->applyVerdicts($regions, $vision['verdicts']);
+            $vision = $this->describeRegions($comparison, $oldSource, $newSource, $regions, $pageBox);
+            $regions = $this->applyVerdicts($regions, $vision['verdicts'], $vision['previews'] ?? []);
 
             $interpretation = $this->interpret($changes, $titleBlock, $regions, $textComparable);
 
@@ -216,19 +222,20 @@ class DrawingComparisonService
      * @return array{verdicts: array<int, array<string, mixed>>, input_tokens: int, output_tokens: int}
      */
     private function describeRegions(
+        DrawingComparison $comparison,
         DrawingSourceFile $old,
         DrawingSourceFile $new,
         array $regions,
         ?array $pageBox,
     ): array {
-        $empty = ['verdicts' => [], 'input_tokens' => 0, 'output_tokens' => 0];
+        $empty = ['verdicts' => [], 'previews' => [], 'input_tokens' => 0, 'output_tokens' => 0];
 
         if ($regions === [] || $pageBox === null || ! $this->vision->isAvailable()) {
             return $empty;
         }
 
         try {
-            return $this->vision->describe($old->path, $new->path, $regions, $pageBox[0], $pageBox[1]);
+            return $this->vision->describe($old->path, $new->path, $regions, $pageBox[0], $pageBox[1], $comparison->id);
         } catch (\Throwable $e) {
             Log::warning('Region vision pass failed; keeping undescribed regions', [
                 'error' => $e->getMessage(),
@@ -245,8 +252,14 @@ class DrawingComparisonService
      * @param  array<int, array<string, mixed>>  $verdicts
      * @return list<array<string, mixed>>
      */
-    private function applyVerdicts(array $regions, array $verdicts): array
+    private function applyVerdicts(array $regions, array $verdicts, array $previews = []): array
     {
+        foreach ($previews as $index => $path) {
+            if (isset($regions[$index])) {
+                $regions[$index]['preview_path'] = $path;
+            }
+        }
+
         foreach ($verdicts as $index => $verdict) {
             if (! isset($regions[$index])) {
                 continue;
@@ -648,6 +661,7 @@ class DrawingComparisonService
                     'h' => $change['h'],
                     'count_old' => $change['count_old'] ?? null,
                     'count_new' => $change['count_new'] ?? null,
+                    'preview_path' => null,
                     'locatable' => $textLocatable,
                     // Fall back to the diff's own idea of what this row is, so
                     // an unranked row still says "dimensions" rather than nothing.
@@ -691,6 +705,7 @@ class DrawingComparisonService
                     // Populated when the vision pass read this region with
                     // enough confidence; otherwise it stays a plain, locatable
                     // "changed area" the user can go and look at.
+                    'preview_path' => $region['preview_path'] ?? null,
                     'element' => $region['element'] ?? 'changed area',
                     'description' => $region['description'] ?? null,
                     'trade_impact' => isset($region['trade_impact'])

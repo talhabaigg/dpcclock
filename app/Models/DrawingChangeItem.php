@@ -27,6 +27,7 @@ class DrawingChangeItem extends Model
         'y',
         'w',
         'h',
+        'preview_path',
         'locatable',
         'element',
         'description',

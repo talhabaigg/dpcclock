@@ -1,7 +1,8 @@
 import { AnnotationOverlayUi } from '@/components/annotations/drawing-annotations/annotation-overlay-ui';
 import type { LayerDef } from '@/components/annotations/drawing-annotations/layers-panel';
 import { useAnnotationLayer } from '@/components/annotations/drawing-annotations/use-annotation-layer';
-import { ChangeDetectionPanel } from '@/components/drawings/change-detection-panel';
+import { ChangeDetectionPanel, type ChangeItem } from '@/components/drawings/change-detection-panel';
+import { useChangeRegionsOverlay } from '@/components/drawings/use-change-regions-overlay';
 import type { Point } from '@/components/measurement-layer';
 import { PixiDrawingViewer, type ViewControls, type ViewerPin } from '@/components/pixi-drawing-viewer';
 import { PlanVersionControl, type PlanOption } from '@/components/plan-version-control';
@@ -51,6 +52,9 @@ export default function DrawingPlan() {
     const [zoom, setZoom] = useState(1);
     const [viewControls, setViewControls] = useState<ViewControls | null>(null);
     const [comparisonError, setComparisonError] = useState<string | null>(null);
+    const [changeItems, setChangeItems] = useState<ChangeItem[]>([]);
+    const [selectedChangeId, setSelectedChangeId] = useState<number | null>(null);
+    const [changesVisible, setChangesVisible] = useState(true);
 
     const [tasks, setTasks] = useState<SiteTaskDto[]>([]);
     const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -161,7 +165,16 @@ export default function DrawingPlan() {
         { title: displayName, href: `/drawings/${drawing.id}/plan` },
     ];
 
+    // Boxes for every locatable detected change, drawn on the sheet itself.
+    const changeOverlay = useChangeRegionsOverlay({
+        regions: changeItems,
+        visible: Boolean(comparison) && changesVisible,
+        selectedId: selectedChangeId,
+        pageHeight: null,
+    });
+
     const layerDefs: LayerDef[] = [
+        ...(comparison ? [{ id: 'changes', label: 'Detected changes', visible: changesVisible, onToggle: setChangesVisible }] : []),
         ...(canViewTasks ? [{ id: 'tasks', label: 'Tasks', visible: tasksVisible, onToggle: setTasksVisible }] : []),
         ann.layerDef,
         ann.linkLayerDef,
@@ -186,7 +199,7 @@ export default function DrawingPlan() {
                     selectedPinId={selectedTaskId}
                     onPinClick={(pin) => setSelectedTaskId(resolvePanelTask(pin.id))}
                     pinDropMode={pinMode && canEditTasks}
-                    overlays={[ann.overlay]}
+                    overlays={[ann.overlay, changeOverlay]}
                     onCanvasClick={(point) => {
                         setPinMode(false);
                         // The viewer fires this on pointerup; the browser's
@@ -237,8 +250,10 @@ export default function DrawingPlan() {
                         // of the change and pick a zoom that frames it with some
                         // surrounding context — a region shown edge-to-edge is
                         // hard to interpret without what sits around it.
+                        onItemsChange={setChangeItems}
                         onLocate={(item) => {
                             if (item.x === null || item.y === null) return;
+                            setSelectedChangeId(item.id);
                             const w = item.w ?? 0;
                             const h = item.h ?? 0;
                             const scale = w > 0 && h > 0 ? Math.min(6, Math.max(1.5, 500 / Math.max(w, h))) : 3;

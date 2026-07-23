@@ -51,6 +51,12 @@ return [
         // Model used for region reads. Defaults to the main comparison model.
         'vision_model' => env('DRAWING_COMPARISON_VISION_MODEL'),
 
+        // Regions that get a before/after animation. Cropping is cheap once the
+        // page is rendered, so this runs wider than the vision budget - being
+        // able to flick between the two states is useful even where nothing has
+        // described the change in words.
+        'max_region_previews' => env('DRAWING_COMPARISON_MAX_PREVIEWS', 45),
+
         // Largest N regions actually read. The rest keep their factual
         // "changed area" row so nothing is lost, just not described.
         'max_regions_for_vision' => env('DRAWING_COMPARISON_MAX_REGIONS', 25),

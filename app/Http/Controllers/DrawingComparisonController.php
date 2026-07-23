@@ -8,9 +8,12 @@ use App\Models\Drawing;
 use App\Models\DrawingChangeItem;
 use App\Models\DrawingComparison;
 use App\Services\Drawings\DrawingComparisonService;
+use App\Services\Drawings\DrawingRegionCropper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Revision change detection for a pair of drawings.
@@ -73,6 +76,37 @@ class DrawingComparisonController extends Controller
 
         return response()->json([
             'comparison' => $this->format($comparison->load('items')),
+        ]);
+    }
+
+    /**
+     * Stream a change's before/after animation.
+     *
+     * Served through the app rather than from a public disk because drawings
+     * are project-restricted; the route sits behind the same drawings.view
+     * permission as everything else here.
+     */
+    public function preview(Request $request, Drawing $drawing, DrawingChangeItem $item): StreamedResponse|JsonResponse
+    {
+        $comparison = $item->comparison;
+
+        // The item must genuinely belong to a comparison ending at this
+        // drawing, or the drawing in the URL means nothing for authorisation.
+        if ($comparison === null || $comparison->new_drawing_id !== $drawing->id || ! $item->preview_path) {
+            return response()->json(['message' => 'Preview not found.'], 404);
+        }
+
+        $disk = Storage::disk(DrawingRegionCropper::DISK);
+
+        if (! $disk->exists($item->preview_path)) {
+            return response()->json(['message' => 'Preview not found.'], 404);
+        }
+
+        return $disk->response($item->preview_path, null, [
+            'Content-Type' => 'image/gif',
+            // Immutable: a comparison's previews are regenerated under a fresh
+            // path when it is re-run, so a cached one is never stale.
+            'Cache-Control' => 'private, max-age=86400',
         ]);
     }
 
@@ -284,6 +318,9 @@ class DrawingComparisonController extends Controller
                 'confidence' => $item->confidence,
                 'page_number' => $item->page_number,
                 'locatable' => (bool) $item->locatable,
+                'preview_url' => $item->preview_path
+                    ? route('drawings.comparison.preview', ['drawing' => $comparison->new_drawing_id, 'item' => $item->id])
+                    : null,
                 'x' => $item->x,
                 'y' => $item->y,
                 'w' => $item->w,

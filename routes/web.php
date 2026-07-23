@@ -1316,6 +1316,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // while an analysis runs); `analyze` starts one for a revision pair.
         Route::get('/drawings/{drawing}/comparison', [DrawingComparisonController::class, 'show'])->name('drawings.comparison.show');
         Route::post('/drawings/{drawing}/comparison', [DrawingComparisonController::class, 'analyze'])->name('drawings.comparison.analyze');
+        Route::get('/drawings/{drawing}/comparison/preview/{item}', [DrawingComparisonController::class, 'preview'])->name('drawings.comparison.preview');
     });
     Route::middleware('permission:drawings.create')->group(function () {
         Route::get('/projects/{project}/drawings/upload', [DrawingController::class, 'upload'])->name('drawings.upload');

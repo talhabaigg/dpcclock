@@ -46,8 +46,9 @@ class DrawingRegionVisionService
         array $regions,
         float $pageWidth,
         float $pageHeight,
+        int $comparisonId = 0,
     ): array {
-        $empty = ['verdicts' => [], 'input_tokens' => 0, 'output_tokens' => 0];
+        $empty = ['verdicts' => [], 'previews' => [], 'input_tokens' => 0, 'output_tokens' => 0];
 
         if (! $this->isAvailable() || $regions === []) {
             return $empty;
@@ -58,12 +59,13 @@ class DrawingRegionVisionService
         $provider = str_starts_with($model, 'claude') ? Lab::Anthropic : Lab::OpenAI;
         $timeout = (int) config('drawings.comparison.timeout', 120);
         $limit = (int) config('drawings.comparison.max_regions_for_vision', 25);
+        $previewLimit = (int) config('drawings.comparison.max_region_previews', 45);
 
         // Largest first: area on the sheet is the best cheap proxy for how much
         // changed, and it means a truncated budget spends on the big changes.
         $order = array_keys($regions);
         usort($order, fn (int $a, int $b) => ($regions[$b]['w'] * $regions[$b]['h']) <=> ($regions[$a]['w'] * $regions[$a]['h']));
-        $order = array_slice($order, 0, $limit);
+        $previewOrder = array_slice($order, 0, max($limit, $previewLimit));
 
         $verdicts = [];
         $inputTokens = 0;
@@ -81,8 +83,17 @@ class DrawingRegionVisionService
             return $empty;
         }
 
+        $previews = [];
+
         try {
-            foreach ($order as $index) {
+            foreach ($previewOrder as $position => $index) {
+                // Every region in the preview budget gets a before/after
+                // animation; only the leading slice is also read by the model.
+                // Cropping is cheap once the page is rendered, and being able
+                // to flick between the two states is useful even where nothing
+                // has described the change in words.
+                $readByModel = $position < $limit;
+
                 $result = $this->describeRegion(
                     $oldPage,
                     $newPage,
@@ -92,9 +103,19 @@ class DrawingRegionVisionService
                     $provider,
                     $model,
                     $timeout,
+                    $readByModel,
+                    $comparisonId > 0 ? "drawing-change-previews/{$comparisonId}/{$index}.gif" : null,
                 );
 
                 if ($result === null) {
+                    continue;
+                }
+
+                if (($result['preview'] ?? null) !== null) {
+                    $previews[$index] = $result['preview'];
+                }
+
+                if (($result['verdict'] ?? null) === null) {
                     continue;
                 }
 
@@ -109,6 +130,7 @@ class DrawingRegionVisionService
 
         return [
             'verdicts' => $verdicts,
+            'previews' => $previews,
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
         ];
@@ -127,6 +149,8 @@ class DrawingRegionVisionService
         Lab $provider,
         string $model,
         int $timeout,
+        bool $readByModel = true,
+        ?string $previewPath = null,
     ): ?array {
         $oldCrop = null;
         $newCrop = null;
@@ -137,6 +161,14 @@ class DrawingRegionVisionService
 
             if ($oldCrop === null || $newCrop === null) {
                 return null;
+            }
+
+            $preview = $previewPath !== null
+                ? $this->cropper->animate($oldCrop, $newCrop, $previewPath)
+                : null;
+
+            if (! $readByModel) {
+                return ['verdict' => null, 'preview' => $preview, 'input_tokens' => 0, 'output_tokens' => 0];
             }
 
             $response = DrawingRegionVisionAgent::make()->prompt(
@@ -152,6 +184,7 @@ class DrawingRegionVisionService
 
             return [
                 'verdict' => $response->toArray(),
+                'preview' => $preview,
                 'input_tokens' => $response->usage->promptTokens,
                 'output_tokens' => $response->usage->completionTokens,
             ];
@@ -163,7 +196,11 @@ class DrawingRegionVisionService
                 'error' => $e->getMessage(),
             ]);
 
-            return null;
+            // The animation may already exist even though the read failed, and
+            // it is the more useful half of the two.
+            return isset($preview) && $preview !== null
+                ? ['verdict' => null, 'preview' => $preview, 'input_tokens' => 0, 'output_tokens' => 0]
+                : null;
         } finally {
             foreach ([$oldCrop, $newCrop] as $path) {
                 if ($path !== null && file_exists($path)) {

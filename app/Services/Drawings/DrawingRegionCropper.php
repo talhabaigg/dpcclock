@@ -4,6 +4,7 @@ namespace App\Services\Drawings;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Cuts detected change regions out of a revision as PNG crops.
@@ -34,6 +35,12 @@ class DrawingRegionCropper
 
     /** Smallest crop edge in points, so a tiny region still lands legibly. */
     private const MIN_EDGE = 120.0;
+
+    /** Longest edge of the generated preview, in pixels. */
+    private const PREVIEW_WIDTH = 560;
+
+    /** Disk previews are written to. Private — drawings are not public. */
+    public const DISK = 'local';
 
     public function __construct(private readonly DrawingRasterizer $rasterizer) {}
 
@@ -139,6 +146,105 @@ class DrawingRegionCropper
         } catch (\Throwable $e) {
             Log::warning('Region crop threw', ['error' => $e->getMessage()]);
             @unlink($output);
+
+            return null;
+        }
+    }
+
+    /**
+     * Build an animated before/after GIF for one region.
+     *
+     * Flicking between two states in place is how people actually read a
+     * drawing revision — the eye catches the thing that moves instantly, where
+     * reading a written description of the same change takes real effort. The
+     * two frames are labelled so a paused animation is still unambiguous.
+     *
+     * @return string|null path relative to the storage disk, or null on failure
+     */
+    public function animate(string $oldCrop, string $newCrop, string $relativePath): ?string
+    {
+        $binary = $this->rasterizer->magickBinary();
+
+        if ($binary === null) {
+            return null;
+        }
+
+        $absolute = Storage::disk(self::DISK)->path($relativePath);
+        $directory = dirname($absolute);
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        try {
+            // Each frame is built on its own, then the two are combined. Doing
+            // it in one pipeline requires a per-frame label, and the obvious
+            // way to express that (an fx ternary) does not work — fx yields
+            // numbers, not strings. Three cheap calls are worth the certainty.
+            $frames = [];
+
+            foreach ([[$oldCrop, 'BEFORE'], [$newCrop, 'AFTER']] as [$source, $label]) {
+                $frame = tempnam(sys_get_temp_dir(), 'drawframe_').'.png';
+                $frames[] = $frame;
+
+                $built = Process::timeout(60)->run([
+                    $binary,
+                    $source,
+                    // Both frames are pinned to one exact canvas. A GIF whose
+                    // frames differ even by a pixel renders as a jitter, and on
+                    // a before/after animation that jitter reads as a change
+                    // that is not there — measured 496px against 494px at +0+2
+                    // when the frames were built together.
+                    '-resize', self::PREVIEW_WIDTH.'x'.self::PREVIEW_WIDTH.'>',
+                    '-background', 'white', '-alpha', 'remove',
+                    '-gravity', 'center', '-extent', self::PREVIEW_WIDTH.'x'.self::PREVIEW_WIDTH,
+                    // Label bar, so a paused animation still says which
+                    // revision is on screen.
+                    '-gravity', 'North', '-splice', '0x20',
+                    '-pointsize', '15', '-fill', 'black',
+                    '-annotate', '+0+3', $label,
+                    $frame,
+                ]);
+
+                if (! $built->successful() || ! file_exists($frame) || filesize($frame) === 0) {
+                    Log::warning('Region preview frame failed', [
+                        'label' => $label,
+                        'error' => substr($built->errorOutput(), 0, 300),
+                    ]);
+
+                    foreach ($frames as $f) {
+                        @unlink($f);
+                    }
+
+                    return null;
+                }
+            }
+
+            $result = Process::timeout(120)->run([
+                $binary,
+                '-loop', '0',
+                '-delay', '90', $frames[0],
+                '-delay', '90', $frames[1],
+                '-layers', 'OptimizeFrame',
+                $absolute,
+            ]);
+
+            foreach ($frames as $frame) {
+                @unlink($frame);
+            }
+
+            if (! $result->successful() || ! file_exists($absolute) || filesize($absolute) === 0) {
+                Log::warning('Region preview animation failed', [
+                    'exit_code' => $result->exitCode(),
+                    'error' => substr($result->errorOutput(), 0, 300),
+                ]);
+
+                return null;
+            }
+
+            return $relativePath;
+        } catch (\Throwable $e) {
+            Log::warning('Region preview animation threw', ['error' => $e->getMessage()]);
 
             return null;
         }

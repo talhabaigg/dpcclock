@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, RotateCw } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, Images, RotateCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 export type ChangeItem = {
@@ -24,6 +24,8 @@ export type ChangeItem = {
     page_number: number | null;
     /** Whether x/y are true page coordinates the viewer can zoom to. */
     locatable: boolean;
+    /** Animated before/after of this region, when one was generated. */
+    preview_url: string | null;
     x: number | null;
     y: number | null;
     w: number | null;
@@ -62,6 +64,8 @@ export type ComparisonResult = {
 };
 
 const SIGNIFICANCE_ORDER = ['high', 'medium', 'low'] as const;
+
+const ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 /** How many unranked rows render before the rest are collapsed. */
 const UNRANKED_PREVIEW = 15;
@@ -109,12 +113,15 @@ export function ChangeDetectionPanel({
     onLocate,
     canCloud = false,
     onClouded,
+    onItemsChange,
 }: {
     drawingId: number;
     oldDrawingId: number;
     onLocate?: (item: ChangeItem) => void;
     canCloud?: boolean;
     onClouded?: () => void;
+    /** Lets the viewer draw the same changes on the sheet. */
+    onItemsChange?: (items: ChangeItem[]) => void;
 }) {
     const [result, setResult] = useState<ComparisonResult | null>(null);
     const [loading, setLoading] = useState(true);
@@ -123,6 +130,12 @@ export function ChangeDetectionPanel({
     const [showLow, setShowLow] = useState(false);
     const [showAllUnranked, setShowAllUnranked] = useState(false);
     const [clouding, setClouding] = useState(false);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+
+    // Held in a ref so a parent that passes an inline callback does not
+    // re-fire the effect on every render.
+    const onItemsChangeRef = useRef(onItemsChange);
+    onItemsChangeRef.current = onItemsChange;
 
     // Cleared on unmount so a poll can't fire against a torn-down component.
     const pollRef = useRef<number | null>(null);
@@ -196,19 +209,31 @@ export function ChangeDetectionPanel({
     };
 
     const running = result?.status === 'pending' || result?.status === 'running';
-    const all = result?.items ?? [];
+    const all = useMemo(() => result?.items ?? [], [result]);
 
-    // Rows are grouped by what is known about them, not by which detector
-    // found them. A geometry region the vision pass read is a described,
-    // ranked change and belongs beside the text changes; one it could not read
-    // is only a place to go and look, and is listed separately.
-    const items = all.filter((item) => item.source !== 'raster' || item.description !== null);
-    const regions = all.filter((item) => item.source === 'raster' && item.description === null);
+    useEffect(() => {
+        onItemsChangeRef.current?.(all);
+    }, [all]);
 
-    const visible = showLow ? items : items.filter((item) => item.significance !== 'low');
-    const hiddenLowCount = items.length - visible.length;
+    // Visual changes lead. They are the ones seen on the drawing itself — a
+    // wall that moved — which is what the trades are being asked about, and
+    // they carry a before/after animation. Text findings follow as supporting
+    // detail: real, exact, but a tag or a dimension rather than built work.
+    const visual = all.filter((item) => item.source === 'raster');
+    const textual = all.filter((item) => item.source !== 'raster');
+
+    const rank = (item: ChangeItem) => ORDER[item.significance ?? ''] ?? 3;
+    const bySignificance = (a: ChangeItem, b: ChangeItem) => rank(a) - rank(b);
+
+    const visualRanked = [...visual].sort(bySignificance);
+    // A region nothing could read is not a finding, it is a place to look.
+    const visualDescribed = visualRanked.filter((item) => item.description !== null);
+    const visualUnread = visualRanked.filter((item) => item.description === null);
+
+    const visible = showLow ? textual : textual.filter((item) => item.significance !== 'low');
+    const hiddenLowCount = textual.length - visible.length;
     // Text coordinates are unusable on some CAD exports; regions never are.
-    const textLocatable = items.some((item) => item.locatable);
+    const textLocatable = textual.some((item) => item.locatable);
     const unranked = visible.filter((item) => item.significance === null);
     // Unranked rows are the fallback path: ranking was skipped, capped, or
     // failed. Showing hundreds of them unbounded is what made this panel
@@ -284,24 +309,64 @@ export function ChangeDetectionPanel({
                                 </div>
                             )}
 
-                            {items.length > 0 && result.text_comparable === false && (
+                            {textual.length > 0 && result.text_comparable === false && (
                                 <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
                                     These two PDFs encode their text differently, so the text changes below are unreliable for this pair and may
                                     include export artefacts. The changed areas are unaffected — they come from comparing the drawn image.
                                 </p>
                             )}
 
-                            {items.length > 0 && !textLocatable && (
+                            {textual.length > 0 && !textLocatable && (
                                 <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
                                     This sheet stores its text in a nested coordinate space, so the text changes below can't be located on the plan.
                                     The list itself is exact, and the changed areas can still be opened.
                                 </p>
                             )}
 
-                            {items.length === 0 && regions.length === 0 && (
-                                <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>
+                            {all.length === 0 && <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>}
+
+                            {/* Visual changes lead: seen on the drawing itself,
+                                and each carries a before/after animation. */}
+                            {visualDescribed.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                        Wall &amp; geometry changes ({visualDescribed.length})
+                                    </p>
+                                    {visualDescribed.map((item) => (
+                                        <ChangeRow
+                                            key={item.id}
+                                            item={item}
+                                            onLocate={onLocate}
+                                            expanded={expandedId === item.id}
+                                            onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                                        />
+                                    ))}
+                                </div>
                             )}
 
+                            {visualUnread.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                        Other potential changes ({visualUnread.length})
+                                    </p>
+                                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                        Line work changed here but was not read. Open one to compare before and after.
+                                    </p>
+                                    {visualUnread.map((item, index) => (
+                                        <ChangeRow
+                                            key={item.id}
+                                            item={item}
+                                            index={index + 1}
+                                            onLocate={onLocate}
+                                            expanded={expandedId === item.id}
+                                            onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Text findings: exact, but tags and dimensions
+                                rather than built work, so they sit below. */}
                             {SIGNIFICANCE_ORDER.map((level) => {
                                 const group = visible.filter((item) => item.significance === level);
                                 if (group.length === 0) return null;
@@ -309,7 +374,7 @@ export function ChangeDetectionPanel({
                                 return (
                                     <div key={level} className="space-y-1.5">
                                         <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                            {SIGNIFICANCE_LABEL[level]} ({group.length})
+                                            Text &middot; {SIGNIFICANCE_LABEL[level]} ({group.length})
                                         </p>
                                         {group.map((item) => (
                                             <ChangeRow key={item.id} item={item} onLocate={onLocate} />
@@ -323,7 +388,7 @@ export function ChangeDetectionPanel({
                             {unranked.length > 0 && (
                                 <div className="space-y-1.5">
                                     <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                        Not ranked ({unranked.length})
+                                        Text &middot; not ranked ({unranked.length})
                                     </p>
                                     {unrankedShown.map((item) => (
                                         <ChangeRow key={item.id} item={item} onLocate={onLocate} />
@@ -339,20 +404,6 @@ export function ChangeDetectionPanel({
                                             Show {unranked.length - unrankedShown.length} more
                                         </Button>
                                     )}
-                                </div>
-                            )}
-
-                            {regions.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                        Changed areas ({regions.length})
-                                    </p>
-                                    <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                        Line work changed here, but it could not be read reliably — open each to see what it is.
-                                    </p>
-                                    {regions.map((region, index) => (
-                                        <RegionRow key={region.id} region={region} index={index + 1} onLocate={onLocate} />
-                                    ))}
                                 </div>
                             )}
 
@@ -400,88 +451,113 @@ export function ChangeDetectionPanel({
     );
 }
 
-/**
- * A region of the sheet whose drawn geometry changed. Deliberately makes no
- * claim about what changed — that needs eyes on the drawing.
- */
-function RegionRow({ region, index, onLocate }: { region: ChangeItem; index: number; onLocate?: (item: ChangeItem) => void }) {
-    const locatable = region.x !== null && region.y !== null && region.locatable && Boolean(onLocate);
-    // Points to millimetres on the printed sheet, which is the size a person
-    // holding the drawing would perceive.
+function ChangeRow({
+    item,
+    index,
+    onLocate,
+    expanded = false,
+    onToggle,
+}: {
+    item: ChangeItem;
+    index?: number;
+    onLocate?: (item: ChangeItem) => void;
+    expanded?: boolean;
+    onToggle?: () => void;
+}) {
+    const locatable = item.x !== null && item.y !== null && item.locatable && Boolean(onLocate);
+    const hasPreview = Boolean(item.preview_url) && Boolean(onToggle);
+    // Points to millimetres on the printed sheet — the size a person holding
+    // the drawing would perceive.
     const mm = (pt: number | null) => Math.round((pt ?? 0) * 0.3528);
 
     return (
-        <button
-            type="button"
-            disabled={!locatable}
-            onClick={() => locatable && onLocate?.(region)}
-            className={cn(
-                'flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                locatable ? 'hover:bg-accent hover:text-accent-foreground' : 'cursor-default',
-            )}
-        >
-            <span>Area {index}</span>
-            <span className="text-muted-foreground text-[10px] tabular-nums">
-                {mm(region.w)} × {mm(region.h)} mm
-            </span>
-        </button>
-    );
-}
-
-function ChangeRow({ item, onLocate }: { item: ChangeItem; onLocate?: (item: ChangeItem) => void }) {
-    const locatable = item.x !== null && item.y !== null && item.locatable && Boolean(onLocate);
-
-    return (
-        <button
-            type="button"
-            disabled={!locatable}
-            onClick={() => locatable && onLocate?.(item)}
-            className={cn(
-                'w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                locatable ? 'hover:bg-accent hover:text-accent-foreground' : 'cursor-default',
-            )}
-        >
-            <span className="flex items-center gap-1.5">
-                <Badge variant={significanceVariant(item.significance)} className="h-4 px-1.5 text-[10px]">
-                    {changeTypeLabel(item)}
-                </Badge>
-                {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
-                {item.source === 'raster' && (
-                    <Badge variant="outline" className="ml-auto h-4 shrink-0 px-1.5 text-[10px]" title="Read from the drawing image">
-                        visual
-                    </Badge>
+        <div className="rounded-md border text-xs">
+            <button
+                type="button"
+                disabled={!locatable && !hasPreview}
+                onClick={() => {
+                    // Locating and expanding are both useful, and a row that can
+                    // do both should do both — jump the viewer there and open
+                    // the comparison in one press.
+                    if (locatable) onLocate?.(item);
+                    if (hasPreview) onToggle?.();
+                }}
+                className={cn(
+                    'w-full px-2 py-1.5 text-left transition-colors',
+                    locatable || hasPreview ? 'hover:bg-accent hover:text-accent-foreground' : 'cursor-default',
                 )}
-            </span>
-
-            <span className="mt-1 block leading-snug">{item.description ?? describeRaw(item)}</span>
-
-            {/* Population rows carry the tally rather than a before/after string. */}
-            {item.count_old !== null && item.count_new !== null && (
-                <span className="text-muted-foreground mt-1 block text-[10px] tabular-nums">
-                    {item.count_old} → {item.count_new}
-                </span>
-            )}
-
-            {/* Always show the underlying strings — the description is the
-                model's reading of them, and the reader may want the source. */}
-            {(item.text_old || item.text_new) && (
-                <span className="text-muted-foreground mt-1 block truncate font-mono text-[10px]">
-                    {item.text_old && <span className="line-through">{item.text_old}</span>}
-                    {item.text_old && item.text_new && <span> → </span>}
-                    {item.text_new && <span>{item.text_new}</span>}
-                </span>
-            )}
-
-            {item.trade_impact.length > 0 && (
-                <span className="mt-1 flex flex-wrap gap-1">
-                    {item.trade_impact.map((trade) => (
-                        <Badge key={trade} variant="outline" className="h-4 px-1.5 text-[10px] capitalize">
-                            {trade}
+            >
+                <span className="flex items-center gap-1.5">
+                    <Badge variant={significanceVariant(item.significance)} className="h-4 px-1.5 text-[10px]">
+                        {changeTypeLabel(item)}
+                    </Badge>
+                    {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
+                    {item.source === 'raster' && (
+                        <Badge variant="outline" className="ml-auto h-4 shrink-0 px-1.5 text-[10px]" title="Read from the drawing image">
+                            visual
                         </Badge>
-                    ))}
+                    )}
                 </span>
+
+                <span className="mt-1 block leading-snug">
+                    {index !== undefined && item.description === null ? `Area ${index} — ` : ''}
+                    {item.description ?? describeRaw(item)}
+                </span>
+
+                {/* Population rows carry the tally rather than a before/after string. */}
+                {item.count_old !== null && item.count_new !== null && (
+                    <span className="text-muted-foreground mt-1 block text-[10px] tabular-nums">
+                        {item.count_old} → {item.count_new}
+                    </span>
+                )}
+
+                {/* Always show the underlying strings — the description is the
+                model's reading of them, and the reader may want the source. */}
+                {(item.text_old || item.text_new) && (
+                    <span className="text-muted-foreground mt-1 block truncate font-mono text-[10px]">
+                        {item.text_old && <span className="line-through">{item.text_old}</span>}
+                        {item.text_old && item.text_new && <span> → </span>}
+                        {item.text_new && <span>{item.text_new}</span>}
+                    </span>
+                )}
+
+                {item.trade_impact.length > 0 && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                        {item.trade_impact.map((trade) => (
+                            <Badge key={trade} variant="outline" className="h-4 px-1.5 text-[10px] capitalize">
+                                {trade}
+                            </Badge>
+                        ))}
+                    </span>
+                )}
+
+                {hasPreview && (
+                    <span className="text-muted-foreground mt-1 flex items-center gap-1 text-[10px]">
+                        <Images className="h-3 w-3" />
+                        {expanded ? 'Hide comparison' : 'Compare before / after'}
+                        {item.w !== null && item.h !== null && (
+                            <span className="ml-auto tabular-nums">
+                                {mm(item.w)} × {mm(item.h)} mm
+                            </span>
+                        )}
+                    </span>
+                )}
+            </button>
+
+            {/* Loaded only once opened. A panel that eagerly fetched forty
+                animations would pull several megabytes for rows most people
+                never look at. */}
+            {expanded && item.preview_url && (
+                <div className="border-t p-1.5">
+                    <img
+                        src={item.preview_url}
+                        alt={`Before and after of ${item.element ?? 'this change'}`}
+                        className="w-full rounded"
+                        loading="lazy"
+                    />
+                </div>
             )}
-        </button>
+        </div>
     );
 }
 
