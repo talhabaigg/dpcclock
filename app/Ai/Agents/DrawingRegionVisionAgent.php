@@ -36,12 +36,52 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
         comparison has already established that something in this area differs —
         your job is to say what.
 
+        ## What to look for
+        Check for these in order. The first two are the easiest to miss and usually
+        the most expensive, so look for them deliberately before anything else:
+
+        1. SOMETHING MOVED. A wall, partition, door, opening, riser or fixture in a
+           different position between the two images, while what surrounds it
+           stayed put. Say what moved and which way ("partition between store and
+           corridor moved about 300mm north"). If a dimension either side is
+           readable, say what it went from and to.
+
+        2. SOMETHING CHANGED SIZE. A wall longer or shorter, a room deeper or
+           narrower, a door or opening wider, a riser or bulkhead bigger. This is a
+           separate thing from moving and is just as expensive: a wall that grew
+           two metres has not moved at all but the quantity changed. Compare the
+           ENDS of a wall, not just its position — one end fixed and the other
+           extended is a resize, and it reads at a glance as "nothing moved".
+
+        3. Something added or removed entirely.
+
+        4. Something re-tagged or re-labelled — a partition type, door number or
+           room name changed while the geometry stayed put.
+
+        5. Anything else visibly different.
+
+        Report every one you can see, not just the first. Movement and resizing
+        often happen together — a wall that moved AND got longer is both, and
+        saying only one of them understates the change.
+
+        ## Say what it means for the rooms
+        A partition moving and a room changing size are the same event described
+        from two directions, and the room is the half a reader acts on. When a
+        partition shifts, name the rooms either side and say which one grew:
+        "store enlarged, partition to corridor moved about 300mm east" rather than
+        "a partition moved". If a room boundary is only visible on one side of the
+        crop, say what you can see and leave the rest.
+
         ## Rules
         - Compare the two images and describe the difference you can actually see.
         - If you cannot tell what changed, say so and give a low confidence. That is
           a useful answer. Inventing a plausible-sounding wall change is not.
-        - Ignore differences that are only line weight, anti-aliasing, or a slight
-          shift of the whole crop — those are rendering artefacts, not design changes.
+        - Only ignore a shift when the ENTIRE crop has shifted together — the whole
+          image sliding a pixel or two is the sheet being re-plotted, not a design
+          change. One element moving while its surroundings stay put is a real
+          change, however small it looks. Do not dismiss it as a plot artefact:
+          at 1:100 a wall relocated by half a metre moves only a few millimetres on
+          the sheet. Line weight and anti-aliasing differences are still artefacts.
         - TWENTY WORDS MAXIMUM. This is a list someone scans, not prose. State the
           change and stop. "Partition between store and corridor removed" is a
           complete answer; the reader can open the image for the rest.
@@ -51,11 +91,14 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
           reasoning. Only the difference.
 
         ## Significance
-        - high   — changes what gets built or ordered: walls added, removed or
-                   relocated, partition type changed, ceiling height or grid layout
-                   changed, room boundaries moved.
+        - high   — changes what gets built or ordered: walls or partitions added,
+                   removed, MOVED or RESIZED, doors or openings relocated or
+                   widened, partition type changed, ceiling height or grid layout
+                   changed, room boundaries moved. Any relocation or change of
+                   length of built work is high, however small it looks on the
+                   sheet.
         - medium — likely to matter but needs confirming: tags or labels changed,
-                   dimensions revised, a symbol added or removed.
+                   dimensions revised, a symbol added or removed, fixtures moved.
         - low    — drafting or presentation only: revision clouds, hatching,
                    linework tidied, text nudged, north points, notes reformatted.
 
@@ -72,11 +115,11 @@ class DrawingRegionVisionAgent implements Agent, HasStructuredOutput
     {
         return [
             'element' => $schema->string()
-                ->description('What changed, in drawing vocabulary: "partition wall", "door", "ceiling grid", "dimension", "room tag", "revision cloud", or "unclear".')
+                ->description('What changed, in drawing vocabulary: "partition wall", "door", "opening", "ceiling grid", "dimension", "room tag", "revision cloud", or "unclear".')
                 ->required(),
 
             'description' => $schema->string()
-                ->description('What changed, in 20 words or fewer. A scannable line, not a sentence of prose.')
+                ->description('What changed, in 20 words or fewer. Say if something moved or changed size, and by roughly how much. A scannable line, not prose.')
                 ->required(),
 
             'trade_impact' => $schema->array()
