@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Cuts a detected change region out of both revisions as a pair of PNGs.
+ * Cuts detected change regions out of a revision as PNG crops.
  *
  * These crops are the whole reason the raster pass produces bounding boxes
  * rather than a verdict: a vision model handed two dense A1 sheets and asked
@@ -14,9 +14,11 @@ use Illuminate\Support\Facades\Process;
  * before on the left, after on the right — it is doing something it is
  * genuinely good at.
  *
- * Crops are rendered at a much higher density than the detection pass. Finding
- * a region only needs enough resolution to see that ink moved; reading it needs
- * enough to make out a partition tag.
+ * The sheet is rendered once per revision and every crop is cut from that
+ * raster. Rendering per region instead means re-rasterizing a full A1 page at
+ * crop density for each one and discarding all but a few hundred pixels; at 25
+ * regions across two revisions that was fifty full-page renders and it
+ * dominated the entire analysis.
  */
 class DrawingRegionCropper
 {
@@ -36,12 +38,62 @@ class DrawingRegionCropper
     public function __construct(private readonly DrawingRasterizer $rasterizer) {}
 
     /**
-     * Render one region from a PDF to a PNG on disk.
+     * Rasterize a sheet once, ready for repeated cropping. The caller must pass
+     * the returned path to release() when finished.
+     */
+    public function prepare(string $pdfPath): ?string
+    {
+        $binary = $this->rasterizer->magickBinary();
+
+        if ($binary === null) {
+            return null;
+        }
+
+        $output = tempnam(sys_get_temp_dir(), 'drawpage_').'.png';
+
+        try {
+            $result = Process::timeout(300)->run([
+                $binary,
+                '-density', (string) self::DENSITY,
+                $pdfPath.'[0]',
+                '-alpha', 'remove',
+                '-alpha', 'off',
+                $output,
+            ]);
+
+            if (! $result->successful() || ! file_exists($output) || filesize($output) === 0) {
+                Log::warning('Page render for cropping failed', [
+                    'exit_code' => $result->exitCode(),
+                    'error' => substr($result->errorOutput(), 0, 300),
+                ]);
+                @unlink($output);
+
+                return null;
+            }
+
+            return $output;
+        } catch (\Throwable $e) {
+            Log::warning('Page render for cropping threw', ['error' => $e->getMessage()]);
+            @unlink($output);
+
+            return null;
+        }
+    }
+
+    public function release(?string $preparedPath): void
+    {
+        if ($preparedPath !== null && file_exists($preparedPath)) {
+            @unlink($preparedPath);
+        }
+    }
+
+    /**
+     * Cut one region out of an already-rendered sheet.
      *
      * @param  array{x: float, y: float, w: float, h: float}  $region  in PDF points
-     * @return string|null path to a temporary PNG, or null if it could not be rendered
+     * @return string|null path to a temporary PNG, or null if it could not be cut
      */
-    public function crop(string $pdfPath, array $region, float $pageWidth, float $pageHeight): ?string
+    public function crop(string $preparedPath, array $region, float $pageWidth, float $pageHeight): ?string
     {
         $binary = $this->rasterizer->magickBinary();
 
@@ -64,10 +116,7 @@ class DrawingRegionCropper
         try {
             $result = Process::timeout(120)->run([
                 $binary,
-                '-density', (string) self::DENSITY,
-                $pdfPath.'[0]',
-                '-alpha', 'remove',
-                '-alpha', 'off',
+                $preparedPath,
                 '-crop', "{$cropW}x{$cropH}+{$cropX}+{$cropY}",
                 // The crop leaves the original canvas geometry attached, which
                 // some encoders then honour by re-padding the image back to
@@ -81,7 +130,6 @@ class DrawingRegionCropper
                     'exit_code' => $result->exitCode(),
                     'error' => substr($result->errorOutput(), 0, 300),
                 ]);
-
                 @unlink($output);
 
                 return null;

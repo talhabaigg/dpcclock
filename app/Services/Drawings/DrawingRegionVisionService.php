@@ -69,25 +69,42 @@ class DrawingRegionVisionService
         $inputTokens = 0;
         $outputTokens = 0;
 
-        foreach ($order as $index) {
-            $result = $this->describeRegion(
-                $oldPdfPath,
-                $newPdfPath,
-                $regions[$index],
-                $pageWidth,
-                $pageHeight,
-                $provider,
-                $model,
-                $timeout,
-            );
+        // Rasterize each sheet once up front. Every crop is then a cheap cut
+        // from that image rather than another full-page render of the PDF.
+        $oldPage = $this->cropper->prepare($oldPdfPath);
+        $newPage = $this->cropper->prepare($newPdfPath);
 
-            if ($result === null) {
-                continue;
+        if ($oldPage === null || $newPage === null) {
+            $this->cropper->release($oldPage);
+            $this->cropper->release($newPage);
+
+            return $empty;
+        }
+
+        try {
+            foreach ($order as $index) {
+                $result = $this->describeRegion(
+                    $oldPage,
+                    $newPage,
+                    $regions[$index],
+                    $pageWidth,
+                    $pageHeight,
+                    $provider,
+                    $model,
+                    $timeout,
+                );
+
+                if ($result === null) {
+                    continue;
+                }
+
+                $verdicts[$index] = $result['verdict'];
+                $inputTokens += $result['input_tokens'];
+                $outputTokens += $result['output_tokens'];
             }
-
-            $verdicts[$index] = $result['verdict'];
-            $inputTokens += $result['input_tokens'];
-            $outputTokens += $result['output_tokens'];
+        } finally {
+            $this->cropper->release($oldPage);
+            $this->cropper->release($newPage);
         }
 
         return [
@@ -102,8 +119,8 @@ class DrawingRegionVisionService
      * @return array{verdict: array<string, mixed>, input_tokens: int, output_tokens: int}|null
      */
     private function describeRegion(
-        string $oldPdfPath,
-        string $newPdfPath,
+        string $oldPage,
+        string $newPage,
         array $region,
         float $pageWidth,
         float $pageHeight,
@@ -115,8 +132,8 @@ class DrawingRegionVisionService
         $newCrop = null;
 
         try {
-            $oldCrop = $this->cropper->crop($oldPdfPath, $region, $pageWidth, $pageHeight);
-            $newCrop = $this->cropper->crop($newPdfPath, $region, $pageWidth, $pageHeight);
+            $oldCrop = $this->cropper->crop($oldPage, $region, $pageWidth, $pageHeight);
+            $newCrop = $this->cropper->crop($newPage, $region, $pageWidth, $pageHeight);
 
             if ($oldCrop === null || $newCrop === null) {
                 return null;
