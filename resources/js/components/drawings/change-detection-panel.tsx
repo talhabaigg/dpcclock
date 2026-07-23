@@ -77,13 +77,18 @@ const SIGNIFICANCE_LABEL: Record<string, string> = {
 };
 
 /**
- * Badge intent per significance, mapped to shadcn tokens rather than raw
- * palette colours so the panel follows the app theme in both modes.
+ * Left-edge accent carrying how much a change matters.
+ *
+ * Significance is deliberately not put on the type badge. That badge says what
+ * happened — Added, Removed, Changed, Moved — and colouring it by importance
+ * made one chip encode two unrelated things: a red "Changed" looked like it
+ * meant something about changing, when it only ever meant "high significance".
+ * The accent keeps the two readable apart, and shadcn tokens keep it themed.
  */
-function significanceVariant(significance: string | null): 'default' | 'secondary' | 'outline' | 'destructive' {
-    if (significance === 'high') return 'destructive';
-    if (significance === 'medium') return 'default';
-    return 'secondary';
+function significanceAccent(significance: string | null): string {
+    if (significance === 'high') return 'border-l-destructive';
+    if (significance === 'medium') return 'border-l-primary';
+    return 'border-l-transparent';
 }
 
 function changeTypeLabel(item: ChangeItem): string {
@@ -471,7 +476,7 @@ function ChangeRow({
     const mm = (pt: number | null) => Math.round((pt ?? 0) * 0.3528);
 
     return (
-        <div className="rounded-md border text-xs">
+        <div className={cn('rounded-md border border-l-2 text-xs', significanceAccent(item.significance))}>
             <button
                 type="button"
                 disabled={!locatable && !hasPreview}
@@ -488,9 +493,12 @@ function ChangeRow({
                 )}
             >
                 <span className="flex items-center gap-1.5">
-                    <Badge variant={significanceVariant(item.significance)} className="h-4 px-1.5 text-[10px]">
+                    <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
                         {changeTypeLabel(item)}
                     </Badge>
+                    {item.significance !== null && item.significance !== 'low' && (
+                        <span className="text-muted-foreground text-[10px] capitalize">{item.significance}</span>
+                    )}
                     {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
                     {item.source === 'raster' && (
                         <Badge variant="outline" className="ml-auto h-4 shrink-0 px-1.5 text-[10px]" title="Read from the drawing image">
