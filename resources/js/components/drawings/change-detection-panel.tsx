@@ -2,9 +2,10 @@ import { ChangeReviewCard } from '@/components/drawings/change-review-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, Images, ListChecks, RotateCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, ListChecks, RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -88,33 +89,18 @@ const STAGE_LABEL: Record<string, string> = {
     writing_summary: 'Writing the summary',
 };
 
-const SIGNIFICANCE_ORDER = ['high', 'medium', 'low'] as const;
-
 const ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-/** How many unranked rows render before the rest are collapsed. */
-const UNRANKED_PREVIEW = 15;
-
+/** Group headings within a tab. Significance is the only ordering that
+ *  matters once the rows themselves are plain. */
 const SIGNIFICANCE_LABEL: Record<string, string> = {
     high: 'Affects what gets built',
     medium: 'Worth confirming',
     low: 'Drafting only',
+    none: 'Not ranked',
 };
 
-/**
- * Left-edge accent carrying how much a change matters.
- *
- * Significance is deliberately not put on the type badge. That badge says what
- * happened — Added, Removed, Changed, Moved — and colouring it by importance
- * made one chip encode two unrelated things: a red "Changed" looked like it
- * meant something about changing, when it only ever meant "high significance".
- * The accent keeps the two readable apart, and shadcn tokens keep it themed.
- */
-function significanceAccent(significance: string | null): string {
-    if (significance === 'high') return 'border-l-destructive';
-    if (significance === 'medium') return 'border-l-primary';
-    return 'border-l-transparent';
-}
+const GROUP_ORDER = ['high', 'medium', 'low', 'none'] as const;
 
 function changeTypeLabel(item: ChangeItem): string {
     switch (item.change_type) {
@@ -158,10 +144,9 @@ export function ChangeDetectionPanel({
     const [starting, setStarting] = useState(false);
     const [open, setOpen] = useState(true);
     const [showLow, setShowLow] = useState(false);
-    const [showAllUnranked, setShowAllUnranked] = useState(false);
     const [clouding, setClouding] = useState(false);
-    const [expandedId, setExpandedId] = useState<number | null>(null);
     const [showSummary, setShowSummary] = useState(false);
+    const [listTab, setListTab] = useState('geometry');
     const [reviewing, setReviewing] = useState(false);
     const [reviewIndex, setReviewIndex] = useState(0);
     const queueRef = useRef<ChangeItem[]>([]);
@@ -216,10 +201,11 @@ export function ChangeDetectionPanel({
                 force,
             });
             setResult(res.comparison);
-            // A re-run clears the old rows, so drop any expanded state that
+            // A re-run clears the old rows, so drop any view state that
             // referred to them.
             setShowLow(false);
-            setShowAllUnranked(false);
+            setReviewing(false);
+            setReviewIndex(0);
         } catch {
             toast.error('Could not start change detection');
         } finally {
@@ -262,6 +248,14 @@ export function ChangeDetectionPanel({
         setReviewIndex(nextUndecided === -1 ? Math.min(from + 1, deck.length - 1) : nextUndecided);
     };
 
+    // A row is a shortcut into the deck at that change, not a second place to
+    // read it — one surface owns the evidence and the decision.
+    const openInReview = (item: ChangeItem) => {
+        const at = queueRef.current.findIndex((row) => row.id === item.id);
+        setReviewIndex(at === -1 ? 0 : at);
+        setReviewing(true);
+    };
+
     const running = result?.status === 'pending' || result?.status === 'running';
     const all = useMemo(() => result?.items ?? [], [result]);
 
@@ -298,17 +292,11 @@ export function ChangeDetectionPanel({
     queueRef.current = queue;
 
     const visualRanked = [...visual].sort(bySignificance);
-    // A region nothing could read is not a finding, it is a place to look.
-    const visualDescribed = visualRanked.filter((item) => item.description !== null);
-    const visualUnread = visualRanked.filter((item) => item.description === null);
-
-    const visible = showLow ? textual : textual.filter((item) => item.significance !== 'low');
-    const hiddenLowCount = textual.length - visible.length;
-    const unranked = visible.filter((item) => item.significance === null);
-    // Unranked rows are the fallback path: ranking was skipped, capped, or
-    // failed. Showing hundreds of them unbounded is what made this panel
-    // unusable, so only a sample renders until asked for the rest.
-    const unrankedShown = showAllUnranked ? unranked : unranked.slice(0, UNRANKED_PREVIEW);
+    const textRanked = [...textual].sort(bySignificance);
+    // Drafting-only rows stay behind a toggle: they are the bulk on most
+    // sheets and almost never the reason someone opened this.
+    const textVisible = showLow ? textRanked : textRanked.filter((item) => item.significance !== 'low');
+    const hiddenLowCount = textRanked.length - textVisible.length;
     // Only changes that are both ranked worth seeing and actually locatable can
     // become clouds — the rest have nowhere trustworthy to draw.
     const cloudable = all.filter((item) => item.locatable && (item.significance === 'high' || item.significance === 'medium')).length;
@@ -449,87 +437,88 @@ export function ChangeDetectionPanel({
                                 </Button>
                             )}
 
-                            {/* Visual changes lead: seen on the drawing itself,
-                                and each carries a before/after animation. */}
-                            {!reviewing && visualDescribed.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                        Wall &amp; geometry changes ({visualDescribed.length})
-                                    </p>
-                                    {visualDescribed.map((item) => (
-                                        <ChangeRow
-                                            key={item.id}
-                                            item={item}
-                                            onLocate={onLocate}
-                                            expanded={expandedId === item.id}
-                                            onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                                        />
-                                    ))}
-                                </div>
+                            {!reviewing && all.length > 0 && (
+                                // Tabs rather than stacked sections with coloured
+                                // rows: the panel is narrow, and four headings
+                                // plus per-row colour was two systems saying the
+                                // same thing. A tab is one choice, and it keeps
+                                // the rows themselves plain.
+                                <Tabs value={listTab} onValueChange={setListTab}>
+                                    <TabsList className="w-full">
+                                        <TabsTrigger value="geometry" className="flex-1 text-xs">
+                                            Geometry ({visualRanked.length})
+                                        </TabsTrigger>
+                                        <TabsTrigger value="text" className="flex-1 text-xs">
+                                            Text ({textRanked.length})
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="geometry" className="mt-2 space-y-2">
+                                        {visualRanked.length === 0 && (
+                                            <p className="text-muted-foreground py-2 text-center text-xs">No geometry changes found.</p>
+                                        )}
+                                        {GROUP_ORDER.map((level) => {
+                                            const group = visualRanked.filter((item) => (item.significance ?? 'none') === level);
+                                            if (group.length === 0) return null;
+
+                                            return (
+                                                <div key={level} className="space-y-1">
+                                                    <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                                                        {SIGNIFICANCE_LABEL[level]} ({group.length})
+                                                    </p>
+                                                    {group.map((item, index) => (
+                                                        <ChangeRow key={item.id} item={item} index={index + 1} onOpen={openInReview} />
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
+                                    </TabsContent>
+
+                                    <TabsContent value="text" className="mt-2 space-y-2">
+                                        {textVisible.length === 0 && (
+                                            <p className="text-muted-foreground py-2 text-center text-xs">No text changes found.</p>
+                                        )}
+                                        {GROUP_ORDER.map((level) => {
+                                            const group = textVisible.filter((item) => (item.significance ?? 'none') === level);
+                                            if (group.length === 0) return null;
+
+                                            return (
+                                                <div key={level} className="space-y-1">
+                                                    <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+                                                        {SIGNIFICANCE_LABEL[level]} ({group.length})
+                                                    </p>
+                                                    {group.map((item) => (
+                                                        <ChangeRow key={item.id} item={item} onOpen={openInReview} />
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
+                                        {hiddenLowCount > 0 && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-7 w-full text-xs"
+                                                onClick={() => setShowLow(true)}
+                                            >
+                                                Show {hiddenLowCount} drafting-only change{hiddenLowCount === 1 ? '' : 's'}
+                                            </Button>
+                                        )}
+                                    </TabsContent>
+                                </Tabs>
                             )}
 
-                            {!reviewing && visualUnread.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                        Other potential changes ({visualUnread.length})
-                                    </p>
-                                    <p className="text-muted-foreground text-[11px] leading-relaxed">
-                                        Line work changed here but was not read. Open one to compare before and after.
-                                    </p>
-                                    {visualUnread.map((item, index) => (
-                                        <ChangeRow
-                                            key={item.id}
-                                            item={item}
-                                            index={index + 1}
-                                            onLocate={onLocate}
-                                            expanded={expandedId === item.id}
-                                            onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Text findings: exact, but tags and dimensions
-                                rather than built work, so they sit below. */}
-                            {!reviewing &&
-                                SIGNIFICANCE_ORDER.map((level) => {
-                                    const group = visible.filter((item) => item.significance === level);
-                                    if (group.length === 0) return null;
-
-                                    return (
-                                        <div key={level} className="space-y-1.5">
-                                            <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                                Text &middot; {SIGNIFICANCE_LABEL[level]} ({group.length})
-                                            </p>
-                                            {group.map((item) => (
-                                                <ChangeRow key={item.id} item={item} onLocate={onLocate} />
-                                            ))}
-                                        </div>
-                                    );
-                                })}
-
-                            {/* Un-ranked rows: the diff succeeded but interpretation
-                                did not. Still exact, so still shown. */}
-                            {!reviewing && unranked.length > 0 && (
-                                <div className="space-y-1.5">
-                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                        Text &middot; not ranked ({unranked.length})
-                                    </p>
-                                    {unrankedShown.map((item) => (
-                                        <ChangeRow key={item.id} item={item} onLocate={onLocate} />
-                                    ))}
-                                    {unranked.length > unrankedShown.length && (
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-7 w-full text-xs"
-                                            onClick={() => setShowAllUnranked(true)}
-                                        >
-                                            Show {unranked.length - unrankedShown.length} more
-                                        </Button>
-                                    )}
-                                </div>
+                            {!reviewing && canCloud && cloudable > 0 && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => void cloudChanges()}
+                                    disabled={clouding}
+                                >
+                                    {clouding ? 'Clouding…' : `Cloud ${cloudable} change${cloudable === 1 ? '' : 's'} on the drawing`}
+                                </Button>
                             )}
 
                             {/* Context, not the headline. The changes are what
@@ -611,124 +600,52 @@ export function ChangeDetectionPanel({
     );
 }
 
-function ChangeRow({
-    item,
-    index,
-    onLocate,
-    expanded = false,
-    onToggle,
-}: {
-    item: ChangeItem;
-    index?: number;
-    onLocate?: (item: ChangeItem) => void;
-    expanded?: boolean;
-    onToggle?: () => void;
-}) {
-    const locatable = item.x !== null && item.y !== null && item.locatable && Boolean(onLocate);
-    const hasPreview = Boolean(item.preview_url) && Boolean(onToggle);
-    // Points to millimetres on the printed sheet — the size a person holding
-    // the drawing would perceive.
-    const mm = (pt: number | null) => Math.round((pt ?? 0) * 0.3528);
-
+/**
+ * A change as a single dense line in the list.
+ *
+ * The list is for scanning: which changes exist, roughly what and where. It
+ * deliberately does not carry the before/after animation — forty inline
+ * animations is megabytes of traffic for rows most people never dwell on, and
+ * it turns a scannable list into a wall. Clicking opens the change in the
+ * review card, which is where the evidence and the decision live.
+ */
+function ChangeRow({ item, index, onOpen }: { item: ChangeItem; index?: number; onOpen: (item: ChangeItem) => void }) {
     return (
-        <div className={cn('rounded-md border border-l-2 text-xs', significanceAccent(item.significance))}>
-            <button
-                type="button"
-                disabled={!locatable && !hasPreview}
-                onClick={() => {
-                    // Locating and expanding are both useful, and a row that can
-                    // do both should do both — jump the viewer there and open
-                    // the comparison in one press.
-                    if (locatable) onLocate?.(item);
-                    if (hasPreview) onToggle?.();
-                }}
-                className={cn(
-                    'w-full px-2 py-1.5 text-left transition-colors',
-                    locatable || hasPreview ? 'hover:bg-accent hover:text-accent-foreground' : 'cursor-default',
-                )}
-            >
-                <span className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
-                        {changeTypeLabel(item)}
-                    </Badge>
-                    {item.significance !== null && item.significance !== 'low' && (
-                        <span className="text-muted-foreground text-[10px] capitalize">{item.significance}</span>
-                    )}
-                    {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
-                    {item.source === 'raster' && (
-                        <Badge variant="outline" className="ml-auto h-4 shrink-0 px-1.5 text-[10px]" title="Read from the drawing image">
-                            visual
-                        </Badge>
-                    )}
-                </span>
-
-                <span className="mt-1 block leading-snug">
-                    {index !== undefined && item.description === null ? `Area ${index} — ` : ''}
-                    {item.description ?? describeRaw(item)}
-                </span>
-
-                {/* Population rows carry the tally rather than a before/after string. */}
-                {item.count_old !== null && item.count_new !== null && (
-                    <span className="text-muted-foreground mt-1 block text-[10px] tabular-nums">
-                        {item.count_old} → {item.count_new}
-                    </span>
-                )}
-
-                {/* Always show the underlying strings — the description is the
-                model's reading of them, and the reader may want the source. */}
-                {(item.text_old || item.text_new) && (
-                    <span className="text-muted-foreground mt-1 block truncate font-mono text-[10px]">
-                        {item.text_old && <span className="line-through">{item.text_old}</span>}
-                        {item.text_old && item.text_new && <span> → </span>}
-                        {item.text_new && <span>{item.text_new}</span>}
-                    </span>
-                )}
-
-                {item.trade_impact.length > 0 && (
-                    <span className="mt-1 flex flex-wrap gap-1">
-                        {item.trade_impact.map((trade) => (
-                            <Badge key={trade} variant="outline" className="h-4 px-1.5 text-[10px] capitalize">
-                                {trade}
-                            </Badge>
-                        ))}
-                    </span>
-                )}
-
-                {hasPreview && (
-                    <span className="text-muted-foreground mt-1 flex items-center gap-1 text-[10px]">
-                        <Images className="h-3 w-3" />
-                        {expanded ? 'Hide comparison' : 'Compare before / after'}
-                        {item.w !== null && item.h !== null && (
-                            <span className="ml-auto tabular-nums">
-                                {mm(item.w)} × {mm(item.h)} mm
-                            </span>
-                        )}
-                    </span>
-                )}
-            </button>
-
-            {/* Loaded only once opened. A panel that eagerly fetched forty
-                animations would pull several megabytes for rows most people
-                never look at. */}
-            {expanded && item.preview_url && (
-                <div className="border-t p-1.5">
-                    <img
-                        src={item.preview_url}
-                        alt={`Before and after of ${item.element ?? 'this change'}`}
-                        className="w-full rounded"
-                        loading="lazy"
-                    />
-                </div>
+        <button
+            type="button"
+            onClick={() => onOpen(item)}
+            className={cn(
+                'hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-xs transition-colors',
             )}
-        </div>
+        >
+            <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+                {changeTypeLabel(item)}
+            </Badge>
+
+            <span className="min-w-0 flex-1 truncate">
+                {index !== undefined && item.description === null ? `Area ${index} — ` : ''}
+                {item.description ?? describeRaw(item)}
+            </span>
+
+            {item.triage_status && (
+                <span
+                    className={cn('shrink-0 text-[10px]', item.triage_status === 'accepted' ? 'text-success' : 'text-muted-foreground')}
+                    title={item.triage_status === 'accepted' ? 'Raised as a task' : 'Marked as not a change'}
+                >
+                    {item.triage_status === 'accepted' ? '✓' : '—'}
+                </span>
+            )}
+
+            <ChevronRight className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+        </button>
     );
 }
 
 /**
  * What a run in flight looks like.
  *
- * These take minutes, so a bare spinner is not enough: with nothing moving,
- * a stuck job and a working one look identical, and the reasonable response to
+ * These take minutes, so a bare spinner is not enough: with nothing moving, a
+ * stuck job and a working one look identical, and the reasonable response to
  * that is to press the button again. Naming the stage and counting the work
  * makes the difference visible, and a job that has stopped checking in says so
  * and offers a way out rather than spinning forever.
