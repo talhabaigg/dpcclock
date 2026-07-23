@@ -30,7 +30,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 15;
+    public const PIPELINE_VERSION = 16;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -187,10 +187,10 @@ class DrawingComparisonService
 
             $titleBlock = $newText !== null ? $this->titleBlockText($newText) : '';
 
-            // Text coordinates are only usable when they line up with the real
-            // page; raster regions always are.
-            $textLocatable = $newText !== null && $pageBox !== null
-                && $this->textCoordinatesUsable($newText, $pageBox[0], $pageBox[1]);
+            // Whether a text change can be pointed at is settled per change
+            // rather than for the sheet as a whole — see changeIsLocatable.
+            // Raster regions always are.
+            $textLocatable = $newText !== null && $pageBox !== null;
 
             $this->progress($comparison, 'comparing_geometry');
 
@@ -756,7 +756,11 @@ class DrawingComparisonService
                     'count_old' => $change['count_old'] ?? null,
                     'count_new' => $change['count_new'] ?? null,
                     'preview_path' => null,
-                    'locatable' => $textLocatable,
+                    'locatable' => $textLocatable && $this->changeIsLocatable(
+                        $change,
+                        (float) ($pageBox[0] ?? 0.0),
+                        (float) ($pageBox[1] ?? 0.0),
+                    ),
                     // Fall back to the diff's own idea of what this row is, so
                     // an unranked row still says "dimensions" rather than nothing.
                     'element' => $entry['element'] ?? $change['element_hint'] ?? null,
@@ -833,7 +837,6 @@ class DrawingComparisonService
             $comparison->update([
                 'status' => DrawingComparison::STATUS_COMPLETE,
                 'methods' => $methods,
-                'coordinates_reliable' => $textLocatable,
                 'pipeline_version' => self::PIPELINE_VERSION,
                 'text_comparable' => $textComparable,
                 'page_width' => $pageBox[0] ?? null,
@@ -851,33 +854,34 @@ class DrawingComparisonService
     }
 
     /**
-     * Whether extracted text coordinates line up with the sheet's real page box.
+     * Whether one change's coordinates land on the actual sheet.
      *
-     * The PHP text parser does not resolve transforms on content nested inside
-     * form XObjects, which CAD exporters use heavily. When that happens the
-     * coordinates are internally consistent — so the diff and its registration
-     * are unaffected — but they are not positions on the page, and offering to
-     * zoom to one would send the user somewhere arbitrary. Checking the
-     * extracted extent against the actual page box catches it.
+     * Settled per change rather than for the whole text layer. The earlier
+     * version compared the extraction's overall extent against the page box and
+     * failed on every sheet tried, which read as proof that the coordinates were
+     * unusable. They were not: that extent is built from x plus an *estimated*
+     * text width, so a single long string inflates the maximum well past the
+     * page edge on its own — one sheet reported a maximum of 6603pt on a 2384pt
+     * page while all 426 of its runs sat inside the trim. Measuring each change
+     * where it actually is avoids condemning a whole sheet for one bad estimate.
      *
-     * @param  array{min_x: float, min_y: float, max_x: float, max_y: float}  $extraction
+     * Generous margins, because a label may legitimately overhang the trim.
+     *
+     * @param  array{x: float, y: float}  $change
      */
-    private function textCoordinatesUsable(array $extraction, float $pageWidth, float $pageHeight): bool
+    private function changeIsLocatable(array $change, float $pageWidth, float $pageHeight): bool
     {
         if ($pageWidth <= 0 || $pageHeight <= 0) {
             return false;
         }
 
-        // Allow a little slack for text whose estimated width overhangs the
-        // trim edge, but nothing like the multiples seen when the transform is
-        // unresolved.
         $marginX = $pageWidth * 0.1;
         $marginY = $pageHeight * 0.1;
 
-        return $extraction['min_x'] >= -$marginX
-            && $extraction['min_y'] >= -$marginY
-            && $extraction['max_x'] <= $pageWidth + $marginX
-            && $extraction['max_y'] <= $pageHeight + $marginY;
+        return $change['x'] >= -$marginX
+            && $change['y'] >= -$marginY
+            && $change['x'] <= $pageWidth + $marginX
+            && $change['y'] <= $pageHeight + $marginY;
     }
 
     /**

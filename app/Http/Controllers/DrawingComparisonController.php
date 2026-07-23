@@ -538,7 +538,6 @@ class DrawingComparisonController extends Controller
                 // a job that is not coming back.
                 'stalled' => $comparison->looksStalled(),
             ],
-            'coordinates_reliable' => (bool) $comparison->coordinates_reliable,
             'text_comparable' => (bool) $comparison->text_comparable,
             'summary' => $comparison->summary,
             'revision_notes' => $comparison->revision_notes ?? [],

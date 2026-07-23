@@ -56,16 +56,8 @@ export type ComparisonResult = {
         done: number | null;
         total: number | null;
         started_at: string | null;
-        seconds_since_heartbeat: number | null;
         stalled: boolean;
     } | null;
-    /**
-     * False when the sheet's text coordinates could not be resolved to real
-     * page positions (common with CAD exports that nest content in form
-     * XObjects). The change list is still exact; only "jump to this change"
-     * is unavailable.
-     */
-    coordinates_reliable: boolean;
     /**
      * False when the two PDFs split text into runs so differently that a
      * token-level diff is untrustworthy. The geometry regions are unaffected.
