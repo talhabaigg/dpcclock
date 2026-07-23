@@ -29,7 +29,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 6;
+    public const PIPELINE_VERSION = 7;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter

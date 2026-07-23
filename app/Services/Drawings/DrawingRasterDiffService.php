@@ -81,11 +81,19 @@ class DrawingRasterDiffService
      * Architectural drawings encode meaning in line weight: walls are drawn
      * heavy while dimensions, leaders, hatching, tags and text are thin.
      * Eroding a binary ink mask by this much destroys everything thinner and
-     * leaves wall geometry standing. Verified visually at 300 DPI on a tower
-     * setout sheet - text, room tags, stair treads and hatching all disappear,
-     * partitions stay crisp.
+     * leaves wall geometry standing. At 300 DPI one pixel is 0.085mm, so this
+     * removes strokes under about 0.76mm.
+     *
+     * Chosen by sweeping 2.5 to 6.5 and looking at what survived on a tower
+     * setout sheet. Below 4.5, thin linework and text ghosts persist and the
+     * region count stays inflated (137 at 2.5, 101 at 3.5). Above it the walls
+     * themselves start breaking into dashes, which both loses real partitions
+     * and manufactures differences where two revisions happen to fragment
+     * differently - the region count rises again at 5.5 despite less ink
+     * surviving. At 4.5 partitions stay continuous, everything else is gone,
+     * and the count bottoms out at 46.
      */
-    private const WALL_ERODE = 2.5;
+    private const WALL_ERODE = 4.5;
 
     /** Render density the erosion is performed at, in DPI. */
     private const WALL_DENSITY = 300;
