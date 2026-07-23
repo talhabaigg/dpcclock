@@ -164,7 +164,16 @@ class DrawingRegionVisionService
             }
 
             $preview = $previewPath !== null
-                ? $this->cropper->animate($oldCrop, $newCrop, $previewPath)
+                ? $this->cropper->animate(
+                    $oldCrop,
+                    $newCrop,
+                    $previewPath,
+                    // Mark the changed area inside the frame. The crop is
+                    // deliberately much wider than the region, so without this
+                    // the animation and the box on the sheet look like
+                    // different places.
+                    $this->cropper->markerRect($region, $pageWidth, $pageHeight),
+                )
                 : null;
 
             if (! $readByModel) {

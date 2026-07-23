@@ -170,9 +170,16 @@ class DrawingRegionCropper
      * reading a written description of the same change takes real effort. The
      * two frames are labelled so a paused animation is still unambiguous.
      *
+     * The changed region is outlined inside the frame. The crop is padded well
+     * beyond the region so the change has context, which means for a small
+     * change the animation shows a far wider area than actually moved — without
+     * a marker the viewer is left hunting, and the box drawn on the sheet looks
+     * like it points somewhere else entirely.
+     *
+     * @param  array{0: float, 1: float, 2: float, 3: float}|null  $marker  region rect within the crop, in crop pixels
      * @return string|null path relative to the storage disk, or null on failure
      */
-    public function animate(string $oldCrop, string $newCrop, string $relativePath): ?string
+    public function animate(string $oldCrop, string $newCrop, string $relativePath, ?array $marker = null): ?string
     {
         $binary = $this->rasterizer->magickBinary();
 
@@ -198,9 +205,22 @@ class DrawingRegionCropper
                 $frame = tempnam(sys_get_temp_dir(), 'drawframe_').'.png';
                 $frames[] = $frame;
 
-                $built = Process::timeout(60)->run([
+                $command = [
                     $binary,
                     $source,
+                ];
+
+                if ($marker !== null) {
+                    // Drawn before the resize so the coordinates are still in
+                    // the crop's own pixel space.
+                    array_push($command,
+                        '-stroke', '#DC2626', '-strokewidth', '3', '-fill', 'none',
+                        '-draw', sprintf('rectangle %.0f,%.0f %.0f,%.0f', ...$marker),
+                        '-stroke', 'none',
+                    );
+                }
+
+                array_push($command,
                     // Both frames are pinned to one exact canvas. A GIF whose
                     // frames differ even by a pixel renders as a jitter, and on
                     // a before/after animation that jitter reads as a change
@@ -215,7 +235,9 @@ class DrawingRegionCropper
                     '-pointsize', '15', '-fill', 'black',
                     '-annotate', '+0+3', $label,
                     $frame,
-                ]);
+                );
+
+                $built = Process::timeout(60)->run($command);
 
                 if (! $built->successful() || ! file_exists($frame) || filesize($frame) === 0) {
                     Log::warning('Region preview frame failed', [
@@ -266,6 +288,30 @@ class DrawingRegionCropper
 
             return null;
         }
+    }
+
+    /**
+     * Where the region sits inside its own crop, in crop pixels.
+     *
+     * @param  array{x: float, y: float, w: float, h: float}  $region
+     * @return array{0: float, 1: float, 2: float, 3: float}
+     */
+    public function markerRect(array $region, float $pageWidth, float $pageHeight): array
+    {
+        [$x, $y, $w, $h] = $this->paddedBox($region, $pageWidth, $pageHeight);
+        $scale = self::DENSITY / 72;
+
+        // Crop pixels run top-down; the region's top edge is its y plus height
+        // measured from the page bottom.
+        $left = ($region['x'] - $x) * $scale;
+        $top = (($y + $h) - ($region['y'] + $region['h'])) * $scale;
+
+        return [
+            $left,
+            $top,
+            $left + $region['w'] * $scale,
+            $top + $region['h'] * $scale,
+        ];
     }
 
     /**
