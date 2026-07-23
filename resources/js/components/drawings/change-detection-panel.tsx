@@ -169,9 +169,6 @@ export function ChangeDetectionPanel({
     const onItemsChangeRef = useRef(onItemsChange);
     onItemsChangeRef.current = onItemsChange;
 
-    // Cleared on unmount so a poll can't fire against a torn-down component.
-    const pollRef = useRef<number | null>(null);
-
     const fetchResult = useCallback(async () => {
         try {
             const res = await api.get<{ comparison: ComparisonResult | null }>(`/drawings/${drawingId}/comparison`, {
@@ -192,19 +189,23 @@ export function ChangeDetectionPanel({
         void fetchResult();
     }, [fetchResult]);
 
+    const inFlight = result?.status === 'pending' || result?.status === 'running';
+
     // Poll only while an analysis is actually in flight.
+    //
+    // An interval rather than a self-rescheduling timeout. The timeout version
+    // fired exactly once: it was scheduled from an effect keyed on the status
+    // string, and a poll that comes back still "running" leaves that string
+    // unchanged, so the effect never re-ran to schedule the next one. The panel
+    // then sat frozen through a multi-minute job until someone reloaded. A
+    // boolean plus an interval has no such dependency on the value changing.
     useEffect(() => {
-        const status = result?.status;
-        if (status !== 'pending' && status !== 'running') return;
+        if (!inFlight) return;
 
-        pollRef.current = window.setTimeout(() => {
-            void fetchResult();
-        }, 2000);
+        const id = window.setInterval(() => void fetchResult(), 2000);
 
-        return () => {
-            if (pollRef.current) window.clearTimeout(pollRef.current);
-        };
-    }, [result?.status, fetchResult]);
+        return () => window.clearInterval(id);
+    }, [inFlight, fetchResult]);
 
     const analyze = async (force = false) => {
         setStarting(true);
@@ -269,7 +270,7 @@ export function ChangeDetectionPanel({
         setReviewing(true);
     };
 
-    const running = result?.status === 'pending' || result?.status === 'running';
+    const running = inFlight;
     const all = useMemo(() => result?.items ?? [], [result]);
 
     useEffect(() => {
