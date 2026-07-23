@@ -7,12 +7,16 @@ use App\Models\Annotation;
 use App\Models\Drawing;
 use App\Models\DrawingChangeItem;
 use App\Models\DrawingComparison;
+use App\Models\SiteTask;
+use App\Models\SiteTaskCategory;
 use App\Services\Drawings\DrawingComparisonService;
 use App\Services\Drawings\DrawingRegionCropper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -108,6 +112,181 @@ class DrawingComparisonController extends Controller
             // path when it is re-run, so a cached one is never stale.
             'Cache-Control' => 'private, max-age=86400',
         ]);
+    }
+
+    /**
+     * Rule on one detected change: raise it as a task, or dismiss it.
+     *
+     * Accepting creates a Potential Variation task pinned at the change, with
+     * the before/after animation attached to a comment. That attachment is the
+     * point of the whole flow — whoever picks the task up later sees the
+     * evidence for it without hunting through revisions.
+     */
+    public function triage(Request $request, Drawing $drawing, DrawingChangeItem $item): JsonResponse
+    {
+        $validated = $request->validate([
+            'decision' => ['required', 'string', 'in:accept,dismiss'],
+            'title' => ['nullable', 'string', 'max:500'],
+            'comment' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $comparison = $item->comparison;
+
+        if ($comparison === null || $comparison->new_drawing_id !== $drawing->id) {
+            return response()->json(['message' => 'Change does not belong to this drawing.'], 404);
+        }
+
+        if ($validated['decision'] === 'dismiss') {
+            $item->update([
+                'triage_status' => DrawingChangeItem::TRIAGE_DISMISSED,
+                'triaged_at' => now(),
+                'triaged_by' => $request->user()?->id,
+            ]);
+
+            return response()->json(['item' => $this->formatItem($item->fresh(), $comparison)]);
+        }
+
+        // Re-accepting an already-raised change must not create a second task.
+        if ($item->site_task_id !== null) {
+            return response()->json([
+                'item' => $this->formatItem($item, $comparison),
+                'message' => 'This change already has a task.',
+            ]);
+        }
+
+        $category = SiteTaskCategory::where('name', 'Potential Variation')->first();
+
+        if ($category === null) {
+            return response()->json(['message' => 'The "Potential Variation" category is missing.'], 422);
+        }
+
+        $task = DB::transaction(function () use ($item, $drawing, $category, $validated, $request, $comparison) {
+            $task = SiteTask::create([
+                'location_id' => $drawing->project_id,
+                'category_id' => $category->id,
+                'title' => $validated['title'] ?: $this->defaultTaskTitle($item),
+                'description' => $this->taskDescription($item, $comparison),
+                'drawing_id' => $drawing->id,
+                'page_number' => $item->page_number ?: 1,
+                ...$this->pinFor($item, $comparison),
+            ]);
+
+            $this->attachEvidence($task, $item, $validated['comment'] ?? null, $request->user()?->id);
+
+            $item->update([
+                'triage_status' => DrawingChangeItem::TRIAGE_ACCEPTED,
+                'site_task_id' => $task->id,
+                'triaged_at' => now(),
+                'triaged_by' => $request->user()?->id,
+            ]);
+
+            return $task;
+        });
+
+        return response()->json([
+            'item' => $this->formatItem($item->fresh(), $comparison),
+            'task' => $task->load('category:id,name,code,color'),
+        ], 201);
+    }
+
+    /**
+     * Title used when the reviewer does not supply one. Kept factual — the
+     * reviewer is the one making the judgement, not this.
+     */
+    private function defaultTaskTitle(DrawingChangeItem $item): string
+    {
+        $element = $item->element && $item->element !== 'changed area' ? $item->element : 'change';
+
+        return Str::limit(ucfirst($element).' — '.($item->description ?: 'detected on revision comparison'), 200);
+    }
+
+    /**
+     * Body text recording which revisions produced this, so the task still
+     * makes sense months later when the comparison is long forgotten.
+     */
+    private function taskDescription(DrawingChangeItem $item, DrawingComparison $comparison): string
+    {
+        $comparison->loadMissing(['oldDrawing:id,revision_number', 'newDrawing:id,revision_number']);
+
+        $old = $comparison->oldDrawing?->revision_number ?: '(unnumbered)';
+        $new = $comparison->newDrawing?->revision_number ?: '(unnumbered)';
+
+        $lines = ["Raised from a revision comparison: Rev {$old} to Rev {$new}."];
+
+        if ($item->description) {
+            $lines[] = $item->description;
+        }
+
+        if ($item->significance) {
+            $lines[] = 'Detected significance: '.$item->significance.'.';
+        }
+
+        return implode('
+
+', $lines);
+    }
+
+    /**
+     * Pin position for the task, as the change's centre in the 0-1 space site
+     * tasks use. Skipped when the coordinates are not real page positions.
+     *
+     * @return array<string, float|null>
+     */
+    private function pinFor(DrawingChangeItem $item, DrawingComparison $comparison): array
+    {
+        $width = (float) $comparison->page_width;
+        $height = (float) $comparison->page_height;
+
+        if (! $item->hasLocation() || $width <= 0 || $height <= 0) {
+            return ['x' => null, 'y' => null];
+        }
+
+        return [
+            'x' => round(max(0.0, min(1.0, ($item->x + $item->w / 2) / $width)), 6),
+            // Task pins are measured from the top; PDF points from the bottom.
+            'y' => round(max(0.0, min(1.0, 1 - ($item->y + $item->h / 2) / $height)), 6),
+        ];
+    }
+
+    /**
+     * Attach the reviewer's note and the before/after animation to the task.
+     *
+     * The animation is copied rather than moved: the comparison still owns it,
+     * and re-running the analysis clears that directory.
+     */
+    private function attachEvidence(SiteTask $task, DrawingChangeItem $item, ?string $note, ?int $userId): void
+    {
+        $body = $note ?: 'Raised from revision comparison.';
+
+        $comment = $task->comments()->create([
+            'user_id' => $userId,
+            'body' => $body,
+            'type' => 'comment',
+        ]);
+
+        if (! $item->preview_path) {
+            return;
+        }
+
+        $disk = Storage::disk(DrawingRegionCropper::DISK);
+
+        if (! $disk->exists($item->preview_path)) {
+            return;
+        }
+
+        try {
+            $comment->addMedia($disk->path($item->preview_path))
+                ->preservingOriginal()
+                ->usingFileName('change-'.$item->id.'-before-after.gif')
+                ->toMediaCollection('attachments');
+        } catch (\Throwable $e) {
+            // The task and its note are the load-bearing part; losing the
+            // animation should not fail the whole action.
+            Log::warning('Could not attach change preview to task', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -275,6 +454,40 @@ class DrawingComparisonController extends Controller
     }
 
     /**
+     * One change row as the panel consumes it.
+     *
+     * @return array<string, mixed>
+     */
+    private function formatItem(DrawingChangeItem $item, DrawingComparison $comparison): array
+    {
+        return [
+            'id' => $item->id,
+            'source' => $item->source,
+            'change_type' => $item->change_type,
+            'text_old' => $item->text_old,
+            'text_new' => $item->text_new,
+            'count_old' => $item->count_old,
+            'count_new' => $item->count_new,
+            'element' => $item->element,
+            'description' => $item->description,
+            'trade_impact' => $item->trade_impact ?? [],
+            'significance' => $item->significance,
+            'confidence' => $item->confidence,
+            'page_number' => $item->page_number,
+            'locatable' => (bool) $item->locatable,
+            'preview_url' => $item->preview_path
+                ? route('drawings.comparison.preview', ['drawing' => $comparison->new_drawing_id, 'item' => $item->id])
+                : null,
+            'triage_status' => $item->triage_status,
+            'site_task_id' => $item->site_task_id,
+            'x' => $item->x,
+            'y' => $item->y,
+            'w' => $item->w,
+            'h' => $item->h,
+        ];
+    }
+
+    /**
      * Validate that the requested old revision is a real sibling drawing in the
      * same project. Prevents comparing across projects.
      */
@@ -303,29 +516,7 @@ class DrawingComparisonController extends Controller
             // failed) sort last but are still shown.
             ->sortBy(fn (DrawingChangeItem $item) => $order[$item->significance] ?? 3)
             ->values()
-            ->map(fn (DrawingChangeItem $item) => [
-                'id' => $item->id,
-                'source' => $item->source,
-                'change_type' => $item->change_type,
-                'text_old' => $item->text_old,
-                'text_new' => $item->text_new,
-                'count_old' => $item->count_old,
-                'count_new' => $item->count_new,
-                'element' => $item->element,
-                'description' => $item->description,
-                'trade_impact' => $item->trade_impact ?? [],
-                'significance' => $item->significance,
-                'confidence' => $item->confidence,
-                'page_number' => $item->page_number,
-                'locatable' => (bool) $item->locatable,
-                'preview_url' => $item->preview_path
-                    ? route('drawings.comparison.preview', ['drawing' => $comparison->new_drawing_id, 'item' => $item->id])
-                    : null,
-                'x' => $item->x,
-                'y' => $item->y,
-                'w' => $item->w,
-                'h' => $item->h,
-            ]);
+            ->map(fn (DrawingChangeItem $item) => $this->formatItem($item, $comparison));
 
         return [
             'id' => $comparison->id,

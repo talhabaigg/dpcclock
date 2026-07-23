@@ -1,9 +1,10 @@
+import { ChangeReviewCard } from '@/components/drawings/change-review-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, Images, RotateCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Images, ListChecks, RotateCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -26,6 +27,9 @@ export type ChangeItem = {
     locatable: boolean;
     /** Animated before/after of this region, when one was generated. */
     preview_url: string | null;
+    /** accepted | dismissed, or null while the change still needs a decision. */
+    triage_status: string | null;
+    site_task_id: number | null;
     x: number | null;
     y: number | null;
     w: number | null;
@@ -137,6 +141,9 @@ export function ChangeDetectionPanel({
     const [clouding, setClouding] = useState(false);
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const [showSummary, setShowSummary] = useState(false);
+    const [reviewing, setReviewing] = useState(false);
+    const [reviewIndex, setReviewIndex] = useState(0);
+    const queueRef = useRef<ChangeItem[]>([]);
 
     // Held in a ref so a parent that passes an inline callback does not
     // re-fire the effect on every render.
@@ -214,6 +221,22 @@ export function ChangeDetectionPanel({
         }
     };
 
+    const onDecided = (decided: ChangeItem, decision: 'accept' | 'dismiss') => {
+        setResult((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      items: prev.items.map((row) =>
+                          row.id === decided.id ? { ...row, triage_status: decision === 'accept' ? 'accepted' : 'dismissed' } : row,
+                      ),
+                  }
+                : prev,
+        );
+        // The queue shrinks under the pointer, so staying on the same index
+        // lands on the next change rather than skipping one.
+        setReviewIndex((i) => Math.max(0, Math.min(i, queueRef.current.length - 2)));
+    };
+
     const running = result?.status === 'pending' || result?.status === 'running';
     const all = useMemo(() => result?.items ?? [], [result]);
 
@@ -230,6 +253,18 @@ export function ChangeDetectionPanel({
 
     const rank = (item: ChangeItem) => ORDER[item.significance ?? ''] ?? 3;
     const bySignificance = (a: ChangeItem, b: ChangeItem) => rank(a) - rank(b);
+
+    // Review queue: everything still awaiting a decision, most significant
+    // first, visual before text because it is the more actionable evidence.
+    const queue = [...all]
+        .filter((item) => item.triage_status === null)
+        .sort((a, b) => {
+            const bySig = rank(a) - rank(b);
+            if (bySig !== 0) return bySig;
+            return (a.source === 'raster' ? 0 : 1) - (b.source === 'raster' ? 0 : 1);
+        });
+
+    queueRef.current = queue;
 
     const visualRanked = [...visual].sort(bySignificance);
     // A region nothing could read is not a finding, it is a place to look.
@@ -316,9 +351,44 @@ export function ChangeDetectionPanel({
 
                             {all.length === 0 && <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>}
 
+                            {reviewing && queue.length > 0 && (
+                                <ChangeReviewCard
+                                    drawingId={drawingId}
+                                    item={queue[Math.min(reviewIndex, queue.length - 1)]}
+                                    position={Math.min(reviewIndex, queue.length - 1) + 1}
+                                    total={queue.length}
+                                    onDecided={onDecided}
+                                    onLocate={onLocate}
+                                />
+                            )}
+
+                            {reviewing && queue.length === 0 && (
+                                <div className="space-y-2 py-2 text-center">
+                                    <p className="text-xs">Every change has been reviewed.</p>
+                                    <Button type="button" size="sm" variant="outline" onClick={() => setReviewing(false)}>
+                                        Back to the list
+                                    </Button>
+                                </div>
+                            )}
+
+                            {!reviewing && queue.length > 0 && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="w-full gap-1.5"
+                                    onClick={() => {
+                                        setReviewIndex(0);
+                                        setReviewing(true);
+                                    }}
+                                >
+                                    <ListChecks className="h-4 w-4" />
+                                    Review {queue.length} change{queue.length === 1 ? '' : 's'}
+                                </Button>
+                            )}
+
                             {/* Visual changes lead: seen on the drawing itself,
                                 and each carries a before/after animation. */}
-                            {visualDescribed.length > 0 && (
+                            {!reviewing && visualDescribed.length > 0 && (
                                 <div className="space-y-1.5">
                                     <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
                                         Wall &amp; geometry changes ({visualDescribed.length})
@@ -335,7 +405,7 @@ export function ChangeDetectionPanel({
                                 </div>
                             )}
 
-                            {visualUnread.length > 0 && (
+                            {!reviewing && visualUnread.length > 0 && (
                                 <div className="space-y-1.5">
                                     <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
                                         Other potential changes ({visualUnread.length})
@@ -358,25 +428,26 @@ export function ChangeDetectionPanel({
 
                             {/* Text findings: exact, but tags and dimensions
                                 rather than built work, so they sit below. */}
-                            {SIGNIFICANCE_ORDER.map((level) => {
-                                const group = visible.filter((item) => item.significance === level);
-                                if (group.length === 0) return null;
+                            {!reviewing &&
+                                SIGNIFICANCE_ORDER.map((level) => {
+                                    const group = visible.filter((item) => item.significance === level);
+                                    if (group.length === 0) return null;
 
-                                return (
-                                    <div key={level} className="space-y-1.5">
-                                        <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-                                            Text &middot; {SIGNIFICANCE_LABEL[level]} ({group.length})
-                                        </p>
-                                        {group.map((item) => (
-                                            <ChangeRow key={item.id} item={item} onLocate={onLocate} />
-                                        ))}
-                                    </div>
-                                );
-                            })}
+                                    return (
+                                        <div key={level} className="space-y-1.5">
+                                            <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                                Text &middot; {SIGNIFICANCE_LABEL[level]} ({group.length})
+                                            </p>
+                                            {group.map((item) => (
+                                                <ChangeRow key={item.id} item={item} onLocate={onLocate} />
+                                            ))}
+                                        </div>
+                                    );
+                                })}
 
                             {/* Un-ranked rows: the diff succeeded but interpretation
                                 did not. Still exact, so still shown. */}
-                            {unranked.length > 0 && (
+                            {!reviewing && unranked.length > 0 && (
                                 <div className="space-y-1.5">
                                     <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
                                         Text &middot; not ranked ({unranked.length})
@@ -444,9 +515,14 @@ export function ChangeDetectionPanel({
                                     <RotateCw className="h-3.5 w-3.5" />
                                     {starting ? 'Restarting…' : 'Run again'}
                                 </Button>
+                                {reviewing && (
+                                    <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setReviewing(false)}>
+                                        Show list
+                                    </Button>
+                                )}
                             </div>
 
-                            {canCloud && cloudable > 0 && (
+                            {!reviewing && canCloud && cloudable > 0 && (
                                 <Button
                                     type="button"
                                     size="sm"
@@ -459,7 +535,7 @@ export function ChangeDetectionPanel({
                                 </Button>
                             )}
 
-                            {hiddenLowCount > 0 && (
+                            {!reviewing && hiddenLowCount > 0 && (
                                 <Button type="button" size="sm" variant="ghost" className="h-7 w-full text-xs" onClick={() => setShowLow(true)}>
                                     Show {hiddenLowCount} drafting-only {hiddenLowCount === 1 ? 'change' : 'changes'}
                                 </Button>

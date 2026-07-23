@@ -28,6 +28,10 @@ class DrawingChangeItem extends Model
         'w',
         'h',
         'preview_path',
+        'triage_status',
+        'site_task_id',
+        'triaged_at',
+        'triaged_by',
         'locatable',
         'element',
         'description',
@@ -46,6 +50,7 @@ class DrawingChangeItem extends Model
         'w' => 'float',
         'h' => 'float',
         'locatable' => 'boolean',
+        'triaged_at' => 'datetime',
         'confidence' => 'float',
     ];
 
@@ -55,6 +60,12 @@ class DrawingChangeItem extends Model
 
     /** A region whose drawn geometry changed, found by comparing rasters. */
     const SOURCE_RASTER = 'raster';
+
+    /** Raised as a task to follow up. */
+    const TRIAGE_ACCEPTED = 'accepted';
+
+    /** Reviewed and judged not worth raising. */
+    const TRIAGE_DISMISSED = 'dismissed';
 
     const TYPE_ADDED = 'added';
 
@@ -67,6 +78,17 @@ class DrawingChangeItem extends Model
     public function comparison(): BelongsTo
     {
         return $this->belongsTo(DrawingComparison::class, 'drawing_comparison_id');
+    }
+
+    public function siteTask(): BelongsTo
+    {
+        return $this->belongsTo(SiteTask::class, 'site_task_id');
+    }
+
+    /** Still awaiting a decision, so still in the review queue. */
+    public function needsReview(): bool
+    {
+        return $this->triage_status === null;
     }
 
     /**

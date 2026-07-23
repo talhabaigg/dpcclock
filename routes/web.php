@@ -1325,6 +1325,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/drawings/{drawing}/annotations', [AnnotationController::class, 'store'])->name('drawings.annotations.store');
         // Writes annotations, so it sits with drawings.create rather than view.
         Route::post('/drawings/{drawing}/comparison/clouds', [DrawingComparisonController::class, 'cloud'])->name('drawings.comparison.cloud');
+        // Triage writes a site task, so it sits with drawings.create too.
+        Route::post('/drawings/{drawing}/comparison/items/{item}/triage', [DrawingComparisonController::class, 'triage'])->name('drawings.comparison.triage');
         Route::patch('/annotations/{annotation}', [AnnotationController::class, 'update'])->name('annotations.update');
         Route::delete('/annotations/{annotation}', [AnnotationController::class, 'destroy'])->name('annotations.destroy');
 
