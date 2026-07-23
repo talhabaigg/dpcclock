@@ -232,9 +232,13 @@ export function ChangeDetectionPanel({
                   }
                 : prev,
         );
-        // The queue shrinks under the pointer, so staying on the same index
-        // lands on the next change rather than skipping one.
-        setReviewIndex((i) => Math.max(0, Math.min(i, queueRef.current.length - 2)));
+        // Advance to the next card still needing a decision rather than the next
+        // card outright, so a second pass does not walk back over work already
+        // done.
+        const deck = queueRef.current;
+        const from = deck.findIndex((row) => row.id === decided.id);
+        const nextUndecided = deck.findIndex((row, i) => i > from && row.triage_status === null && row.id !== decided.id);
+        setReviewIndex(nextUndecided === -1 ? Math.min(from + 1, deck.length - 1) : nextUndecided);
     };
 
     const running = result?.status === 'pending' || result?.status === 'running';
@@ -256,13 +260,17 @@ export function ChangeDetectionPanel({
 
     // Review queue: everything still awaiting a decision, most significant
     // first, visual before text because it is the more actionable evidence.
-    const queue = [...all]
-        .filter((item) => item.triage_status === null)
-        .sort((a, b) => {
-            const bySig = rank(a) - rank(b);
-            if (bySig !== 0) return bySig;
-            return (a.source === 'raster' ? 0 : 1) - (b.source === 'raster' ? 0 : 1);
-        });
+    // The review deck. Every change is in it, most significant first and visual
+    // ahead of text, so priority is automatic rather than something the
+    // reviewer has to impose. Decided cards keep their place so Previous can
+    // reach them — second thoughts are the usual reason to go back.
+    const queue = [...all].sort((a, b) => {
+        const bySig = rank(a) - rank(b);
+        if (bySig !== 0) return bySig;
+        return (a.source === 'raster' ? 0 : 1) - (b.source === 'raster' ? 0 : 1);
+    });
+
+    const undecided = queue.filter((item) => item.triage_status === null).length;
 
     queueRef.current = queue;
 
@@ -273,8 +281,6 @@ export function ChangeDetectionPanel({
 
     const visible = showLow ? textual : textual.filter((item) => item.significance !== 'low');
     const hiddenLowCount = textual.length - visible.length;
-    // Text coordinates are unusable on some CAD exports; regions never are.
-    const textLocatable = textual.some((item) => item.locatable);
     const unranked = visible.filter((item) => item.significance === null);
     // Unranked rows are the fallback path: ranking was skipped, capped, or
     // failed. Showing hundreds of them unbounded is what made this panel
@@ -342,13 +348,6 @@ export function ChangeDetectionPanel({
                                 </p>
                             )}
 
-                            {textual.length > 0 && !textLocatable && (
-                                <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
-                                    This sheet stores its text in a nested coordinate space, so the text changes below can't be located on the plan.
-                                    The list itself is exact, and the changed areas can still be opened.
-                                </p>
-                            )}
-
                             {all.length === 0 && <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>}
 
                             {reviewing && queue.length > 0 && (
@@ -359,16 +358,11 @@ export function ChangeDetectionPanel({
                                     total={queue.length}
                                     onDecided={onDecided}
                                     onLocate={onLocate}
+                                    onPrev={() => setReviewIndex((i) => Math.max(0, i - 1))}
+                                    onNext={() => setReviewIndex((i) => Math.min(queue.length - 1, i + 1))}
+                                    canPrev={reviewIndex > 0}
+                                    canNext={reviewIndex < queue.length - 1}
                                 />
-                            )}
-
-                            {reviewing && queue.length === 0 && (
-                                <div className="space-y-2 py-2 text-center">
-                                    <p className="text-xs">Every change has been reviewed.</p>
-                                    <Button type="button" size="sm" variant="outline" onClick={() => setReviewing(false)}>
-                                        Back to the list
-                                    </Button>
-                                </div>
                             )}
 
                             {!reviewing && queue.length > 0 && (
@@ -377,12 +371,15 @@ export function ChangeDetectionPanel({
                                     size="sm"
                                     className="w-full gap-1.5"
                                     onClick={() => {
-                                        setReviewIndex(0);
+                                        // Open on the first thing still needing a
+                                        // decision, not on work already done.
+                                        const first = queue.findIndex((row) => row.triage_status === null);
+                                        setReviewIndex(first === -1 ? 0 : first);
                                         setReviewing(true);
                                     }}
                                 >
                                     <ListChecks className="h-4 w-4" />
-                                    Review {queue.length} change{queue.length === 1 ? '' : 's'}
+                                    {undecided > 0 ? `Review ${undecided} change${undecided === 1 ? '' : 's'}` : 'Review changes again'}
                                 </Button>
                             )}
 
