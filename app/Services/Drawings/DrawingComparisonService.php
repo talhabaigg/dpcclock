@@ -6,7 +6,6 @@ use App\Ai\Agents\DrawingChangeAgent;
 use App\Models\Drawing;
 use App\Models\DrawingChangeItem;
 use App\Models\DrawingComparison;
-use App\Services\DrawingProcessingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
@@ -24,6 +23,8 @@ class DrawingComparisonService
     public function __construct(
         private readonly PdfTextExtractor $extractor,
         private readonly DrawingTextDiffService $differ,
+        private readonly DrawingRasterDiffService $rasterDiffer,
+        private readonly DrawingRasterizer $rasterizer,
     ) {}
 
     /**
@@ -61,20 +62,23 @@ class DrawingComparisonService
 
         $comparison->update(['status' => DrawingComparison::STATUS_RUNNING, 'error' => null]);
 
+        $oldSource = null;
+        $newSource = null;
+
         try {
             $comparison->loadMissing(['oldDrawing', 'newDrawing']);
 
-            $oldText = $this->extractor->extract($comparison->oldDrawing);
-            $newText = $this->extractor->extract($comparison->newDrawing);
+            // Open both sources once. Text extraction, the page-box probe and
+            // rasterizing all need the same local file; downloading it per step
+            // would triple the S3 traffic on every comparison.
+            $oldSource = DrawingSourceFile::open($comparison->oldDrawing);
+            $newSource = DrawingSourceFile::open($comparison->newDrawing);
 
-            if ($oldText === null || $newText === null) {
-                // A scanned or image-only sheet has nothing for this method to
-                // read. That is a real answer, not a failure — record it so the
-                // UI can say why and the later raster phase can pick it up.
+            if ($oldSource === null || $newSource === null) {
                 return tap($comparison)->update([
                     'status' => DrawingComparison::STATUS_COMPLETE,
                     'methods' => [],
-                    'summary' => 'No text layer found on one or both revisions, so a text comparison is not possible for this sheet. This usually means the drawing is a scan or an image export rather than a CAD-generated PDF.',
+                    'summary' => 'The source file for one or both revisions could not be read, so they cannot be compared.',
                     'revision_notes' => [],
                     'changes_total' => 0,
                     'changes_high' => 0,
@@ -82,15 +86,40 @@ class DrawingComparisonService
                 ]);
             }
 
-            $changes = $this->differ->diff($oldText, $newText);
-            $titleBlock = $this->titleBlockText($newText);
-            $reliable = $this->coordinatesAreReliable($comparison->newDrawing, $newText);
+            $oldText = $this->extractor->extractFromPath($oldSource->path);
+            $newText = $this->extractor->extractFromPath($newSource->path);
+            $pageBox = $this->rasterizer->probePageBox($newSource->path);
 
-            $interpretation = $changes === [] && $titleBlock === ''
-                ? null
-                : $this->interpret($changes, $titleBlock);
+            $changes = $oldText !== null && $newText !== null
+                ? $this->differ->diff($oldText, $newText)
+                : [];
 
-            $this->persist($comparison, $changes, $interpretation, $reliable);
+            $titleBlock = $newText !== null ? $this->titleBlockText($newText) : '';
+
+            // Text coordinates are only usable when they line up with the real
+            // page; raster regions always are.
+            $textLocatable = $newText !== null && $pageBox !== null
+                && $this->textCoordinatesUsable($newText, $pageBox[0], $pageBox[1]);
+
+            $regions = $this->rasterRegions($oldSource, $newSource, $pageBox);
+
+            if ($changes === [] && $regions === [] && $titleBlock === '') {
+                return tap($comparison)->update([
+                    'status' => DrawingComparison::STATUS_COMPLETE,
+                    'methods' => [],
+                    'summary' => $oldText === null || $newText === null
+                        ? 'No text layer was found on one or both revisions and no geometry differences were detected. This usually means the drawing is a scan rather than a CAD-generated PDF.'
+                        : 'No differences were detected between these two revisions.',
+                    'revision_notes' => [],
+                    'changes_total' => 0,
+                    'changes_high' => 0,
+                    'analyzed_at' => now(),
+                ]);
+            }
+
+            $interpretation = $this->interpret($changes, $titleBlock, count($regions));
+
+            $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable);
 
             return $comparison->fresh(['items']);
         } catch (\Throwable $e) {
@@ -105,7 +134,37 @@ class DrawingComparisonService
             ]);
 
             return $comparison;
+        } finally {
+            $oldSource?->close();
+            $newSource?->close();
         }
+    }
+
+    /**
+     * Geometry change regions, or an empty list when the raster pass is
+     * unavailable or turned off. Never fatal — the text diff stands alone.
+     *
+     * @return list<array{x: float, y: float, w: float, h: float, cells: int}>
+     */
+    private function rasterRegions(DrawingSourceFile $old, DrawingSourceFile $new, ?array $pageBox): array
+    {
+        if ($pageBox === null || ! config('drawings.comparison.raster_enabled', true)) {
+            return [];
+        }
+
+        if (! $this->rasterDiffer->isAvailable()) {
+            return [];
+        }
+
+        try {
+            $result = $this->rasterDiffer->diff($old->path, $new->path, $pageBox[0], $pageBox[1]);
+        } catch (\Throwable $e) {
+            Log::warning('Raster comparison failed; keeping text results', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+
+        return $result['regions'] ?? [];
     }
 
     /**
@@ -114,7 +173,7 @@ class DrawingComparisonService
      * @param  list<array<string, mixed>>  $changes
      * @return array{structured: array<string, mixed>, model: string, input_tokens: int, output_tokens: int}|null
      */
-    private function interpret(array $changes, string $titleBlock): ?array
+    private function interpret(array $changes, string $titleBlock, int $regionCount = 0): ?array
     {
         if (! config('drawings.comparison.enabled', true)) {
             return null;
@@ -143,11 +202,20 @@ class DrawingComparisonService
             ? sprintf("\n(%d further changes were found but are not listed here.)", count($changes) - count($sent))
             : '';
 
+        // The geometry count is context for the summary only. The model has not
+        // seen these regions, so it is told to count them, not describe them —
+        // describing unseen geometry is exactly the hallucination this design
+        // avoids.
+        $geometry = $regionCount > 0
+            ? "\n\nGEOMETRY REGIONS: a pixel comparison found {$regionCount} area(s) of the sheet where drawn content changed. Some of these will be the text changes above; others are line work with no text attached. You have not seen them — state only that they exist and need a visual check, and never describe what is in them."
+            : '';
+
         $prompt = "TITLE BLOCK TEXT:\n"
             .($titleBlock !== '' ? $titleBlock : '(none readable)')
             ."\n\nCHANGES:\n"
             .($lines !== [] ? implode("\n", $lines) : '(no text differences found)')
-            .$truncated;
+            .$truncated
+            .$geometry;
 
         try {
             $response = DrawingChangeAgent::make()->prompt(
@@ -179,10 +247,16 @@ class DrawingComparisonService
      * Write the diff and its interpretation, replacing any previous attempt.
      *
      * @param  list<array<string, mixed>>  $changes
+     * @param  list<array<string, mixed>>  $regions
      * @param  array<string, mixed>|null  $interpretation
      */
-    private function persist(DrawingComparison $comparison, array $changes, ?array $interpretation, bool $coordinatesReliable = false): void
-    {
+    private function persist(
+        DrawingComparison $comparison,
+        array $changes,
+        array $regions,
+        ?array $interpretation,
+        bool $textLocatable = false,
+    ): void {
         $structured = $interpretation['structured'] ?? [];
 
         // Index the model's per-change entries so they can be matched back to
@@ -194,7 +268,7 @@ class DrawingComparisonService
             }
         }
 
-        DB::transaction(function () use ($comparison, $changes, $structured, $byIndex, $interpretation, $coordinatesReliable) {
+        DB::transaction(function () use ($comparison, $changes, $regions, $structured, $byIndex, $interpretation, $textLocatable) {
             $comparison->items()->delete();
 
             $high = 0;
@@ -220,6 +294,7 @@ class DrawingComparisonService
                     'y' => $change['y'],
                     'w' => $change['w'],
                     'h' => $change['h'],
+                    'locatable' => $textLocatable,
                     'element' => $entry['element'] ?? null,
                     'description' => $entry['description'] ?? null,
                     'trade_impact' => isset($entry['trade_impact'])
@@ -232,22 +307,57 @@ class DrawingComparisonService
                 ];
             }
 
+            // Geometry regions. No description is written for these: nothing
+            // has looked at them yet, and inventing one would be exactly the
+            // fabrication this design exists to avoid. They carry a position
+            // and a size, which is enough to go and look. Phase 3's vision pass
+            // over these crops is what fills in the description.
+            foreach ($regions as $region) {
+                $rows[] = [
+                    'drawing_comparison_id' => $comparison->id,
+                    'source' => DrawingChangeItem::SOURCE_RASTER,
+                    'change_type' => DrawingChangeItem::TYPE_MODIFIED,
+                    'text_old' => null,
+                    'text_new' => null,
+                    'page_number' => 1,
+                    'x' => $region['x'],
+                    'y' => $region['y'],
+                    'w' => $region['w'],
+                    'h' => $region['h'],
+                    // Measured off the rendered page, so always a true position.
+                    'locatable' => true,
+                    'element' => 'changed area',
+                    'description' => null,
+                    'trade_impact' => null,
+                    'significance' => null,
+                    'confidence' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
             foreach (array_chunk($rows, 500) as $chunk) {
                 DrawingChangeItem::insert($chunk);
             }
 
-            $methods = ['text_layer'];
+            $methods = [];
+            if ($changes !== []) {
+                $methods[] = 'text_layer';
+            }
             if (! empty($structured['revision_notes'])) {
                 $methods[] = 'title_block';
+            }
+            if ($regions !== []) {
+                $methods[] = 'raster';
             }
 
             $comparison->update([
                 'status' => DrawingComparison::STATUS_COMPLETE,
                 'methods' => $methods,
-                'coordinates_reliable' => $coordinatesReliable,
-                'summary' => $structured['summary'] ?? $this->fallbackSummary($changes),
+                'coordinates_reliable' => $textLocatable,
+                'summary' => $structured['summary'] ?? $this->fallbackSummary($changes, count($regions)),
                 'revision_notes' => $structured['revision_notes'] ?? [],
-                'changes_total' => count($changes),
+                'changes_total' => count($changes) + count($regions),
                 'changes_high' => $high,
                 'model' => $interpretation['model'] ?? null,
                 'input_tokens' => $interpretation['input_tokens'] ?? null,
@@ -269,15 +379,8 @@ class DrawingComparisonService
      *
      * @param  array{min_x: float, min_y: float, max_x: float, max_y: float}  $extraction
      */
-    private function coordinatesAreReliable(Drawing $drawing, array $extraction): bool
+    private function textCoordinatesUsable(array $extraction, float $pageWidth, float $pageHeight): bool
     {
-        try {
-            [$pageWidth, $pageHeight] = app(DrawingProcessingService::class)
-                ->probePdfPointDimensions($drawing);
-        } catch (\Throwable $e) {
-            return false;
-        }
-
         if ($pageWidth <= 0 || $pageHeight <= 0) {
             return false;
         }
@@ -366,10 +469,16 @@ class DrawingComparisonService
      *
      * @param  list<array<string, mixed>>  $changes
      */
-    private function fallbackSummary(array $changes): string
+    private function fallbackSummary(array $changes, int $regionCount = 0): string
     {
+        $geometry = $regionCount > 0
+            ? sprintf(' %d area%s of the sheet also changed geometrically.', $regionCount, $regionCount === 1 ? '' : 's')
+            : '';
+
         if ($changes === []) {
-            return 'No text differences were found between these two revisions. Any changes are geometry-only and will need the drawing overlay to see.';
+            return $regionCount > 0
+                ? sprintf('No text differences were found, but %d area%s of the sheet changed geometrically. Open each to see what changed.', $regionCount, $regionCount === 1 ? '' : 's')
+                : 'No differences were found between these two revisions.';
         }
 
         $counts = array_count_values(array_column($changes, 'change_type'));
@@ -382,9 +491,10 @@ class DrawingComparisonService
         }
 
         return sprintf(
-            '%d text differences found (%s). Automatic interpretation was unavailable, so these are unranked.',
+            '%d text differences found (%s).%s Automatic interpretation was unavailable, so these are unranked.',
             count($changes),
             implode(', ', $parts),
+            $geometry,
         );
     }
 

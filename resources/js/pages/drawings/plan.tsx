@@ -233,11 +233,16 @@ export default function DrawingPlan() {
                         drawingId={comparison.new.id}
                         oldDrawingId={comparison.old.id}
                         // Detected changes carry PDF-point coordinates, so the
-                        // viewer can jump straight to one. Zoom in far enough to
-                        // read the affected text rather than just centring it.
+                        // viewer can jump straight to one. Centre on the middle
+                        // of the change and pick a zoom that frames it with some
+                        // surrounding context — a region shown edge-to-edge is
+                        // hard to interpret without what sits around it.
                         onLocate={(item) => {
                             if (item.x === null || item.y === null) return;
-                            viewControls?.centerOn(item.x, item.y, 3);
+                            const w = item.w ?? 0;
+                            const h = item.h ?? 0;
+                            const scale = w > 0 && h > 0 ? Math.min(6, Math.max(1.5, 500 / Math.max(w, h))) : 3;
+                            viewControls?.centerOn(item.x + w / 2, item.y + h / 2, scale);
                         }}
                     />
                 )}

@@ -109,6 +109,7 @@ class DrawingComparisonController extends Controller
                 'significance' => $item->significance,
                 'confidence' => $item->confidence,
                 'page_number' => $item->page_number,
+                'locatable' => (bool) $item->locatable,
                 'x' => $item->x,
                 'y' => $item->y,
                 'w' => $item->w,

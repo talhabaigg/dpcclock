@@ -36,6 +36,15 @@ return [
 
         // Queue the analysis job runs on.
         'queue' => env('DRAWING_COMPARISON_QUEUE', 'default'),
+
+        // Raster comparison (Phase 2) finds geometry changes the text layer
+        // cannot see — a wall that moved, a door removed without its tag
+        // changing. Requires ImageMagick; degrades to text-only when absent.
+        'raster_enabled' => env('DRAWING_COMPARISON_RASTER', true),
+
+        // Explicit path to the ImageMagick binary. Leave null to discover
+        // `magick` (v7) or `convert` (v6) on PATH.
+        'magick_path' => env('DRAWING_COMPARISON_MAGICK_PATH'),
     ],
 
 ];

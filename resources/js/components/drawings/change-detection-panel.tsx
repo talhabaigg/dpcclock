@@ -19,6 +19,8 @@ export type ChangeItem = {
     significance: 'high' | 'medium' | 'low' | null;
     confidence: number | null;
     page_number: number | null;
+    /** Whether x/y are true page coordinates the viewer can zoom to. */
+    locatable: boolean;
     x: number | null;
     y: number | null;
     w: number | null;
@@ -157,13 +159,18 @@ export function ChangeDetectionPanel({
     };
 
     const running = result?.status === 'pending' || result?.status === 'running';
-    // Only offer to jump to a change when its coordinates are real page
-    // positions. Sending the viewer somewhere arbitrary is worse than not
-    // offering the jump at all.
-    const locateEnabled = Boolean(result?.coordinates_reliable);
-    const items = result?.items ?? [];
+    const all = result?.items ?? [];
+
+    // Two detectors, two kinds of row. Text changes carry an exact before/after
+    // and a ranking; geometry regions are places on the sheet where line work
+    // changed, with nothing yet claimed about what changed there.
+    const items = all.filter((item) => item.source !== 'raster');
+    const regions = all.filter((item) => item.source === 'raster');
+
     const visible = showLow ? items : items.filter((item) => item.significance !== 'low');
     const hiddenLowCount = items.length - visible.length;
+    // Text coordinates are unusable on some CAD exports; regions never are.
+    const textLocatable = items.some((item) => item.locatable);
 
     return (
         <div className="bg-background/95 absolute top-16 right-3 z-10 flex max-h-[calc(100%-5rem)] w-[22rem] flex-col rounded-md border shadow-sm backdrop-blur">
@@ -231,17 +238,15 @@ export function ChangeDetectionPanel({
                                 </div>
                             )}
 
-                            {items.length > 0 && !locateEnabled && (
+                            {items.length > 0 && !textLocatable && (
                                 <p className="text-muted-foreground border-l-2 pl-2 text-[11px] leading-relaxed">
-                                    This sheet stores its text in a nested coordinate space, so changes can't be located on the plan. The list itself
-                                    is exact.
+                                    This sheet stores its text in a nested coordinate space, so the text changes below can't be located on the plan.
+                                    The list itself is exact, and the changed areas can still be opened.
                                 </p>
                             )}
 
-                            {items.length === 0 && (
-                                <p className="text-muted-foreground text-xs">
-                                    No text differences found. Any changes are geometry only — use the overlay to spot them.
-                                </p>
+                            {items.length === 0 && regions.length === 0 && (
+                                <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>
                             )}
 
                             {SIGNIFICANCE_ORDER.map((level) => {
@@ -254,7 +259,7 @@ export function ChangeDetectionPanel({
                                             {SIGNIFICANCE_LABEL[level]} ({group.length})
                                         </p>
                                         {group.map((item) => (
-                                            <ChangeRow key={item.id} item={item} onLocate={locateEnabled ? onLocate : undefined} />
+                                            <ChangeRow key={item.id} item={item} onLocate={onLocate} />
                                         ))}
                                     </div>
                                 );
@@ -268,8 +273,22 @@ export function ChangeDetectionPanel({
                                     {visible
                                         .filter((item) => item.significance === null)
                                         .map((item) => (
-                                            <ChangeRow key={item.id} item={item} onLocate={locateEnabled ? onLocate : undefined} />
+                                            <ChangeRow key={item.id} item={item} onLocate={onLocate} />
                                         ))}
+                                </div>
+                            )}
+
+                            {regions.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                                        Changed areas ({regions.length})
+                                    </p>
+                                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                        Line work changed here. Nothing has read these yet — open each to see what it is.
+                                    </p>
+                                    {regions.map((region, index) => (
+                                        <RegionRow key={region.id} region={region} index={index + 1} onLocate={onLocate} />
+                                    ))}
                                 </div>
                             )}
 
@@ -286,8 +305,36 @@ export function ChangeDetectionPanel({
     );
 }
 
+/**
+ * A region of the sheet whose drawn geometry changed. Deliberately makes no
+ * claim about what changed — that needs eyes on the drawing.
+ */
+function RegionRow({ region, index, onLocate }: { region: ChangeItem; index: number; onLocate?: (item: ChangeItem) => void }) {
+    const locatable = region.x !== null && region.y !== null && region.locatable && Boolean(onLocate);
+    // Points to millimetres on the printed sheet, which is the size a person
+    // holding the drawing would perceive.
+    const mm = (pt: number | null) => Math.round((pt ?? 0) * 0.3528);
+
+    return (
+        <button
+            type="button"
+            disabled={!locatable}
+            onClick={() => locatable && onLocate?.(region)}
+            className={cn(
+                'flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                locatable ? 'hover:bg-accent hover:text-accent-foreground' : 'cursor-default',
+            )}
+        >
+            <span>Area {index}</span>
+            <span className="text-muted-foreground text-[10px] tabular-nums">
+                {mm(region.w)} × {mm(region.h)} mm
+            </span>
+        </button>
+    );
+}
+
 function ChangeRow({ item, onLocate }: { item: ChangeItem; onLocate?: (item: ChangeItem) => void }) {
-    const locatable = item.x !== null && item.y !== null && Boolean(onLocate);
+    const locatable = item.x !== null && item.y !== null && item.locatable && Boolean(onLocate);
 
     return (
         <button

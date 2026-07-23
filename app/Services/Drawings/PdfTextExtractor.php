@@ -4,7 +4,6 @@ namespace App\Services\Drawings;
 
 use App\Models\Drawing;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Smalot\PdfParser\Config;
 use Smalot\PdfParser\Parser;
 
@@ -41,12 +40,27 @@ class PdfTextExtractor
      */
     public function extract(Drawing $drawing): ?array
     {
-        $path = $this->resolveLocalSourcePath($drawing);
+        $source = DrawingSourceFile::open($drawing);
 
-        if ($path === null) {
+        if ($source === null) {
             return null;
         }
 
+        try {
+            return $this->extractFromPath($source->path);
+        } finally {
+            $source->close();
+        }
+    }
+
+    /**
+     * Extract from an already-local PDF. Used when the caller has the file open
+     * for other work too (rasterizing), so it is not downloaded twice.
+     *
+     * @return array{items: list<array<string, mixed>>, min_x: float, min_y: float, max_x: float, max_y: float, page_width: float, page_height: float}|null
+     */
+    public function extractFromPath(string $path): ?array
+    {
         try {
             $config = new Config;
             // Font id + size ride along in each data row; we need the size to
@@ -137,78 +151,11 @@ class PdfTextExtractor
             ];
         } catch (\Throwable $e) {
             Log::warning('PDF text extraction failed', [
-                'drawing_id' => $drawing->id,
+                'path' => basename($path),
                 'error' => $e->getMessage(),
             ]);
 
             return null;
-        } finally {
-            $this->cleanupTempFile($path ?? null);
-        }
-    }
-
-    /**
-     * Local filesystem path for the drawing's source PDF, downloading from S3
-     * into the temp dir when the media lives remotely.
-     */
-    private function resolveLocalSourcePath(Drawing $drawing): ?string
-    {
-        $media = $drawing->getFirstMedia('source');
-
-        if (! $media) {
-            return null;
-        }
-
-        $extension = strtolower(pathinfo($media->file_name, PATHINFO_EXTENSION));
-        $isPdf = $extension === 'pdf' || str_contains(strtolower($media->mime_type ?? ''), 'pdf');
-
-        if (! $isPdf) {
-            return null;
-        }
-
-        if ($media->disk !== 's3') {
-            $path = $media->getPath();
-
-            return file_exists($path) ? $path : null;
-        }
-
-        try {
-            $contents = Storage::disk($media->disk)->get($media->getPathRelativeToRoot());
-
-            if (! $contents) {
-                return null;
-            }
-
-            $temp = sys_get_temp_dir().'/drawing_text_'.md5((string) $media->id).'_'.uniqid().'.pdf';
-            file_put_contents($temp, $contents);
-
-            return $temp;
-        } catch (\Throwable $e) {
-            Log::warning('Failed to download drawing source for text extraction', [
-                'drawing_id' => $drawing->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
-    /**
-     * Remove the S3 scratch copy. Only ever deletes files this class created —
-     * a locally-stored media path is left alone.
-     */
-    private function cleanupTempFile(?string $path): void
-    {
-        if ($path === null) {
-            return;
-        }
-
-        if (! str_starts_with(basename($path), 'drawing_text_')) {
-            return;
-        }
-
-        if (str_starts_with($path, sys_get_temp_dir()) && file_exists($path)) {
-            @unlink($path);
         }
     }
 }

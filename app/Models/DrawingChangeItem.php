@@ -25,6 +25,7 @@ class DrawingChangeItem extends Model
         'y',
         'w',
         'h',
+        'locatable',
         'element',
         'description',
         'trade_impact',
@@ -39,12 +40,16 @@ class DrawingChangeItem extends Model
         'y' => 'float',
         'w' => 'float',
         'h' => 'float',
+        'locatable' => 'boolean',
         'confidence' => 'float',
     ];
 
     const SOURCE_TEXT_LAYER = 'text_layer';
 
     const SOURCE_TITLE_BLOCK = 'title_block';
+
+    /** A region whose drawn geometry changed, found by comparing rasters. */
+    const SOURCE_RASTER = 'raster';
 
     const TYPE_ADDED = 'added';
 
@@ -60,11 +65,11 @@ class DrawingChangeItem extends Model
     }
 
     /**
-     * Whether this change can be located on the plan. Title-block rows and any
-     * item whose geometry was dropped are list-only.
+     * Whether the viewer can zoom to this change. Requires both a position and
+     * confidence that the position is a real page coordinate.
      */
     public function hasLocation(): bool
     {
-        return $this->x !== null && $this->y !== null;
+        return $this->x !== null && $this->y !== null && $this->locatable;
     }
 }
