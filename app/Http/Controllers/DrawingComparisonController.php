@@ -523,6 +523,16 @@ class DrawingComparisonController extends Controller
             'status' => $comparison->status,
             'error' => $comparison->error,
             'methods' => $comparison->methods ?? [],
+            'progress' => [
+                'stage' => $comparison->progress_stage,
+                'done' => $comparison->progress_done,
+                'total' => $comparison->progress_total,
+                'started_at' => $comparison->started_at,
+                'seconds_since_heartbeat' => $comparison->secondsSinceHeartbeat(),
+                // Lets the panel offer a restart instead of spinning forever on
+                // a job that is not coming back.
+                'stalled' => $comparison->looksStalled(),
+            ],
             'coordinates_reliable' => (bool) $comparison->coordinates_reliable,
             'text_comparable' => (bool) $comparison->text_comparable,
             'summary' => $comparison->summary,

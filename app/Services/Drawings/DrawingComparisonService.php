@@ -30,7 +30,7 @@ class DrawingComparisonService
      * every sheet a user has already opened keeps serving the old result. A
      * stale row is re-run on next view.
      */
-    public const PIPELINE_VERSION = 11;
+    public const PIPELINE_VERSION = 12;
 
     /**
      * Changes classified per model call. Keeps output length bounded no matter
@@ -111,6 +111,11 @@ class DrawingComparisonService
                 'input_tokens' => null,
                 'output_tokens' => null,
                 'analyzed_at' => null,
+                'progress_stage' => null,
+                'progress_done' => null,
+                'progress_total' => null,
+                'started_at' => null,
+                'heartbeat_at' => null,
             ]);
         });
     }
@@ -126,7 +131,15 @@ class DrawingComparisonService
             return $comparison;
         }
 
-        $comparison->update(['status' => DrawingComparison::STATUS_RUNNING, 'error' => null]);
+        $comparison->update([
+            'status' => DrawingComparison::STATUS_RUNNING,
+            'error' => null,
+            'started_at' => now(),
+            'heartbeat_at' => now(),
+            'progress_stage' => 'starting',
+            'progress_done' => null,
+            'progress_total' => null,
+        ]);
 
         $oldSource = null;
         $newSource = null;
@@ -151,6 +164,8 @@ class DrawingComparisonService
                     'analyzed_at' => now(),
                 ]);
             }
+
+            $this->progress($comparison, 'reading_text');
 
             $oldText = $this->extractor->extractFromPath($oldSource->path);
             $newText = $this->extractor->extractFromPath($newSource->path);
@@ -177,6 +192,8 @@ class DrawingComparisonService
             $textLocatable = $newText !== null && $pageBox !== null
                 && $this->textCoordinatesUsable($newText, $pageBox[0], $pageBox[1]);
 
+            $this->progress($comparison, 'comparing_geometry');
+
             $regions = $this->rasterRegions($oldSource, $newSource, $pageBox);
 
             if ($changes === [] && $regions === [] && $titleBlock === '') {
@@ -198,7 +215,9 @@ class DrawingComparisonService
             $vision = $this->describeRegions($comparison, $oldSource, $newSource, $regions, $pageBox);
             $regions = $this->applyVerdicts($regions, $vision['verdicts'], $vision['previews'] ?? []);
 
-            $interpretation = $this->interpret($changes, $titleBlock, $regions, $textComparable);
+            $this->progress($comparison, 'ranking_changes', 0, count($changes));
+
+            $interpretation = $this->interpret($changes, $titleBlock, $regions, $textComparable, $comparison);
 
             $this->persist($comparison, $changes, $regions, $interpretation, $textLocatable, $textComparable, $vision, $pageBox);
 
@@ -242,7 +261,15 @@ class DrawingComparisonService
         }
 
         try {
-            return $this->vision->describe($old->path, $new->path, $regions, $pageBox[0], $pageBox[1], $comparison->id);
+            return $this->vision->describe(
+                $old->path,
+                $new->path,
+                $regions,
+                $pageBox[0],
+                $pageBox[1],
+                $comparison->id,
+                fn (int $done, int $total) => $this->progress($comparison, 'reading_regions', $done, $total),
+            );
         } catch (\Throwable $e) {
             Log::warning('Region vision pass failed; keeping undescribed regions', [
                 'error' => $e->getMessage(),
@@ -293,6 +320,23 @@ class DrawingComparisonService
         }
 
         return $regions;
+    }
+
+    /**
+     * Record where the run has got to.
+     *
+     * Doubles as a heartbeat: a running row whose heartbeat has gone quiet is a
+     * dead job rather than a slow one, and the panel needs to be able to tell
+     * the difference to avoid presenting an eternal spinner.
+     */
+    private function progress(DrawingComparison $comparison, string $stage, ?int $done = null, ?int $total = null): void
+    {
+        $comparison->forceFill([
+            'progress_stage' => $stage,
+            'progress_done' => $done,
+            'progress_total' => $total,
+            'heartbeat_at' => now(),
+        ])->saveQuietly();
     }
 
     /**
@@ -411,7 +455,7 @@ class DrawingComparisonService
      * @param  list<array<string, mixed>>  $changes
      * @return array{structured: array<string, mixed>, model: string, input_tokens: int, output_tokens: int}|null
      */
-    private function interpret(array $changes, string $titleBlock, array $regions, bool $textComparable): ?array
+    private function interpret(array $changes, string $titleBlock, array $regions, bool $textComparable, ?DrawingComparison $comparison = null): ?array
     {
         if (! config('drawings.comparison.enabled', true)) {
             return null;
@@ -428,7 +472,13 @@ class DrawingComparisonService
         $inputTokens = 0;
         $outputTokens = 0;
 
+        $classified = 0;
+
         foreach (array_chunk($sent, self::CLASSIFY_BATCH, true) as $batch) {
+            if ($comparison !== null) {
+                $this->progress($comparison, 'ranking_changes', $classified, count($sent));
+            }
+
             $lines = [];
 
             foreach ($batch as $index => $change) {
@@ -446,6 +496,8 @@ class DrawingComparisonService
                 $inputTokens += $response->usage->promptTokens;
                 $outputTokens += $response->usage->completionTokens;
 
+                $classified += count($batch);
+
                 foreach ($response->toArray()['changes'] ?? [] as $entry) {
                     if (isset($entry['index']) && is_numeric($entry['index'])) {
                         $ranked[(int) $entry['index']] = $entry;
@@ -459,6 +511,10 @@ class DrawingComparisonService
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        if ($comparison !== null) {
+            $this->progress($comparison, 'writing_summary');
         }
 
         $summary = $this->summarise($changes, $ranked, $titleBlock, $regions, $textComparable, $provider, $model, $timeout);

@@ -47,6 +47,7 @@ class DrawingRegionVisionService
         float $pageWidth,
         float $pageHeight,
         int $comparisonId = 0,
+        ?callable $onProgress = null,
     ): array {
         $empty = ['verdicts' => [], 'previews' => [], 'input_tokens' => 0, 'output_tokens' => 0];
 
@@ -86,7 +87,16 @@ class DrawingRegionVisionService
         $previews = [];
 
         try {
+            $total = count($previewOrder);
+
             foreach ($previewOrder as $position => $index) {
+                // Reported before the work, so the count reflects what is being
+                // done now rather than what has finished — the region being
+                // read is the slow part and the user should see it move.
+                if ($onProgress !== null) {
+                    $onProgress($position, $total);
+                }
+
                 // Every region in the preview budget gets a before/after
                 // animation; only the leading slice is also read by the model.
                 // Cropping is cheap once the page is rendered, and being able

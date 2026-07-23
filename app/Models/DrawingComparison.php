@@ -18,6 +18,11 @@ class DrawingComparison extends Model
         'old_drawing_id',
         'new_drawing_id',
         'status',
+        'progress_stage',
+        'progress_done',
+        'progress_total',
+        'started_at',
+        'heartbeat_at',
         'error',
         'methods',
         'pipeline_version',
@@ -49,6 +54,10 @@ class DrawingComparison extends Model
         'input_tokens' => 'integer',
         'output_tokens' => 'integer',
         'analyzed_at' => 'datetime',
+        'started_at' => 'datetime',
+        'heartbeat_at' => 'datetime',
+        'progress_done' => 'integer',
+        'progress_total' => 'integer',
     ];
 
     const STATUS_PENDING = 'pending';
@@ -72,6 +81,33 @@ class DrawingComparison extends Model
     public function items(): HasMany
     {
         return $this->hasMany(DrawingChangeItem::class);
+    }
+
+    /**
+     * Seconds since the job last reported progress. Null when it has never
+     * reported, which is itself a signal on a row that claims to be running.
+     */
+    public function secondsSinceHeartbeat(): ?int
+    {
+        return $this->heartbeat_at?->diffInSeconds(now());
+    }
+
+    /**
+     * A run that claims to be going but has not checked in for a while.
+     *
+     * Worth surfacing rather than hiding: the job timeout is enforced by a
+     * pcntl alarm, which does not exist on Windows, so a wedged job can sit in
+     * "running" indefinitely with nothing to clear it.
+     */
+    public function looksStalled(int $threshold = 300): bool
+    {
+        if ($this->status !== self::STATUS_RUNNING) {
+            return false;
+        }
+
+        $since = $this->secondsSinceHeartbeat();
+
+        return $since === null || $since > $threshold;
     }
 
     public function isTerminal(): bool

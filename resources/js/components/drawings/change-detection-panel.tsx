@@ -47,6 +47,15 @@ export type ComparisonResult = {
     status: 'pending' | 'running' | 'complete' | 'failed';
     error: string | null;
     methods: string[];
+    /** Where a running analysis has got to, so the panel can show real motion. */
+    progress: {
+        stage: string | null;
+        done: number | null;
+        total: number | null;
+        started_at: string | null;
+        seconds_since_heartbeat: number | null;
+        stalled: boolean;
+    } | null;
     /**
      * False when the sheet's text coordinates could not be resolved to real
      * page positions (common with CAD exports that nest content in form
@@ -65,6 +74,16 @@ export type ComparisonResult = {
     changes_high: number;
     analyzed_at: string | null;
     items: ChangeItem[];
+};
+
+/** What each backend stage is called in the panel. */
+const STAGE_LABEL: Record<string, string> = {
+    starting: 'Starting',
+    reading_text: 'Reading both revisions',
+    comparing_geometry: 'Comparing wall geometry',
+    reading_regions: 'Looking at each changed area',
+    ranking_changes: 'Ranking the changes',
+    writing_summary: 'Writing the summary',
 };
 
 const SIGNIFICANCE_ORDER = ['high', 'medium', 'low'] as const;
@@ -180,7 +199,7 @@ export function ChangeDetectionPanel({
 
         pollRef.current = window.setTimeout(() => {
             void fetchResult();
-        }, 3000);
+        }, 2000);
 
         return () => {
             if (pollRef.current) window.clearTimeout(pollRef.current);
@@ -326,9 +345,7 @@ export function ChangeDetectionPanel({
                         </div>
                     )}
 
-                    {running && (
-                        <p className="text-muted-foreground text-xs">Reading both revisions and comparing… this usually takes under a minute.</p>
-                    )}
+                    {running && <RunningState result={result} onRestart={() => void analyze(true)} restarting={starting} />}
 
                     {result?.status === 'failed' && (
                         <div className="space-y-3">
@@ -654,6 +671,71 @@ function ChangeRow({
                     />
                 </div>
             )}
+        </div>
+    );
+}
+
+/**
+ * What a run in flight looks like.
+ *
+ * These take minutes, so a bare spinner is not enough: with nothing moving,
+ * a stuck job and a working one look identical, and the reasonable response to
+ * that is to press the button again. Naming the stage and counting the work
+ * makes the difference visible, and a job that has stopped checking in says so
+ * and offers a way out rather than spinning forever.
+ */
+function RunningState({ result, onRestart, restarting }: { result: ComparisonResult; onRestart: () => void; restarting: boolean }) {
+    const progress = result.progress;
+    const [now, setNow] = useState(() => Date.now());
+
+    // Elapsed has to tick on its own; the poll only moves when the server has
+    // something new to say.
+    useEffect(() => {
+        const id = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(id);
+    }, []);
+
+    const startedAt = progress?.started_at ? new Date(progress.started_at).getTime() : null;
+    const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : null;
+    const elapsedLabel = elapsed === null ? null : elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+
+    const stage = progress?.stage ? (STAGE_LABEL[progress.stage] ?? 'Working') : 'Working';
+    const done = progress?.done ?? null;
+    const total = progress?.total ?? null;
+    const pct = done !== null && total !== null && total > 0 ? Math.min(100, Math.round((done / total) * 100)) : null;
+
+    if (progress?.stalled) {
+        return (
+            <div className="space-y-2">
+                <p className="text-xs leading-relaxed">
+                    This analysis stopped responding{elapsedLabel ? ` after ${elapsedLabel}` : ''}. The job may have been interrupted.
+                </p>
+                <Button type="button" size="sm" variant="outline" className="w-full" onClick={onRestart} disabled={restarting}>
+                    {restarting ? 'Restarting…' : 'Start it again'}
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium">{stage}…</span>
+                <span className="text-muted-foreground text-[11px] tabular-nums">
+                    {done !== null && total !== null && total > 0 ? `${done} / ${total}` : elapsedLabel}
+                </span>
+            </div>
+
+            <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                <div
+                    className={cn('bg-primary h-full rounded-full transition-all duration-500', pct === null && 'w-1/3 animate-pulse')}
+                    style={pct === null ? undefined : { width: `${pct}%` }}
+                />
+            </div>
+
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Running for {elapsedLabel ?? 'a moment'}. A heavily revised sheet takes several minutes — you can leave this page and come back.
+            </p>
         </div>
     );
 }
