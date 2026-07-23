@@ -47,6 +47,8 @@ export type ComparisonResult = {
     status: 'pending' | 'running' | 'complete' | 'failed';
     error: string | null;
     methods: string[];
+    old_revision: string | null;
+    new_revision: string | null;
     /** Where a running analysis has got to, so the panel can show real motion. */
     progress: {
         stage: string | null;
@@ -290,6 +292,8 @@ export function ChangeDetectionPanel({
     });
 
     const undecided = queue.filter((item) => item.triage_status === null).length;
+    const reviewed = queue.length - undecided;
+    const reviewedPct = queue.length > 0 ? Math.round((reviewed / queue.length) * 100) : 0;
 
     queueRef.current = queue;
 
@@ -310,11 +314,36 @@ export function ChangeDetectionPanel({
     const cloudable = all.filter((item) => item.locatable && (item.significance === 'high' || item.significance === 'medium')).length;
 
     return (
-        <div className="bg-background/95 absolute top-16 right-3 z-10 flex max-h-[calc(100%-5rem)] w-[22rem] flex-col rounded-md border shadow-sm backdrop-blur">
+        <div // A docked pane rather than a floating card: reviewing a hundred
+            // changes is the main task while it is open, and a panel that runs
+            // the height of the viewer fits the whole card without scrolling
+            // the decision buttons out of reach.
+            className="bg-background/95 absolute top-0 right-0 bottom-0 z-10 flex w-[24rem] max-w-[85vw] flex-col border-l shadow-xl backdrop-blur"
+        >
             <button type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left" onClick={() => setOpen((v) => !v)}>
                 <span className="text-sm font-medium">Detected changes</span>
                 <span className="flex items-center gap-2">
-                    {result?.status === 'complete' && (
+                    {reviewing && (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            className="border-border hover:bg-accent flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setReviewing(false);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.stopPropagation();
+                                    setReviewing(false);
+                                }
+                            }}
+                        >
+                            <ListChecks className="h-3 w-3" />
+                            List
+                        </span>
+                    )}
+                    {!reviewing && result?.status === 'complete' && (
                         <span className="text-muted-foreground text-xs tabular-nums">
                             {result.changes_high > 0 ? `${result.changes_high} of ${result.changes_total}` : result.changes_total}
                         </span>
@@ -367,12 +396,32 @@ export function ChangeDetectionPanel({
 
                             {all.length === 0 && <p className="text-muted-foreground text-xs">No differences found between these two revisions.</p>}
 
+                            {reviewing && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs">
+                                            <span className="font-semibold">{reviewed}</span>
+                                            <span className="text-muted-foreground"> of {queue.length} reviewed</span>
+                                        </span>
+                                        <span className="text-muted-foreground text-[11px] tabular-nums">{reviewedPct}%</span>
+                                    </div>
+                                    <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                                        <div
+                                            className="bg-success h-full rounded-full transition-all duration-300"
+                                            style={{ width: `${reviewedPct}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             {reviewing && queue.length > 0 && (
                                 <ChangeReviewCard
                                     drawingId={drawingId}
                                     item={queue[Math.min(reviewIndex, queue.length - 1)]}
                                     position={Math.min(reviewIndex, queue.length - 1) + 1}
                                     total={queue.length}
+                                    oldRevision={result.old_revision}
+                                    newRevision={result.new_revision}
                                     onDecided={onDecided}
                                     onLocate={onLocate}
                                     onPrev={() => setReviewIndex((i) => Math.max(0, i - 1))}

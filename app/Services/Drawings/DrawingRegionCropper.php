@@ -213,9 +213,20 @@ class DrawingRegionCropper
                 if ($marker !== null) {
                     // Drawn before the resize so the coordinates are still in
                     // the crop's own pixel space.
+                    //
+                    // Amber rather than red: drawings already use red for
+                    // revision clouds and the drafter's own markup, so a red
+                    // box reads as part of the drawing rather than as ours.
+                    // The glow is a wide, soft, semi-transparent pass under a
+                    // crisp one — it lifts the box off dense line work without
+                    // hiding what sits beneath it.
+                    $rect = sprintf('rectangle %.0f,%.0f %.0f,%.0f', ...$marker);
+
                     array_push($command,
-                        '-stroke', '#DC2626', '-strokewidth', '3', '-fill', 'none',
-                        '-draw', sprintf('rectangle %.0f,%.0f %.0f,%.0f', ...$marker),
+                        '-fill', 'none',
+                        '-stroke', 'rgba(245,158,11,0.28)', '-strokewidth', '11', '-draw', $rect,
+                        '-stroke', 'rgba(245,158,11,0.45)', '-strokewidth', '6', '-draw', $rect,
+                        '-stroke', '#F59E0B', '-strokewidth', '2.5', '-draw', $rect,
                         '-stroke', 'none',
                     );
                 }

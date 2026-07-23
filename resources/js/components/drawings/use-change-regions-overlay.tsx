@@ -12,14 +12,19 @@ export type ChangeRegion = {
     locatable: boolean;
 };
 
-/** Box colour by significance. Red reads as "this changes what gets built". */
-const COLOURS: Record<string, number> = {
-    high: 0xdc2626,
-    medium: 0xd97706,
-    low: 0x64748b,
-};
+/**
+ * Amber throughout, matching the marker burned into the before/after frames.
+ * Drawings already use red for revision clouds and the drafter's own markup, so
+ * a red box reads as part of the drawing rather than as something this added.
+ */
+const MARKER_COLOUR = 0xf59e0b;
 
-const DEFAULT_COLOUR = 0x2563eb;
+/** Weight by significance, since colour is now carrying provenance instead. */
+const WEIGHTS: Record<string, number> = {
+    high: 2,
+    medium: 1.5,
+    low: 1,
+};
 
 /**
  * Draws the detected change regions straight onto the sheet.
@@ -64,21 +69,29 @@ export function useChangeRegionsOverlay({
         for (const region of drawable) {
             const g = new Graphics();
             const selected = region.id === selectedId;
-            const colour = COLOURS[region.significance ?? ''] ?? DEFAULT_COLOUR;
+            const weight = WEIGHTS[region.significance ?? ''] ?? 1;
 
             const x = region.x!;
             const w = region.w!;
             const h = region.h!;
             const y = height - region.y! - h;
 
+            // Soft wide pass under a crisp one: the same glow as the frames,
+            // so a box lifts off dense line work without hiding it.
             g.rect(x, y, w, h).stroke({
-                width: (selected ? 2.5 : 1.5) / scale,
-                color: colour,
-                alpha: selected ? 1 : 0.85,
+                width: (weight + 5) / scale,
+                color: MARKER_COLOUR,
+                alpha: selected ? 0.35 : 0.2,
+            });
+
+            g.rect(x, y, w, h).stroke({
+                width: (selected ? weight + 1 : weight) / scale,
+                color: MARKER_COLOUR,
+                alpha: selected ? 1 : 0.9,
             });
 
             if (selected) {
-                g.rect(x, y, w, h).fill({ color: colour, alpha: 0.12 });
+                g.rect(x, y, w, h).fill({ color: MARKER_COLOUR, alpha: 0.1 });
             }
 
             layer.addChild(g);

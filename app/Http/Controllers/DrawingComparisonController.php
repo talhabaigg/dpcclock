@@ -509,6 +509,8 @@ class DrawingComparisonController extends Controller
      */
     private function format(DrawingComparison $comparison): array
     {
+        $comparison->loadMissing(['oldDrawing:id,revision_number', 'newDrawing:id,revision_number']);
+
         $order = ['high' => 0, 'medium' => 1, 'low' => 2];
 
         $items = $comparison->items
@@ -523,6 +525,9 @@ class DrawingComparisonController extends Controller
             'status' => $comparison->status,
             'error' => $comparison->error,
             'methods' => $comparison->methods ?? [],
+            // Labels the animation with which two revisions it spans.
+            'old_revision' => $comparison->oldDrawing?->revision_number,
+            'new_revision' => $comparison->newDrawing?->revision_number,
             'progress' => [
                 'stage' => $comparison->progress_stage,
                 'done' => $comparison->progress_done,

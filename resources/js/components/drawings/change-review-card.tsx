@@ -4,28 +4,52 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, MapPin, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 /**
+ * Tags a reader would recognise off the drawing — partition types, door
+ * numbers, room types. Derived from the description rather than stored,
+ * because the model writes them into its own sentence and re-deriving them
+ * here is cheaper than a second round trip to ask for them separately.
+ */
+const TAG_PATTERN = /\b(?:PT\d+[a-z]?|D\d+[a-z]?|Rw\d+|TYPE\s+[A-Z]\d?)\b/gi;
+
+function affectedTags(item: ChangeItem): string[] {
+    const source = [item.description, item.text_new, item.text_old].filter(Boolean).join(' ');
+    const found = source.match(TAG_PATTERN) ?? [];
+
+    // Case-insensitive dedupe — "PT23" and "pt23" are one tag, and showing
+    // both would read as two separate changes.
+    const seen = new Set<string>();
+    for (const tag of found) {
+        seen.add(tag.toUpperCase().replace(/\s+/g, ' '));
+    }
+
+    return [...seen].slice(0, 6);
+}
+
+/**
  * One change at a time, with a decision to make about it.
  *
- * A list of forty changes is something to scroll past; a deck of forty
- * decisions is something a person finishes. The deck is ordered by
- * significance so the changes that affect what gets built are ruled on while
- * attention is freshest, and the animation leads because seeing what moved is
- * a glance where reading a description of it is a paragraph.
+ * A list of a hundred changes is something to scroll past; a deck of a hundred
+ * decisions is something a person finishes. The deck is ordered by significance
+ * so the changes that affect what gets built are ruled on while attention is
+ * freshest, and the animation leads because seeing what moved is a glance where
+ * reading a description of it is a paragraph.
  *
- * Navigation moves over the whole deck rather than only the undecided cards,
- * so "previous" can reach one that was just ruled on — second thoughts about
- * the last decision are the usual reason to go back.
+ * Navigation moves over the whole deck rather than only the undecided cards, so
+ * "previous" can reach one that was just ruled on — second thoughts about the
+ * last decision are the usual reason to go back.
  */
 export function ChangeReviewCard({
     drawingId,
     item,
     position,
     total,
+    oldRevision,
+    newRevision,
     onDecided,
     onLocate,
     onPrev,
@@ -37,6 +61,8 @@ export function ChangeReviewCard({
     item: ChangeItem;
     position: number;
     total: number;
+    oldRevision: string | null;
+    newRevision: string | null;
     onDecided: (item: ChangeItem, decision: 'accept' | 'dismiss') => void;
     onLocate?: (item: ChangeItem) => void;
     onPrev: () => void;
@@ -45,12 +71,14 @@ export function ChangeReviewCard({
     canNext: boolean;
 }) {
     const [description, setDescription] = useState('');
+    const [note, setNote] = useState('');
     const [saving, setSaving] = useState<'accept' | 'dismiss' | null>(null);
 
     // Each change is its own decision — carrying the previous card's wording
     // forward would quietly attach the wrong text to a task.
     useEffect(() => {
         setDescription(item.description ?? 'Change detected on revision comparison');
+        setNote('');
         setSaving(null);
     }, [item.id, item.description]);
 
@@ -66,6 +94,18 @@ export function ChangeReviewCard({
     }, [item]);
 
     const decided = item.triage_status;
+    const tags = affectedTags(item);
+    const title = item.element && item.element !== 'changed area' ? item.element : 'Changed area';
+
+    // Only states the two things actually known about where this came from.
+    // A grid reference would be more useful and is not available, and guessing
+    // one would be worse than saying less.
+    const subtitle = [
+        item.significance ? `${item.significance} significance` : null,
+        item.source === 'raster' ? 'seen on the drawing' : 'text change',
+    ]
+        .filter(Boolean)
+        .join(' · ');
 
     const decide = async (decision: 'accept' | 'dismiss') => {
         setSaving(decision);
@@ -73,7 +113,7 @@ export function ChangeReviewCard({
             await api.post(`/drawings/${drawingId}/comparison/items/${item.id}/triage`, {
                 decision,
                 title: description.trim() || undefined,
-                comment: description.trim() || undefined,
+                comment: note.trim() || description.trim() || undefined,
             });
             toast.success(decision === 'accept' ? 'Variation task raised' : 'Marked as not a change');
             onDecided(item, decision);
@@ -84,42 +124,74 @@ export function ChangeReviewCard({
     };
 
     return (
-        // Lifted off the panel: the deck is the thing being worked through, so
-        // it should read as a card sitting on top rather than another section
-        // of the list behind it.
-        <div className="bg-card space-y-2.5 rounded-lg border p-3 shadow-lg">
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground text-[11px] tabular-nums">
-                    {position} of {total}
-                </span>
-                <span className="flex items-center gap-1.5">
-                    {item.significance && item.significance !== 'low' && (
-                        <Badge variant={item.significance === 'high' ? 'destructive' : 'default'} className="h-4 px-1.5 text-[10px] capitalize">
-                            {item.significance}
-                        </Badge>
-                    )}
-                    {item.element && <span className="text-muted-foreground truncate text-[11px]">{item.element}</span>}
-                </span>
+        // Flat inside the pane: the pane is the surface now, and a card with
+        // its own border and shadow inside a bordered panel reads as two
+        // stacked containers rather than one thing to work through.
+        <div className="space-y-3">
+            <div>
+                <h3 className="text-base leading-tight font-semibold capitalize">{title}</h3>
+                <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs capitalize">
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    {subtitle}
+                </p>
             </div>
 
-            {/* Thumbnail first: the fastest read of what actually moved. */}
-            {item.preview_url ? (
-                <img src={item.preview_url} alt={`Before and after of ${item.element ?? 'this change'}`} className="w-full rounded border" />
-            ) : (
-                <div className="text-muted-foreground rounded border px-2 py-8 text-center text-[11px]">No before/after image for this change</div>
+            {/* The animation, not a tabbed pair: the change is easiest to read
+                when the two states swap in place. */}
+            <div className="overflow-hidden rounded-md border">
+                <div className="text-muted-foreground flex items-center justify-between gap-2 border-b px-2 py-1.5 text-[10px] tracking-wide uppercase">
+                    <span>Before / after</span>
+                    {(oldRevision || newRevision) && (
+                        <span className="font-mono">
+                            Rev {oldRevision ?? '?'} → Rev {newRevision ?? '?'}
+                        </span>
+                    )}
+                </div>
+                {item.preview_url ? (
+                    <img src={item.preview_url} alt={`Before and after of ${title}`} className="w-full" />
+                ) : (
+                    <div className="text-muted-foreground px-2 py-10 text-center text-[11px]">No before/after image for this change</div>
+                )}
+            </div>
+
+            <div className="space-y-1.5">
+                <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">What changed</p>
+                {/* Editable: this becomes the task name, so the detected wording
+                    is a starting point rather than the last word. */}
+                <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the change"
+                    rows={3}
+                    className="resize-none text-xs leading-snug"
+                    aria-label="What changed"
+                />
+            </div>
+
+            {tags.length > 0 && (
+                <div className="space-y-1.5">
+                    <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">Affected tags</p>
+                    <div className="flex flex-wrap gap-1">
+                        {tags.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="h-5 px-2 font-mono text-[10px]">
+                                {tag}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
             )}
 
-            {/* A textarea rather than a single line: these descriptions run to
-                a full sentence and the reviewer is editing what becomes the
-                task name, so it has to be readable in full. */}
-            <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the change"
-                rows={3}
-                className="resize-none text-xs leading-snug"
-                aria-label="Description of change"
-            />
+            <div className="space-y-1.5">
+                <p className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">Add note</p>
+                <Textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Leave a comment for the design team…"
+                    rows={2}
+                    className="resize-none text-xs leading-snug"
+                    aria-label="Add note"
+                />
+            </div>
 
             {decided ? (
                 <div
@@ -138,7 +210,7 @@ export function ChangeReviewCard({
                     </Button>
                     <Button type="button" variant="success" className="h-11" onClick={() => void decide('accept')} disabled={saving !== null}>
                         <Check className="mr-1.5 h-4 w-4" />
-                        {saving === 'accept' ? 'Raising…' : 'Change'}
+                        {saving === 'accept' ? 'Raising…' : 'Confirm change'}
                     </Button>
                 </div>
             )}
@@ -148,6 +220,9 @@ export function ChangeReviewCard({
                     <ChevronLeft className="mr-1 h-3.5 w-3.5" />
                     Previous
                 </Button>
+                <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+                    {position} / {total}
+                </span>
                 <Button type="button" size="sm" variant="outline" className="flex-1 text-xs" onClick={onNext} disabled={!canNext}>
                     Next
                     <ChevronRight className="ml-1 h-3.5 w-3.5" />
